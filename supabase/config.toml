@@ -54,7 +54,11 @@ refresh_token_reuse_interval = 10
 enable_signup = false
 
 [auth.email]
-enable_signup = false
+# TRUE is correct and deliberate: this key maps to GoTrue's "external email
+# enabled" flag — false disables email+password SIGN-IN entirely ("Email logins
+# are disabled"), not just signup. Public signup is blocked by the top-level
+# [auth] enable_signup = false above; invited accounts still sign in with email.
+enable_signup = true
 # Local dev only: skips the confirmation round trip against Inbucket. Production is
 # configured separately in S7 (docs/runbooks/03-CREDENTIAL_ROTATION.md).
 enable_confirmations = false

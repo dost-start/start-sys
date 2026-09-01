@@ -94,6 +94,93 @@ export type Database = {
           },
         ]
       }
+      applications: {
+        Row: {
+          applicant_email: string
+          applicant_family_name: string
+          applicant_given_name: string
+          created_at: string
+          id: string
+          payload: Json
+          person_id: string | null
+          proof_drive_file_id: string | null
+          proof_mime_type: string | null
+          proof_size_bytes: number | null
+          proof_verified_at: string | null
+          proof_web_view_link: string | null
+          redacted_at: string | null
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: Database["public"]["Enums"]["application_status"]
+          submit_token_expires_at: string | null
+          submit_token_hash: string | null
+          submitted_at: string | null
+          term_id: string
+        }
+        Insert: {
+          applicant_email: string
+          applicant_family_name: string
+          applicant_given_name: string
+          created_at?: string
+          id?: string
+          payload?: Json
+          person_id?: string | null
+          proof_drive_file_id?: string | null
+          proof_mime_type?: string | null
+          proof_size_bytes?: number | null
+          proof_verified_at?: string | null
+          proof_web_view_link?: string | null
+          redacted_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["application_status"]
+          submit_token_expires_at?: string | null
+          submit_token_hash?: string | null
+          submitted_at?: string | null
+          term_id: string
+        }
+        Update: {
+          applicant_email?: string
+          applicant_family_name?: string
+          applicant_given_name?: string
+          created_at?: string
+          id?: string
+          payload?: Json
+          person_id?: string | null
+          proof_drive_file_id?: string | null
+          proof_mime_type?: string | null
+          proof_size_bytes?: number | null
+          proof_verified_at?: string | null
+          proof_web_view_link?: string | null
+          redacted_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["application_status"]
+          submit_token_expires_at?: string | null
+          submit_token_hash?: string | null
+          submitted_at?: string | null
+          term_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "applications_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "applications_term_id_fkey"
+            columns: ["term_id"]
+            isOneToOne: false
+            referencedRelation: "terms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_log: {
         Row: {
           actor_role: string
@@ -644,6 +731,27 @@ export type Database = {
         }
         Relationships: []
       }
+      rate_limit_buckets: {
+        Row: {
+          bucket: string
+          hit_count: number
+          key_hash: string
+          window_started_at: string
+        }
+        Insert: {
+          bucket: string
+          hit_count?: number
+          key_hash: string
+          window_started_at: string
+        }
+        Update: {
+          bucket?: string
+          hit_count?: number
+          key_hash?: string
+          window_started_at?: string
+        }
+        Relationships: []
+      }
       regions: {
         Row: {
           code: string
@@ -667,6 +775,45 @@ export type Database = {
           sort_order?: number
         }
         Relationships: []
+      }
+      renewal_submissions: {
+        Row: {
+          id: string
+          payload: Json
+          person_id: string
+          submitted_at: string
+          term_id: string
+        }
+        Insert: {
+          id?: string
+          payload?: Json
+          person_id: string
+          submitted_at?: string
+          term_id: string
+        }
+        Update: {
+          id?: string
+          payload?: Json
+          person_id?: string
+          submitted_at?: string
+          term_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "renewal_submissions_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "renewal_submissions_term_id_fkey"
+            columns: ["term_id"]
+            isOneToOne: false
+            referencedRelation: "terms"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       rr_region_grants: {
         Row: {
@@ -864,6 +1011,15 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Database["public"]["Enums"]["org_role"]
       }
+      check_rate_limit: {
+        Args: {
+          p_bucket: string
+          p_key_hash: string
+          p_limit: number
+          p_window: unknown
+        }
+        Returns: boolean
+      }
       consume_recovery_code: {
         Args: { p_code: string }
         Returns: boolean
@@ -871,6 +1027,16 @@ export type Database = {
       current_term_id: {
         Args: Record<PropertyKey, never>
         Returns: string
+      }
+      finalize_application: {
+        Args: {
+          p_app_id: string
+          p_file_ref: string
+          p_mime: string
+          p_size: number
+          p_token: string
+        }
+        Returns: undefined
       }
       get_person_sensitive: {
         Args: { p_person_id: string }
@@ -899,6 +1065,13 @@ export type Database = {
       mask_sensitive: {
         Args: { p_row: Json; p_table: string }
         Returns: Json
+      }
+      purge_abandoned_drafts: {
+        Args: { p_age?: unknown }
+        Returns: {
+          application_id: string
+          storage_ref: string
+        }[]
       }
       reject_write_to_archived_term: {
         Args: Record<PropertyKey, never>

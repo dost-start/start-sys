@@ -52,8 +52,8 @@
 
 begin;
 
-\ir ../test-helpers/auth.sql
-\ir ../test-helpers/fixtures.sql
+\ir helpers/auth.psql
+\ir helpers/fixtures.psql
 
 select plan(68);
 

@@ -99,7 +99,7 @@ select is((select count(*)::int from public.sensitive_column_registry), 17,
 -- test and hide which statement actually broke.
 -- ═══════════════════════════════════════════════════════════════════════════════════
 
-\ir ../migrations/0016_seed.sql
+\ir helpers/seed-rerun.psql
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════════

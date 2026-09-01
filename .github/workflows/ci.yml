@@ -119,6 +119,12 @@ jobs:
       - name: Lint the schema
         run: npx supabase db lint
 
+      - name: Guard the seed-rerun copy against drift
+        # 033_seed_idempotency.sql re-executes the seed via a committed copy
+        # (supabase test db mounts only supabase/tests/). This diff is what keeps
+        # that copy honest — a drifted copy fails here, not silently in the test.
+        run: diff supabase/migrations/0016_seed.sql supabase/tests/helpers/seed-rerun.psql
+
       - name: Run the pgTAP suite
         run: npx supabase test db
 

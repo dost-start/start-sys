@@ -1,0 +1,111 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# THE SINGLE SCHEDULER FOR START-SYS.
+#
+# Every recurring job in this system lives in this one file. Not pg_cron, not pg_net,
+# not Vercel Cron, not Redis/BullMQ/Inngest/QStash — all of those are banned outright
+# (CLAUDE.md "Infrastructure"; ARCHITECTURE.md §7).
+#
+# The reason is a handover reason, not a technical one: ONE ADEQUATE SCHEDULER BEATS
+# THREE OPTIMAL ONES when the reader has never seen the system before. The nightly
+# `pg_dump` has to live in GitHub Actions regardless, so everything else joins it —
+# one syntax, one log viewer, one place a 2029 maintainer looks when they ask "what
+# runs on its own?".
+#
+# ⚠ THIS FILE IS DELIBERATELY INCOMPLETE TODAY. Only the abandoned-draft sweep ships
+# in S3. The four jobs ARCHITECTURE.md §8 lists — the encrypted backup, the Drive
+# health check, the campaign drain sweep and the RA 10173 five-year purge — are
+# stubbed as comments below with their owning slice, so that a reader who compares
+# this file against §8 finds a documented gap rather than an apparent omission.
+#
+# CRON IS UTC. Philippine Standard Time is UTC+8 with no daylight saving, so
+# `HH:MM PHT` is `HH-8` UTC. Every schedule below carries the PHT time it means.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+name: scheduled
+
+on:
+  schedule:
+    # 03:00 PHT daily = 19:00 UTC the previous day.
+    - cron: "0 19 * * *"
+  # Manual runs matter: the first thing an incoming officer does with a job is run it
+  # once by hand to see what it prints (docs/RUNBOOK.md).
+  workflow_dispatch:
+
+# Never let two runs of the same job overlap. The sweep is idempotent — a redacted row
+# carries `redacted_at` and is never returned twice — but two concurrent runs would
+# race on the same document deletions and produce confusing counts.
+concurrency:
+  group: scheduled-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # ───────────────────────────────────────────────────────────────────────────
+  # Abandoned-draft sweep — BUILD_PLAN S3-T22; PRD US-J2, US-J3; RA 10173.
+  #
+  # Redacts application drafts older than 30 days that were never submitted, deletes
+  # the proof-of-enrollment document each one produced, and reconciles orphaned
+  # objects whose upload succeeded but whose finalize never ran.
+  #
+  # The endpoint returns COUNTS ONLY. Nothing an applicant typed can appear in this
+  # job's log, which is public to anyone with read access to the repository.
+  # ───────────────────────────────────────────────────────────────────────────
+  purge-abandoned-drafts:
+    name: Purge abandoned application drafts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Call the job endpoint
+        env:
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+          JOB_SHARED_SECRET: ${{ secrets.JOB_SHARED_SECRET }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${APP_BASE_URL}" ] || [ -z "${JOB_SHARED_SECRET}" ]; then
+            echo "APP_BASE_URL and JOB_SHARED_SECRET must both be set as repository secrets."
+            echo "See docs/runbooks/03-CREDENTIAL_ROTATION.md."
+            exit 1
+          fi
+
+          # --fail-with-body so a non-2xx exits non-zero AND still prints the body.
+          # The secret goes in a HEADER, never in the URL: a query string lands in
+          # access logs, proxy logs and browser history (CLAUDE.md "Privacy").
+          # -sS keeps the log quiet on success but keeps real errors visible.
+          curl --fail-with-body -sS -X POST \
+            -H "x-job-secret: ${JOB_SHARED_SECRET}" \
+            -H "content-length: 0" \
+            "${APP_BASE_URL%/}/api/jobs/purge-abandoned-drafts"
+
+          echo ""
+          echo "Sweep complete. Counts above; the per-row record is in audit_log."
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # PLACEHOLDERS — the rest of ARCHITECTURE.md §8's scheduler, by owning slice.
+  # Each is listed rather than silently absent so the gap is visible in a diff.
+  #
+  #   backup          S7-T14. Nightly 02:00 PHT: `supabase db dump` as a read-only
+  #                   role -> age encryption -> Backblaze B2, 30 dailies + 12
+  #                   monthlies. MUST assert the dump is not silently empty (a dump
+  #                   taken by a role subject to FORCE ROW LEVEL SECURITY returns
+  #                   structurally-valid SQL with zero rows). ⚠ If S3 took the
+  #                   Supabase Storage fallback (ADR 0005), this job also needs an
+  #                   object-sync step — storage objects are NOT in `db dump`, and
+  #                   without it every proof document falls outside the Backup NFR.
+  #
+  #   drive-health    S7-T17. Daily: GET /api/health/drive. This is the check that
+  #                   tells you the service-account key expired BEFORE an applicant
+  #                   discovers it mid-upload.
+  #
+  #   benchmark       S7-T17/S7-T19. Weekly against the deployed URL; fails over a
+  #                   3000ms p95 (PRD Performance NFR, Success Metric 4).
+  #
+  #   notify-failure  S7-T17. Referenced by `if: failure()` from every job above. A
+  #                   backup job that fails silently for three weeks is the same as
+  #                   no backup.
+  #
+  #   campaign-sweep  v1.1. Every 15 min: resume any campaign stalled mid-chunk.
+  #   ra10173-purge   v1.2. Monthly: `redact_expired_pii()` + document deletes.
+  # ───────────────────────────────────────────────────────────────────────────

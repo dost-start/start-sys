@@ -61,6 +61,10 @@
 -- See note 2. Idempotent: re-granting is harmless if a second helper file repeats it.
 do $$
 begin
+  -- pg_my_temp_schema() returns 0 until the session's temp schema exists, and
+  -- 0::regnamespace prints '-', which turns the GRANT into a syntax error. Touch
+  -- a temp table first so the schema is materialised before we name it.
+  create temp table if not exists _pgtemp_bootstrap (i int);
   execute format('grant usage on schema %s to public', pg_my_temp_schema()::regnamespace);
 end;
 $$;

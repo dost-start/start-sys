@@ -1058,6 +1058,10 @@ export type Database = {
         Args: { p_app_id: string }
         Returns: Json
       }
+      get_member_record: {
+        Args: { p_person_id: string }
+        Returns: Json
+      }
       get_person_sensitive: {
         Args: { p_person_id: string }
         Returns: Json
@@ -1109,9 +1113,42 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: unknown
       }
+      search_member_directory: {
+        Args: {
+          p_committee_ids?: string[]
+          p_department_ids?: string[]
+          p_q?: string
+          p_region_ids?: string[]
+          p_statuses?: Database["public"]["Enums"]["membership_status"][]
+          p_term_id?: string
+        }
+        Returns: {
+          committee_names: string[]
+          department_names: string[]
+          family_name: string
+          given_name: string
+          island_group: Database["public"]["Enums"]["island_group"]
+          join_year: number
+          member_id: string
+          membership_id: string
+          person_id: string
+          region_name: string
+          status: Database["public"]["Enums"]["membership_status"]
+          term_id: string
+          year_level: number
+        }[]
+      }
       set_updated_at: {
         Args: Record<PropertyKey, never>
         Returns: unknown
+      }
+      update_member_record: {
+        Args: {
+          p_expected_updated_at: string
+          p_patch: Json
+          p_person_id: string
+        }
+        Returns: undefined
       }
     }
     Enums: {

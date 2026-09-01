@@ -666,7 +666,11 @@ export const authScreens = {
   submitLogin: (page: Page) => page.getByRole("button", { name: /sign in|log ?in/i }),
   /** The six-digit TOTP input on both the verify and the reset challenge screens. */
   totpField: (page: Page) =>
-    page.getByLabel(/authentication code|verification code|one-time code|6-digit|totp/i),
+    // Role textbox, not getByLabel: the verify screen's <section aria-labelledby>
+    // ("Enter your authentication code") also matches a label lookup.
+    page.getByRole("textbox", {
+      name: /authentication code|verification code|one-time code|digit|totp/i,
+    }),
   submitTotp: (page: Page) => page.getByRole("button", { name: /verify|continue|submit/i }),
   errorMessage: (page: Page) => page.getByRole("alert"),
 };

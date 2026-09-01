@@ -151,6 +151,15 @@ export const startApplication = withPublic<StartApplicationInput, StartApplicati
         applicant_given_name: input.applicant_given_name,
         applicant_family_name: input.applicant_family_name,
         payload,
+        // RA 10173 consent, captured AT COLLECTION (0035, BUILD_PLAN S7-T22). Sending this
+        // field AT ALL is the affirmative act, and it is only reachable here because
+        // `consent_privacy_notice: z.literal(true)` already parsed — an unticked box never
+        // gets this far. The VALUE is thrown away: enforce_consent_server_values() overwrites
+        // it with the server's own clock and stamps the current privacy_notice_version, so a
+        // backdated consent or a claim against a superseded notice is unrepresentable. Omit
+        // it and the draft can never be finalized: submitted_has_consent refuses the
+        // draft -> pending flip, which is what makes "consent at collection" structural.
+        consented_at: consentGivenAt,
         submit_token_hash: hashSubmitToken(uploadToken),
         submit_token_expires_at: expiresAt,
       })

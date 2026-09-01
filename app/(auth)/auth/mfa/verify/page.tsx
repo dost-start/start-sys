@@ -27,12 +27,12 @@ export default async function MfaVerifyPage({
   const next = typeof rawNext === "string" ? rawNext : null;
   const home = homeForRole(ctx.role);
 
-  const { data: aal } = await ctx.supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-
-  // Already satisfied. Do not make an admin type a second code because they hit Back.
-  if (aal?.currentLevel === "aal2") {
-    redirect(next !== null && next.startsWith("/") && !next.startsWith("//") ? next : home);
-  }
+  // Deliberately NO aal2 shortcut redirect here. The middleware is the sole judge of
+  // whether a session needs the challenge; a second, page-side AAL read can disagree
+  // with the middleware's (fresh-login cookie propagation) and the two then bounce a
+  // user between /auth/mfa/verify and their target without a code ever being entered.
+  // An already-aal2 visitor who lands here (Back button) just types a code again —
+  // mildly redundant, never insecure, never a loop.
 
   const { data: factorData } = await ctx.supabase.auth.mfa.listFactors();
   const factors: TotpFactorOption[] = (factorData?.totp ?? [])

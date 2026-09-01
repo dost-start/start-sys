@@ -93,6 +93,23 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # ── Client bundle audit (BUILD_PLAN S7-T10, S7-T30) ────────────────────
+      # MUST run after Build: it reads the BUILT ARTIFACT under .next/static, because
+      # what ships to a browser is the output of tree-shaking and code-splitting, not
+      # the source. A source file can look server-only while a fragment of it lands in
+      # a chunk.
+      #
+      # Fails on evidence, never on vocabulary: a secret literal, a non-NEXT_PUBLIC_
+      # env name, or a PostgREST select naming a sensitive column. A form field called
+      # `birthdate` is a COLUMN NAME and is expected in the client bundle — the script's
+      # header explains at length why conflating the two produces a check that gets
+      # switched off within a week.
+      #
+      # Deliberately NOT `continue-on-error`: security invariant 9 (no sensitive PII in
+      # a client bundle) is either enforced or it is decoration.
+      - name: Client bundle audit
+        run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/audit-client-bundle.mjs
+
   db:
     name: db (supabase lint + pgTAP RLS suite + member-ID race)
     runs-on: ubuntu-latest

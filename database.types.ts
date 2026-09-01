@@ -99,10 +99,12 @@ export type Database = {
           applicant_email: string
           applicant_family_name: string
           applicant_given_name: string
+          consented_at: string | null
           created_at: string
           id: string
           payload: Json
           person_id: string | null
+          privacy_notice_version: string | null
           proof_drive_file_id: string | null
           proof_mime_type: string | null
           proof_size_bytes: number | null
@@ -122,10 +124,12 @@ export type Database = {
           applicant_email: string
           applicant_family_name: string
           applicant_given_name: string
+          consented_at?: string | null
           created_at?: string
           id?: string
           payload?: Json
           person_id?: string | null
+          privacy_notice_version?: string | null
           proof_drive_file_id?: string | null
           proof_mime_type?: string | null
           proof_size_bytes?: number | null
@@ -145,10 +149,12 @@ export type Database = {
           applicant_email?: string
           applicant_family_name?: string
           applicant_given_name?: string
+          consented_at?: string | null
           created_at?: string
           id?: string
           payload?: Json
           person_id?: string | null
+          privacy_notice_version?: string | null
           proof_drive_file_id?: string | null
           proof_mime_type?: string | null
           proof_size_bytes?: number | null
@@ -171,6 +177,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "people"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "applications_privacy_notice_version_fkey"
+            columns: ["privacy_notice_version"]
+            isOneToOne: false
+            referencedRelation: "privacy_notice_versions"
+            referencedColumns: ["version"]
           },
           {
             foreignKeyName: "applications_term_id_fkey"
@@ -731,6 +744,30 @@ export type Database = {
         }
         Relationships: []
       }
+      privacy_notice_versions: {
+        Row: {
+          body_sha256: string
+          created_at: string
+          effective_at: string
+          url: string
+          version: string
+        }
+        Insert: {
+          body_sha256: string
+          created_at?: string
+          effective_at: string
+          url: string
+          version: string
+        }
+        Update: {
+          body_sha256?: string
+          created_at?: string
+          effective_at?: string
+          url?: string
+          version?: string
+        }
+        Relationships: []
+      }
       rate_limit_buckets: {
         Row: {
           bucket: string
@@ -1073,6 +1110,10 @@ export type Database = {
       has_confidentiality_ack: {
         Args: Record<PropertyKey, never>
         Returns: boolean
+      }
+      health_ping: {
+        Args: Record<PropertyKey, never>
+        Returns: number
       }
       is_admin_reader: {
         Args: Record<PropertyKey, never>

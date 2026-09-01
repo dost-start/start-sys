@@ -152,8 +152,15 @@ async function clickAndConfirm(
 ) {
   await trigger.click();
 
+  // The confirm dialog mounts with an animation — an immediate isVisible() races it
+  // and silently skips the confirm click. Wait for it; only a real absence after the
+  // wait means the control acts directly.
   const dialog = page.getByRole("dialog");
-  if (await dialog.isVisible().catch(() => false)) {
+  const appeared = await dialog
+    .waitFor({ state: "visible", timeout: 5_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (appeared) {
     await reviewScreens.confirm(page).click();
   }
 }

@@ -31,7 +31,7 @@ begun (Art. V §2.1, first week of May). See ARCHITECTURE.md §4.3.
    via `/admin/system/user-roles` (once it ships) or, until then, a
    reviewed migration. Confirm the grant took effect (the incoming CTO's
    next request reaches `/admin/system`) before continuing.
-2. *(TODO(tech_admin, before first rollover): write the remaining steps
+2. *(TODO(cto, 2027-05, before first rollover): write the remaining steps
    once `roll_over_term()` ships — call signature, expected output, how to
    verify the seven departments carried forward, how to verify dashboards
    show zero for the new term, and the `unfreeze_term()` escape hatch if
@@ -39,9 +39,9 @@ begun (Art. V §2.1, first week of May). See ARCHITECTURE.md §4.3.
 
 ## How to verify it worked
 
-*(TODO(tech_admin, before first rollover))*
+*(TODO(cto, 2027-05, before first rollover))*
 
 ## If it fails
 
-*(TODO(tech_admin, before first rollover) — link this section from runbook
+*(TODO(cto, 2027-05, before first rollover) — link this section from runbook
 05's incident response if a rollover fails mid-run.)*

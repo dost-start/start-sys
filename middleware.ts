@@ -102,10 +102,12 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
       return redirectTo(request, "/auth/mfa/enroll", response);
     }
 
-    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    const { data: aal, error: aalError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
 
     // Enrolled but this session has only satisfied the password factor. Step up.
-    if (aal?.currentLevel === "aal1" && aal.nextLevel === "aal2") {
+    // FAIL CLOSED: an errored or absent AAL read is treated as unverified — an open
+    // gate on a read failure would wave an aal1 admin straight through (US-A3).
+    if (aalError !== null || aal === null || aal.currentLevel !== "aal2") {
       return redirectTo(request, "/auth/mfa/verify", response, `${pathname}${search}`);
     }
   }

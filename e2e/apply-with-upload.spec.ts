@@ -444,7 +444,18 @@ async function waitOutHoneypotFloor(page: Page): Promise<void> {
 async function submitAndExpectSuccess(page: Page): Promise<string> {
   await waitOutHoneypotFloor(page);
   await applyScreens.submit(page).first().click();
-  await expect(applyScreens.success(page)).toBeVisible({ timeout: 120_000 });
+  try {
+    await expect(applyScreens.success(page)).toBeVisible({ timeout: 120_000 });
+  } catch (cause) {
+    // Surface WHAT the form said instead of a bare "not found" — the alert text is
+    // the difference between one CI round and three.
+    const alerts = await page.getByRole("alert").allInnerTexts();
+    const body = (await page.locator("body").innerText()).slice(0, 2000);
+    throw new Error(
+      `success screen never appeared. alerts=${JSON.stringify(alerts)} body:\n${body}`,
+      { cause },
+    );
+  }
 
   // The whole rendered confirmation, not just the matched sentence: case (c) compares
   // two of these byte for byte, and a difference hiding in a subheading would be exactly

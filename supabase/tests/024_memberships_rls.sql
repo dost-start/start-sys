@@ -126,22 +126,26 @@ select is((select count(*) from public.memberships)::int, 0,
 -- transition — `left` is legitimately theirs — so these two refusals are the whole point.
 -- ═══════════════════════════════════════════════════════════════════════════════════
 
+-- Since 0028, the enforce_membership_transition() trigger raises 42501 for a
+-- non-exec termination attempt BEFORE the WITH CHECK half of the policy is ever
+-- evaluated (the USING half still shows crrd/moderator the active row, so the
+-- BEFORE trigger fires). Two layers, same refusal — the raise is the one observed.
 select pg_temp.login_as('00000000-0000-4000-a000-000000000003');   -- crrd_admin
-select is(pg_temp.rows_affected($$
+select throws_ok($$
     update public.memberships
        set status = 'terminated',
            ended_reason = 'CBL Art. VII 3.2.3 Executive Board majority vote (fixture)'
      where id = '00000000-0000-4000-c000-000000000002'
-  $$), 0,
+  $$, '42501', null,
   'crrd_admin CANNOT set status=terminated — CBL Art. VII §3.2.3 reserves it to the Executive Board (PRD US-D5)');
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator
-select is(pg_temp.rows_affected($$
+select throws_ok($$
     update public.memberships
        set status = 'terminated',
            ended_reason = 'CBL Art. VII 3.2.3 Executive Board majority vote (fixture)'
      where id = '00000000-0000-4000-c000-000000000002'
-  $$), 0,
+  $$, '42501', null,
   'moderator CANNOT set status=terminated, despite holding every other status transition — PRD US-D3, last criterion');
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000005');   -- officer

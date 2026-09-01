@@ -235,7 +235,9 @@ test.describe("member records (US-I2, US-I3, US-D1, US-D3)", () => {
     await page.waitForURL((url) => url.searchParams.get("q") === target, { timeout: 15_000 });
     await waitForGrid(page);
 
-    await expect(page.getByText(target)).toBeVisible();
+    // `.first()`: the surname can legitimately render in more than one node of the
+    // matched row (name cell + row link); one visible hit is what the assertion needs.
+    await expect(page.getByText(target).first()).toBeVisible();
 
     // Exactly one member, and it is the one asked for. `ScopeAlpha01` is a unique family
     // name, so a grid still showing anyone else is not filtering server-side.
@@ -417,6 +419,12 @@ test.describe("member records (US-I2, US-I3, US-D1, US-D3)", () => {
     await waitForGrid(page);
 
     const person = await readPerson(admin, member.personId);
+    if (person.contact_number !== nextNumber) {
+      // Surface what the form actually said — a silent save failure costs a CI round.
+      const alerts = await page.getByRole("alert").allInnerTexts();
+      const body = (await page.locator("body").innerText()).slice(0, 1500);
+      throw new Error(`save did not land. alerts=${JSON.stringify(alerts)} body:\n${body}`);
+    }
     expect(person.contact_number).toBe(nextNumber);
 
     // "Including the user responsible" is true because `audit_row()` is a DB TRIGGER, not
@@ -435,27 +443,18 @@ test.describe("member records (US-I2, US-I3, US-D1, US-D3)", () => {
     await page.goto(`${MEMBERS_PATH}/${member.personId}`);
     await waitForGrid(page);
 
-    await memberScreens.statusEditor(page).click();
+    // S5-T28's markup: a page-level "Change status" <select> feeding an AlertDialog
+    // confirm step — select the target, Continue, write the ground, Confirm.
+    await page.getByLabel(/change status/i).selectOption({ label: "Graduated" });
+    await page.getByRole("button", { name: /^continue$/i }).click();
 
     const dialog = memberScreens.confirmDialog(page);
     await expect(dialog).toBeVisible();
 
-    // The target status. Rendered as an option or a radio depending on how S5-T28 settled
-    // its markup; both are addressed by accessible name.
-    await dialog
-      .getByRole("option", { name: /graduated/i })
-      .or(dialog.getByRole("radio", { name: /graduated/i }))
-      .or(dialog.getByRole("button", { name: /graduated/i }))
-      .first()
-      .click();
-
     // A written ground is required for every terminal status on both sides — and for
     // `terminated` it is also a database CHECK (0028), so the form cannot be looser.
     await memberScreens.statusReason(page).fill("Confirmed graduation, e2e fixture record.");
-    await dialog
-      .getByRole("button", { name: /save|confirm|update|change/i })
-      .last()
-      .click();
+    await dialog.getByRole("button", { name: /^confirm$/i }).click();
     await waitForGrid(page);
 
     expect(await readMembershipStatus(admin, member.membershipId)).toBe("graduated");
@@ -463,15 +462,10 @@ test.describe("member records (US-I2, US-I3, US-D1, US-D3)", () => {
     await expect(page.getByText(/graduated/i).first()).toBeVisible();
 
     // The reverse edge is terminal within the term (DATA_MODEL §3.1). The editor must not
-    // offer what the trigger will refuse: a control that produces a 23514 teaches the
-    // officer that the system is broken, and the next move is to stop trusting the screen.
-    await memberScreens.statusEditor(page).click();
-    const reopened = memberScreens.confirmDialog(page);
-    await expect(reopened).toBeVisible();
+    // offer what the trigger will refuse: `legalNextStatuses('graduated', …)` is empty, so
+    // the page-level select either offers no "Active" option or is not rendered at all.
     await expect(
-      reopened
-        .getByRole("option", { name: /^active$/i })
-        .or(reopened.getByRole("radio", { name: /^active$/i })),
+      page.getByLabel(/change status/i).locator("option", { hasText: /^Active$/ }),
     ).toHaveCount(0);
   });
 });

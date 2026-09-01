@@ -34,6 +34,22 @@ pnpm dev
 | Lint schema | `pnpm db:lint` |
 | Email preview | `pnpm email` |
 
+## Compliance position
+
+START-SYS handles real personal data for ~600 scholars under RA 10173 (the Data
+Privacy Act). The technical mechanisms — access restriction, audit logging,
+encrypted backups, scheduled deletion, a published notice with consent at collection —
+are built and tested. **The organizational side is not finished**: no Data Protection
+Officer is designated, no data processing agreement is executed with any processor,
+and the National Privacy Commission has not been notified of this processing.
+
+**The system must not be used to collect real applicant data until that is resolved.**
+See [`docs/issues/2026-09-06-ra10173-organizational-gaps.md`](docs/issues/2026-09-06-ra10173-organizational-gaps.md)
+for the full accounting — what is built (Table 1) versus what is still owed (Table 2)
+— and [`docs/privacy/DPA_REGISTER.md`](docs/privacy/DPA_REGISTER.md) for the
+processor-by-processor status. This project does not claim RA 10173 compliance, and no
+document in this repository should.
+
 ## Two things that save the most time
 
 1. **Schema is never clicked into the Supabase dashboard.** Every schema and

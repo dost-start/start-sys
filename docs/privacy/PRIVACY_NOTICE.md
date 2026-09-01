@@ -7,6 +7,13 @@ for a lawyer. It mirrors, in plain language, `app/(public)/privacy/page.tsx` —
 page is what a submitter actually sees, and the two must stay in sync (S7-T22 will
 enforce that with a checked hash; until then, edit both files in one commit).
 
+> **Drift note (2026-09-06):** this revision adds the "Why we're allowed to collect it"
+> section and two processor rows (GitHub Actions, Backblaze B2) that `page.tsx` does not
+> yet carry. Neither changes what is collected, retained, or who can read it — both are
+> additions, not corrections — so the applicant-facing consent is not invalidated, but
+> `page.tsx` should be updated to match in the same lane that next touches it, and this
+> note deleted once it does.
+
 > **Status.** START-DOST has not yet designated a Data Protection Officer or
 > registered with the National Privacy Commission (see `PRD.md` OQ-2). Until that is
 > done, the Chief Community Development Officer (CCDO) is the interim contact for any
@@ -30,6 +37,14 @@ When you submit a membership application, START-SYS collects:
 
 We do not collect anything beyond what the application form asks for, and the form
 will not let you submit without agreeing to this notice.
+
+## Why we're allowed to collect it
+
+**Your consent, given when you submit the form.** RA 10173 requires a lawful basis for
+processing personal data; ours is your affirmative agreement, captured at the moment you
+apply — not implied, not pre-ticked, and recorded against the exact version of this notice
+you agreed to (see "Version" above). If you do not tick the two consent boxes on the
+application form, the form will not let you submit.
 
 ## Who can see it
 
@@ -58,10 +73,15 @@ Your information is stored and processed by:
 | Supabase (database) | Your application record | Singapore (`ap-southeast-1`) |
 | Vercel (hosting) | Runs the application while you use it; does not retain your data afterward | Singapore (`sin1`) |
 | Google Drive **or** Supabase Storage | Your uploaded proof-of-enrollment document, never shared publicly | Google/Supabase data centers |
-| Resend | Delivers system emails (e.g. account invitations) | United States |
+| Resend *(planned, v1.1)* | Will deliver system emails (e.g. account invitations, acceptance emails) once outreach features ship | United States |
+| GitHub Actions | Briefly handles an encrypted copy of the whole database — including your record — while producing the nightly backup; never stores it unencrypted | United States |
+| Backblaze B2 *(planned)* | Stores the encrypted nightly backup once provisioned (see "Status" note below) | United States / European Union |
 
-Your data is stored outside the Philippines. We use processors in Singapore where
-possible to keep it close to home.
+**Your data is stored outside the Philippines**, at every processor in this table. We use
+processors in Singapore where possible to keep it close to home, and every backup copy is
+encrypted before it leaves our database so that no processor in this table — including
+GitHub and Backblaze — can read your birthdate, address, contact number, or school ID
+without the decryption key, which is held offline by the Technical Admin.
 
 ## How long we keep it
 

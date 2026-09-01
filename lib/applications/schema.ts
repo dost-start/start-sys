@@ -368,3 +368,146 @@ export function buildApplicationPayload(
     consent_given_at: consentGivenAt,
   };
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// S4 — THE REVIEW SURFACE (BUILD_PLAN S4-T13)
+// ═════════════════════════════════════════════════════════════════════════════
+// Appended to this module rather than started as a second one, because CONVENTIONS
+// §6 says a form and the Server Action that receives it share ONE schema module. The
+// reviewer screens are a different audience from the applicant, not a different
+// feature — and a `review-schema.ts` beside this file is exactly how two validation
+// rules for the same table start to drift.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The floor on a rejection reason, in characters after trimming.
+ *
+ * ⚠ THIS NUMBER IS A CONTRACT WITH THE DATABASE, NOT A UI PREFERENCE.
+ * `0024_reject_application.sql` ships BOTH `rejected_has_reason`
+ * (`check (status <> 'rejected' or length(btrim(review_note)) >= 10)`) AND the same
+ * floor inside `reject_application()`. If this constant and that CHECK ever disagree,
+ * the form accepts a reason the database then refuses — the reviewer sees a generic
+ * validation error on a field they filled in correctly, and the bug is invisible in
+ * every test that does not cross the boundary. Change one, change all three.
+ *
+ * PRD US-C2: "rejection records a reason". CBL-adjacent but not constitutional — this
+ * is the PRD's requirement, enforced at the row so a direct PostgREST call cannot
+ * bypass the form.
+ */
+export const REJECT_REASON_MIN_LENGTH = 10;
+
+/** Bounded so a paste of an entire email thread does not become the audit record. */
+export const REJECT_REASON_MAX_LENGTH = 2000;
+
+/** Approve takes nothing but the row. Everything else is derived server-side. */
+export const applicationApproveSchema = z
+  .object({
+    id: z.uuid("Select an application to approve"),
+  })
+  .strict();
+
+export type ApplicationApproveInput = z.infer<typeof applicationApproveSchema>;
+
+/**
+ * Reject, with a written ground.
+ *
+ * `.trim()` runs BEFORE `.min()`, so ten spaces is not a reason. That is the same
+ * order `length(btrim(review_note))` applies in SQL — deliberately, so the two agree
+ * on the edge case rather than only on the happy path.
+ */
+export const applicationRejectSchema = z
+  .object({
+    id: z.uuid("Select an application to reject"),
+    review_note: z
+      .string()
+      .trim()
+      .min(
+        REJECT_REASON_MIN_LENGTH,
+        `Give a reason of at least ${REJECT_REASON_MIN_LENGTH} characters — it is recorded in the audit log and shown on the application`,
+      )
+      .max(
+        REJECT_REASON_MAX_LENGTH,
+        `Keep the reason under ${REJECT_REASON_MAX_LENGTH} characters`,
+      ),
+  })
+  .strict();
+
+export type ApplicationRejectInput = z.infer<typeof applicationRejectSchema>;
+
+// ── The review queue's URL state ─────────────────────────────────────────────
+// CONVENTIONS §2: filter, sort and pagination state lives in URL SEARCH PARAMS and
+// nowhere else — no client state library, so a filtered queue is a shareable link and
+// the back button works (PRD US-I3).
+
+/**
+ * The statuses the queue filters by (PRD US-C1: "Pending / Approved / Rejected").
+ *
+ * `draft` is deliberately ABSENT. A draft is an abandoned upload, not a submission —
+ * the applicant never sees the word (DATA_MODEL.md §3.2) and `purge_abandoned_drafts()`
+ * redacts it after 30 days. Offering it as a filter would put un-submitted applicant
+ * PII on a reviewer screen for no decision anyone can take on it.
+ */
+export const APPLICATION_QUEUE_STATUSES = ["pending", "approved", "rejected"] as const;
+
+export type ApplicationQueueStatus = (typeof APPLICATION_QUEUE_STATUSES)[number];
+
+/** The only orderings the queue offers. PRD US-C1: "sorts by submission time". */
+export const APPLICATION_SORTS = ["submitted_at.desc", "submitted_at.asc"] as const;
+
+export type ApplicationSort = (typeof APPLICATION_SORTS)[number];
+
+export const DEFAULT_APPLICATION_SORT: ApplicationSort = "submitted_at.desc";
+export const DEFAULT_APPLICATIONS_PER_PAGE = 25;
+export const MAX_APPLICATIONS_PER_PAGE = 100;
+
+/**
+ * A search param arrives as `string | string[] | undefined`. Take the first value and
+ * treat an empty string as absence, so `?status=` is "no filter" rather than an
+ * invalid enum member.
+ */
+const firstParam = (value: unknown): unknown => {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (typeof raw === "string" && raw.trim() === "") return undefined;
+  return raw;
+};
+
+const searchParam = <T extends z.ZodTypeAny>(inner: T) => z.preprocess(firstParam, inner);
+
+/**
+ * Parse `searchParams` into the queue's filter state.
+ *
+ * ⚠ THIS SCHEMA NEVER THROWS. Every field carries `.catch(...)`, so a shared,
+ * hand-edited or stale link degrades to the default view instead of a 500. A filtered
+ * queue is meant to be pasted into a group chat (PRD US-I3); a link that errors when
+ * one param is stale is a link nobody shares twice.
+ *
+ * The cost is that `?status=nonsense` silently shows everything rather than
+ * complaining. That is the right trade for a reviewer screen and it matches the rule
+ * S5-T14 applies to the member grid, so both surfaces behave the same way.
+ *
+ * `term_id` is honoured for the reviewer roles only, and that gate is SERVER-SIDE in
+ * `listApplications` — not here. A schema cannot know who is asking.
+ */
+export const applicationListFiltersSchema = z.object({
+  status: searchParam(z.enum(APPLICATION_QUEUE_STATUSES).optional()).catch(undefined),
+  term_id: searchParam(z.uuid().optional()).catch(undefined),
+  sort: searchParam(z.enum(APPLICATION_SORTS).default(DEFAULT_APPLICATION_SORT)).catch(
+    DEFAULT_APPLICATION_SORT,
+  ),
+  page: searchParam(z.coerce.number().int().min(1).default(1)).catch(1),
+  per_page: searchParam(
+    z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(MAX_APPLICATIONS_PER_PAGE)
+      .default(DEFAULT_APPLICATIONS_PER_PAGE),
+  ).catch(DEFAULT_APPLICATIONS_PER_PAGE),
+});
+
+export type ApplicationListFilters = z.infer<typeof applicationListFiltersSchema>;
+
+/** Parse whatever a page received. Total by construction — see the schema's note. */
+export function parseApplicationListFilters(input: unknown): ApplicationListFilters {
+  return applicationListFiltersSchema.parse(input ?? {});
+}

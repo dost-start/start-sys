@@ -14,7 +14,16 @@ import { ALLOWED_MIME, MAX_PROOF_BYTES } from "@/lib/documents/types";
 
 import {
   APPLICATION_PAYLOAD_KEYS,
+  APPLICATION_QUEUE_STATUSES,
+  applicationApproveSchema,
+  applicationRejectSchema,
   applicationSubmitSchema,
+  DEFAULT_APPLICATION_SORT,
+  DEFAULT_APPLICATIONS_PER_PAGE,
+  MAX_APPLICATIONS_PER_PAGE,
+  parseApplicationListFilters,
+  REJECT_REASON_MAX_LENGTH,
+  REJECT_REASON_MIN_LENGTH,
   buildApplicationPayload,
   DECLARED_ALLOWED_MIME,
   finalizeApplicationSchema,
@@ -282,5 +291,170 @@ describe("finalizeApplicationSchema", () => {
     expect(
       finalizeApplicationSchema.safeParse({ ...VALID_FINALIZE, status: "approved" }).success,
     ).toBe(false);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// S4 — the review surface (BUILD_PLAN S4-T13)
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe("applicationRejectSchema", () => {
+  const ID = "33333333-3333-4333-8333-333333333333";
+
+  /**
+   * THE LOAD-BEARING ASSERTION IN THIS BLOCK.
+   *
+   * `0024_reject_application.sql` ships the floor TWICE — as
+   * `check (status <> 'rejected' or length(btrim(review_note)) >= 10)` and as an
+   * explicit length check inside `reject_application()`. Transcribed here
+   * INDEPENDENTLY rather than imported, so this compares two sources instead of
+   * comparing the module to itself. If the SQL floor moves and this does not, the form
+   * accepts a reason the database then refuses — and the reviewer sees a generic error
+   * on a field they filled in correctly.
+   */
+  const SQL_REJECTED_HAS_REASON_FLOOR = 10;
+
+  it("uses the same floor as the rejected_has_reason CHECK in 0024", () => {
+    expect(REJECT_REASON_MIN_LENGTH).toBe(SQL_REJECTED_HAS_REASON_FLOOR);
+  });
+
+  it("refuses a 9-character reason", () => {
+    const parsed = applicationRejectSchema.safeParse({ id: ID, review_note: "a".repeat(9) });
+    expect(parsed.success).toBe(false);
+    if (parsed.success) throw new Error("unreachable");
+    expect(parsed.error.issues[0]?.path.map(String).join(".")).toBe("review_note");
+  });
+
+  it("accepts a 10-character reason", () => {
+    const parsed = applicationRejectSchema.safeParse({ id: ID, review_note: "a".repeat(10) });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("trims BEFORE measuring, exactly as length(btrim(review_note)) does", () => {
+    // Ten spaces around a two-character reason is a 22-character string and a
+    // 2-character ground. SQL would refuse it; so must this, or the two disagree on
+    // the only edge case anybody actually hits.
+    const padded = `${" ".repeat(10)}no${" ".repeat(10)}`;
+    expect(padded.length).toBeGreaterThan(REJECT_REASON_MIN_LENGTH);
+    expect(applicationRejectSchema.safeParse({ id: ID, review_note: padded }).success).toBe(false);
+
+    // And the stored value is the trimmed one, so `btrim` in SQL is a no-op rather
+    // than a second, invisible transformation.
+    const parsed = applicationRejectSchema.parse({ id: ID, review_note: "  a valid ground  " });
+    expect(parsed.review_note).toBe("a valid ground");
+  });
+
+  it("refuses a non-uuid id and an unknown key", () => {
+    expect(
+      applicationRejectSchema.safeParse({ id: "nope", review_note: "a".repeat(12) }).success,
+    ).toBe(false);
+    expect(
+      applicationRejectSchema.safeParse({ id: ID, review_note: "a".repeat(12), status: "rejected" })
+        .success,
+    ).toBe(false);
+  });
+
+  it("refuses a reason past the upper bound", () => {
+    const parsed = applicationRejectSchema.safeParse({
+      id: ID,
+      review_note: "a".repeat(REJECT_REASON_MAX_LENGTH + 1),
+    });
+    expect(parsed.success).toBe(false);
+  });
+});
+
+describe("applicationApproveSchema", () => {
+  it("takes the row and nothing else — everything is derived server-side", () => {
+    const id = "44444444-4444-4444-8444-444444444444";
+    expect(applicationApproveSchema.parse({ id })).toEqual({ id });
+    // A client must never be able to suggest a member ID, a person or a term.
+    expect(applicationApproveSchema.safeParse({ id, member_id: "2026-001" }).success).toBe(false);
+    expect(applicationApproveSchema.safeParse({ id, person_id: id }).success).toBe(false);
+  });
+});
+
+describe("applicationListFiltersSchema", () => {
+  const TERM = "55555555-5555-4555-8555-555555555555";
+
+  it("defaults an empty query string to the newest-first first page", () => {
+    expect(parseApplicationListFilters({})).toEqual({
+      status: undefined,
+      term_id: undefined,
+      sort: DEFAULT_APPLICATION_SORT,
+      page: 1,
+      per_page: DEFAULT_APPLICATIONS_PER_PAGE,
+    });
+  });
+
+  it("coerces the strings a URL actually carries", () => {
+    expect(
+      parseApplicationListFilters({
+        status: "pending",
+        term_id: TERM,
+        sort: "submitted_at.asc",
+        page: "3",
+        per_page: "50",
+      }),
+    ).toEqual({
+      status: "pending",
+      term_id: TERM,
+      sort: "submitted_at.asc",
+      page: 3,
+      per_page: 50,
+    });
+  });
+
+  it("takes the first value when a param is repeated", () => {
+    expect(parseApplicationListFilters({ status: ["approved", "rejected"] }).status).toBe(
+      "approved",
+    );
+  });
+
+  it("treats an empty param as absence, so ?status= is 'no filter'", () => {
+    expect(parseApplicationListFilters({ status: "", term_id: "" })).toMatchObject({
+      status: undefined,
+      term_id: undefined,
+    });
+  });
+
+  it("NEVER throws — a shared or stale link degrades to the default view", () => {
+    // PRD US-I3: a filtered queue is meant to be pasted into a group chat. A link that
+    // 500s when one param is stale is a link nobody shares twice.
+    for (const input of [
+      { status: "nonsense" },
+      { term_id: "not-a-uuid" },
+      { sort: "member_id.desc" },
+      { page: "abc" },
+      { page: "0" },
+      { page: "-4" },
+      { per_page: String(MAX_APPLICATIONS_PER_PAGE + 1) },
+      { per_page: "0" },
+      { status: { deep: true }, page: [] },
+    ]) {
+      expect(() => parseApplicationListFilters(input)).not.toThrow();
+    }
+
+    expect(parseApplicationListFilters({ status: "nonsense" }).status).toBeUndefined();
+    expect(parseApplicationListFilters({ sort: "member_id.desc" }).sort).toBe(
+      DEFAULT_APPLICATION_SORT,
+    );
+    expect(parseApplicationListFilters({ page: "abc" }).page).toBe(1);
+    expect(
+      parseApplicationListFilters({ per_page: String(MAX_APPLICATIONS_PER_PAGE + 1) }).per_page,
+    ).toBe(DEFAULT_APPLICATIONS_PER_PAGE);
+  });
+
+  it("never offers `draft` as a queue filter", () => {
+    // A draft is an abandoned upload holding applicant PII with the weakest retention
+    // basis in the system (0020). There is no decision to take on one, so it is not a
+    // view a reviewer is given.
+    expect([...APPLICATION_QUEUE_STATUSES]).not.toContain("draft");
+    expect(parseApplicationListFilters({ status: "draft" }).status).toBeUndefined();
+  });
+
+  it("strips params it does not own rather than rejecting the whole query", () => {
+    const parsed = parseApplicationListFilters({ q: "dela cruz", page: "2" });
+    expect(parsed.page).toBe(2);
+    expect(parsed).not.toHaveProperty("q");
   });
 });

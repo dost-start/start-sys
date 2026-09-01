@@ -1,0 +1,293 @@
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- helpers/review-fixtures.psql  —  the S4 review world, layered on top of the nine fixtures
+--
+-- WHAT:      Adds to the caller's test transaction, on top of helpers/fixtures.psql:
+--              · one OPEN membership_application window on the active term
+--              · P7 — a RETURNING scholar who already holds member_id '2024-007'
+--              · the member_id_counters row for join year 2024
+--              · FIVE applications on the active term: two pending, one approved, one
+--                rejected, and one pending whose applicant_email IS P7's
+--              · the moderator's confidentiality acknowledgement
+--
+-- USAGE:     \ir helpers/auth.psql
+--            \ir helpers/fixtures.psql
+--            \ir helpers/review-fixtures.psql      -- ALWAYS AFTER fixtures.psql
+--
+--            Included by 046, 047 and 049 ONLY. 048 does not include it (it seeds its own
+--            people at a dedicated join year and would otherwise inherit an irrelevant
+--            counter row).
+--
+-- ⚠⚠ **NEVER INCLUDE THIS FILE FROM 020_confidentiality_gate.sql.** ⚠⚠
+--    §5 below inserts the MODERATOR's confidentiality acknowledgement. helpers/fixtures.psql
+--    deliberately omits it, and 020 is the suite that asserts PRD US-J5 — "a sensitive-column
+--    read by a user with no current-term acknowledgement is REFUSED, and the refusal is an
+--    ERROR, not an empty result" (CBL Art. VIII §7.1). The moderator fixture IS that negative
+--    case. Adding the row here makes 020's refusal assertions unprovable, so the row is added
+--    HERE, in a file 020 does not include, rather than in fixtures.psql.
+--
+--    Why the review suites need it at all: EVERY S4 path a moderator can take —
+--    approve_application(), reject_application() (indirectly, through the same review
+--    surface), log_document_view() and get_application_detail() — sits behind
+--    assert_confidentiality_ack(). Without this row the moderator's *positive* cases would
+--    all raise, and 047's "moderator succeeds" assertions would be measuring the gate rather
+--    than the role guard. Both properties are real; they just cannot be asserted from one
+--    fixture file, which is why there are two.
+--
+-- RUNS AS THE SESSION ROLE, like fixtures.psql. `applications` has no INSERT policy and no
+--    INSERT privilege for `authenticated` (0008 §5, §6); `people` has neither either (0014,
+--    0015); `confidentiality_acknowledgements` is exec_admin-INSERT-only (0014). Seeding is a
+--    privileged act by construction. Do not call login_as() before including this file.
+--
+-- EVERY WRITE IS `on conflict do nothing`, so a second include is a no-op.
+--
+-- CITATION:  BUILD_PLAN S4-T7; DATA_MODEL.md §3.2, §4, §6/0008; PRD US-C1, US-C2, US-C3,
+--            US-C4, US-H5, US-J5; CBL Art. V §1, Art. VIII §7.1.
+-- ═══════════════════════════════════════════════════════════════════════════════════
+--
+-- ★ THE ARITHMETIC — what a reviewer fixture sees after this file ★
+--   046 and 047 derive from this table.
+--
+--     applications on the active term ............ 5
+--       pending ................................. 3   (A1, A2, A5)
+--       approved ................................ 1   (A3, linked to P4)
+--       rejected ................................ 1   (A4, with a real ground)
+--     people (fixtures.psql 6 + P7) .............. 7
+--     member_id_counters rows .................... 1   (join_year 2024, last_seq 7)
+--     confidentiality acknowledgements ........... 3   (P1 exec, P2 crrd, P3 moderator)
+--
+--   ⚠ THE COUNTER ROW IS INTENTIONALLY INCONSISTENT WITH fixtures.psql, AND THAT IS FINE.
+--     fixtures.psql writes member_id literals ('2024-001', '2024-1000') without counter rows,
+--     because nothing in S2 allocates. Seeding (2024, 7) here means a NEW 2024 allocation
+--     would yield '2024-008' — which collides with nothing that exists. No test in this suite
+--     allocates for join year 2024 anyway: approve_application() derives join_year from the
+--     TERM (active term starts 2026-06-01), so every fresh mint in 047 is '2026-NNN'. The row
+--     exists so the returning-applicant path is seeded the way S5-T12 insists a real seed must
+--     be — counters consistent with the ids that were handed out — rather than left absent.
+-- ═══════════════════════════════════════════════════════════════════════════════════
+
+
+-- Repeated from auth.psql / fixtures.psql so this file is self-sufficient. Idempotent.
+do $$
+begin
+  execute format('grant usage on schema %s to public', pg_my_temp_schema()::regnamespace);
+end;
+$$;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- 1 — an OPEN application window on the active term
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- Not strictly required to read or decide an application — applications_read has no window
+-- predicate, and approve_application() does not re-check the window (a decision is made
+-- AFTER the period closes; PRD US-C5 sends acceptance emails "after the application period").
+-- It is seeded anyway so the review world is a plausible one: an application that could not
+-- have been submitted is a fixture that quietly disagrees with 041.
+--
+-- application_windows carries `unique (term_id, form_kind)`, so at most one row per kind per
+-- term. Wide open on both sides, because nothing here is testing the boundary — 041 owns
+-- that, and this file must not fight it for the same row.
+insert into public.application_windows (term_id, form_kind, opens_at, closes_at)
+select pg_temp.fx_active_term(), 'membership_application',
+       now() - interval '7 days', now() + interval '7 days'
+on conflict (term_id, form_kind) do nothing;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- 2 — P7, the RETURNING scholar
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- ★ THE FIXTURE PRD US-C4 AND US-H5 ARE ABOUT. ★
+--
+-- P7 joined in 2024, already holds '2024-007', and is applying again in the 2026-2027 term.
+-- A5 below carries P7's personal_email as its applicant_email. approve_application() resolves
+-- step 2 (citext email match), falls through to allocate_member_id(), which early-returns
+-- '2024-007' — so the approval creates ZERO new people rows and the member ID does not become
+-- '2026-00N'. That is the PRD's own example, run as a test:
+--
+--     "those with existing IDs will not be assigned new ones
+--      (e.g. 2024-001 will not become 2025-001)"
+--
+-- The email is spelled in MIXED CASE here and lower case on the application on purpose:
+-- personal_email and applicant_email are both `citext`, so the match is case-insensitive by
+-- TYPE rather than by a lower() someone could forget. If either column were ever changed to
+-- text, 047's reuse assertion goes red — which is the point.
+--
+-- No membership row: P7 is a lapsed member returning through the public form, which is
+-- exactly the shape that would otherwise acquire a second identity.
+insert into public.people (
+  id, member_id, join_year, given_name, middle_name, family_name,
+  birthdate, contact_number, personal_email,
+  address_line, city_municipality, province, postal_code,
+  school, school_id_no
+)
+values
+  ('00000000-0000-4000-b000-000000000007', '2024-007', 2024,
+   'Liza', 'Mendoza', 'Bautista',
+   date '2003-07-07', '+639180000007', 'Liza.Bautista@fixture.start-sys.test',
+   'Fixture Street 7', 'Taguig', 'Metro Manila', '1630',
+   'Technological Institute of the Philippines', 'FIXT-SCH-P7')
+on conflict (id) do nothing;
+
+-- The counter that says '2024-007' was handed out. See the arithmetic note above for why
+-- this is deliberately not reconciled with fixtures.psql's other 2024 literals.
+insert into public.member_id_counters (join_year, last_seq)
+values (2024, 7)
+on conflict (join_year) do nothing;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- 3 — a payload builder
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- ⚠ THE ELEVEN KEYS BELOW ARE A CROSS-LANE CONTRACT. They are spelled in exactly three
+-- places: APPLICATION_PAYLOAD_KEYS in lib/applications/schema.ts, the `payload ->> '…'`
+-- reads in approve_application() (0023), and here. A rename in any one of them fails no
+-- typecheck, no lint and no other test — it fails when an approval writes a `people` row full
+-- of NULLs for a real scholar. This builder is what makes 047's approval assertions capable
+-- of catching that: they read the resulting people/memberships row back and compare VALUES,
+-- not just counts.
+--
+-- middle_name and suffix are included because 0023 now copies both (the gap
+-- lib/applications/schema.ts handed to S4). region_id is resolved by CODE — 0016 generates
+-- region ids with gen_random_uuid(), so a literal would be wrong on every fresh database, and
+-- memberships.region_id is NOT NULL so a wrong one raises rather than degrading quietly.
+create or replace function pg_temp.fx_app_payload(
+  p_region_code text default 'NCR',
+  p_year_level  int  default 2,
+  p_grad_year   int  default 2029
+) returns jsonb
+language sql stable as $$
+  select jsonb_build_object(
+    'birthdate',          '2004-08-08',
+    'contact_number',     '+639171112222',
+    'address_line',       'Fixture Applicant Street 9',
+    'city_municipality',  'Quezon City',
+    'province',           'Metro Manila',
+    'postal_code',        '1101',
+    'school',             'Fixture State University',
+    'school_id_no',       'FIXT-APP-SCH',
+    'region_id',          pg_temp.fx_region(p_region_code)::text,
+    'year_level',         p_year_level,
+    'expected_grad_year', p_grad_year,
+    -- collected by the form, copied onto people by 0023, not among the eleven
+    'middle_name',        'Cruz',
+    'suffix',             'Jr.',
+    'program',            'BS Computer Science',
+    -- RA 10173 consent record (S3-T20); never read by approve_application()
+    'consent_privacy_notice_version', 'v1.0.0',
+    'consent_given_at',   now()::text
+  );
+$$;
+
+comment on function pg_temp.fx_app_payload(text, int, int) is
+  'A realistic applications.payload carrying all eleven APPLICATION_PAYLOAD_KEYS plus '
+  'middle_name/suffix/program and the consent record. region_id resolved by code.';
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- 4 — five applications on the active term
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- FIVE, in four states, because a read policy that accidentally filters on status shows up
+-- as a WRONG COUNT rather than as a plausible one — and because the decision suite needs a
+-- pending row it can approve, a second it can reject, a decided row it must be refused on,
+-- and the returning-applicant row.
+--
+-- ⚠ EVERY NON-DRAFT ROW NEEDS A DISTINCT applicant_email: one_application_per_email_per_term
+-- is a PARTIAL unique index on (term_id, applicant_email) WHERE status <> 'draft' (0008,
+-- divergence 1). Reusing an address here would fail the seed, not the test.
+--
+-- ⚠ A4 CARRIES A REAL review_note. rejected_has_reason (0024) refuses a rejected row whose
+-- ground is shorter than ten characters after trimming — PRD US-C2, "rejection records a
+-- reason". A fixture that seeds a reasonless rejection is asserting a state the schema
+-- forbids.
+--
+-- ⚠ A3 CARRIES person_id. approved_has_person (0008) refuses an approved row without one —
+-- PRD US-C2, "approval creates the member's membership record". P4 is used because P4 already
+-- holds '2024-001' and an active-term membership from fixtures.psql, so A3 is a consistent
+-- history rather than a dangling approval.
+--
+-- proof_drive_file_id is non-null on every non-draft row: pending_has_proof (0008) requires a
+-- document reference on anything past draft (PRD US-B2). The values are opaque strings — the
+-- column is provider-opaque by contract and nothing in these tests dereferences it.
+--
+-- NO DRAFT ROW IS SEEDED HERE. 042 covers the draft in the read matrix; a draft in this file
+-- would only be a row every decision assertion has to skip.
+insert into public.applications (
+  id, term_id, status,
+  applicant_email, applicant_given_name, applicant_family_name,
+  payload,
+  proof_drive_file_id, proof_mime_type, proof_size_bytes, proof_verified_at,
+  proof_web_view_link,
+  person_id, reviewed_by, reviewed_at, review_note,
+  submitted_at
+)
+values
+  -- A1 — pending. The generic target: deny assertions do not consume it, and neither does a
+  -- document view or a detail read.
+  ('00000000-0000-4000-8000-000000000201', pg_temp.fx_active_term(), 'pending',
+   'alpha.applicant@fixture.start-sys.test', 'Alpha', 'Applicant',
+   pg_temp.fx_app_payload('NCR', 2, 2029),
+   'ref-review-alpha', 'application/pdf', 524288, now(),
+   'https://drive.example.invalid/file/ref-review-alpha/view',
+   null, null, null, null,
+   now() - interval '3 days'),
+
+  -- A2 — pending. The APPROVE happy path and the idempotency retry.
+  ('00000000-0000-4000-8000-000000000202', pg_temp.fx_active_term(), 'pending',
+   'bravo.applicant@fixture.start-sys.test', 'Bravo', 'Applicant',
+   pg_temp.fx_app_payload('R07', 3, 2028),
+   'ref-review-bravo', 'image/jpeg', 6291456, now(),
+   'https://drive.example.invalid/file/ref-review-bravo/view',
+   null, null, null, null,
+   now() - interval '2 days'),
+
+  -- A3 — already APPROVED, linked to P4. The terminal state a re-decision must be refused on.
+  ('00000000-0000-4000-8000-000000000203', pg_temp.fx_active_term(), 'approved',
+   'charlie.applicant@fixture.start-sys.test', 'Charlie', 'Applicant',
+   pg_temp.fx_app_payload('NCR', 2, 2029),
+   'ref-review-charlie', 'application/pdf', 262144, now(),
+   'https://drive.example.invalid/file/ref-review-charlie/view',
+   '00000000-0000-4000-b000-000000000004',
+   '00000000-0000-4000-a000-000000000003', now() - interval '1 day', null,
+   now() - interval '5 days'),
+
+  -- A4 — already REJECTED, with a ground long enough to satisfy rejected_has_reason.
+  ('00000000-0000-4000-8000-000000000204', pg_temp.fx_active_term(), 'rejected',
+   'delta.applicant@fixture.start-sys.test', 'Delta', 'Applicant',
+   pg_temp.fx_app_payload('R07', 1, 2030),
+   'ref-review-delta', 'application/pdf', 131072, now(),
+   'https://drive.example.invalid/file/ref-review-delta/view',
+   null,
+   '00000000-0000-4000-a000-000000000001', now() - interval '1 day',
+   'Proof of enrollment did not name the applicant.',
+   now() - interval '6 days'),
+
+  -- A5 — pending, and its applicant_email IS P7's. THE RETURNING-APPLICANT PATH.
+  --      Lower case here against the mixed case on the people row: citext, by type.
+  ('00000000-0000-4000-8000-000000000205', pg_temp.fx_active_term(), 'pending',
+   'liza.bautista@fixture.start-sys.test', 'Liza', 'Bautista',
+   pg_temp.fx_app_payload('NCR', 4, 2027),
+   'ref-review-echo', 'application/pdf', 393216, now(),
+   'https://drive.example.invalid/file/ref-review-echo/view',
+   null, null, null, null,
+   now() - interval '1 day')
+on conflict (id) do nothing;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- 5 — the moderator's confidentiality acknowledgement  (READ THE WARNING IN THE HEADER)
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- CBL Art. VIII §7.1, per term (Art. V §1). P3 is the moderator fixture's person, and
+-- fixtures.psql omits this row ON PURPOSE so 020 can assert the refusal.
+--
+-- It is added here because the moderator is a first-class reviewer in S4 — ARCHITECTURE.md
+-- §5: "you cannot review an application without reading it" — and every S4 read path asserts
+-- the acknowledgement. 047 still gets the negative case for free: it revokes this row inside
+-- a savepoint to prove the gate bites, rather than relying on its absence.
+--
+-- recorded_by is the exec_admin account, matching the exec_admin-only INSERT policy (0014).
+insert into public.confidentiality_acknowledgements (
+  person_id, term_id, agreement_version, recorded_by
+)
+values
+  ('00000000-0000-4000-b000-000000000003', pg_temp.fx_active_term(),
+   'CBL-2026-VIII-7', '00000000-0000-4000-a000-000000000001')
+on conflict do nothing;

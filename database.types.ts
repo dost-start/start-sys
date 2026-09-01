@@ -987,6 +987,14 @@ export type Database = {
       }
     }
     Functions: {
+      allocate_member_id: {
+        Args: { p_person_id: string }
+        Returns: string
+      }
+      approve_application: {
+        Args: { p_app_id: string }
+        Returns: string
+      }
       assert_confidentiality_ack: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -1028,6 +1036,14 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      enforce_application_status_transition: {
+        Args: Record<PropertyKey, never>
+        Returns: unknown
+      }
+      enforce_member_id_immutable: {
+        Args: Record<PropertyKey, never>
+        Returns: unknown
+      }
       finalize_application: {
         Args: {
           p_app_id: string
@@ -1037,6 +1053,10 @@ export type Database = {
           p_token: string
         }
         Returns: undefined
+      }
+      get_application_detail: {
+        Args: { p_app_id: string }
+        Returns: Json
       }
       get_person_sensitive: {
         Args: { p_person_id: string }
@@ -1062,6 +1082,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string[]
       }
+      log_document_view: {
+        Args: { p_app_id: string }
+        Returns: undefined
+      }
       mask_sensitive: {
         Args: { p_row: Json; p_table: string }
         Returns: Json
@@ -1072,6 +1096,10 @@ export type Database = {
           application_id: string
           storage_ref: string
         }[]
+      }
+      reject_application: {
+        Args: { p_app_id: string; p_reason: string }
+        Returns: undefined
       }
       reject_write_to_archived_term: {
         Args: Record<PropertyKey, never>

@@ -94,7 +94,7 @@ jobs:
         run: pnpm build
 
   db:
-    name: db (supabase lint + pgTAP RLS suite)
+    name: db (supabase lint + pgTAP RLS suite + member-ID race)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -127,6 +127,41 @@ jobs:
 
       - name: Run the pgTAP suite
         run: npx supabase test db
+
+      # ── The DB-backed Vitest suite (BUILD_PLAN S4-T12) ─────────────────────
+      # pgTAP CANNOT prove the member-ID race: `supabase test db` wraps each file in
+      # a transaction that is rolled back, so a second connection never sees the
+      # fixtures and 50-way parallelism is unachievable there
+      # (supabase/tests/048_member_id_concurrency.sql says so in its own header).
+      #
+      # This step is the other half: 50 genuinely concurrent PostgREST connections
+      # approving 50 applications, asserting 50 distinct, GAPLESS member IDs. It runs
+      # in `db` rather than `js` because it is the only job with a live database, and
+      # it is REQUIRED — the suite skips itself when the three variables are absent,
+      # so without this step it would skip silently in CI forever and "green" would
+      # mean nothing.
+      - name: Export the local Supabase keys
+        run: |
+          set -uo pipefail
+          # Local-stack demo keys only. Never a production credential.
+          status=$(npx supabase status -o env)
+          api=$(printf '%s\n' "$status" | grep -E '^API_URL=' | head -n1 | cut -d= -f2- | tr -d '"')
+          anon=$(printf '%s\n' "$status" | grep -E '^ANON_KEY=' | head -n1 | cut -d= -f2- | tr -d '"')
+          service=$(printf '%s\n' "$status" | grep -E '^SERVICE_ROLE_KEY=' | head -n1 | cut -d= -f2- | tr -d '"')
+          if [ -z "$api" ] || [ -z "$anon" ] || [ -z "$service" ]; then
+            echo "::error::Could not parse API_URL/ANON_KEY/SERVICE_ROLE_KEY from supabase status"
+            exit 1
+          fi
+          echo "::add-mask::$anon"
+          echo "::add-mask::$service"
+          echo "NEXT_PUBLIC_SUPABASE_URL=$api" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$anon" >> "$GITHUB_ENV"
+          echo "SUPABASE_SERVICE_ROLE_KEY=$service" >> "$GITHUB_ENV"
+
+      - name: DB-backed vitest (member-ID concurrency)
+        # If the suite reports "skipped" here, the environment did not reach it and the
+        # race was NOT proved. Treat that as a failure to investigate, not as a pass.
+        run: pnpm vitest run lib/applications/approve-application.test.ts
 
       - name: Stop the Supabase stack
         if: always()

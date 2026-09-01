@@ -499,3 +499,13 @@ revoke execute on function public.get_person_sensitive(uuid) from anon;
 -- the anon INSERT policy on applications (0008) and the anon SELECT policies on regions
 -- and terms (0014) sit in policy bodies that call them. They disclose nothing — each
 -- returns only the caller's own binding, which for anon is NULL.
+
+-- ─────────────────────────────────────────────────────────────────────────────────────
+-- applications audit trigger (US-C1/US-C2, History NFR). Lives HERE rather than in
+-- 0008_applications.sql because migrations apply in filename order: 0008 runs before
+-- 0011 defines audit_row(), and CREATE TRIGGER resolves its function at creation time.
+-- 0012 orders after both, so the attachment is safe. See the note at the foot of 0008.
+-- ─────────────────────────────────────────────────────────────────────────────────────
+create trigger trg_applications_audit
+  after insert or update on public.applications
+  for each row execute function public.audit_row();

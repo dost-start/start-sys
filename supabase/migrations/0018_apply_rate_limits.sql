@@ -67,6 +67,72 @@
 --
 -- current_term_id() discloses nothing an anonymous visitor cannot already read: terms_read_anon
 -- already lets anon see the active term row in full.
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- 0 — RELOCATED POLICIES from 0008_applications.sql (see the note there).
+-- These bodies call auth_role()/auth_person_id() (defined in 0012), so they must be
+-- created in a migration that orders after 0012. Nothing about their content changed.
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- ── applications_read ──────────────────────────────────────────────────────────────
+-- PRD US-C1: CRRD and Executive Admins review applications; moderators do the day-to-day
+-- work, and you cannot review an application without reading it (ARCHITECTURE.md §5).
+--
+-- ⚠ **THERE IS NO ANON SELECT POLICY AND NO ANON UPDATE POLICY ON THIS TABLE, AND THOSE TWO
+-- ABSENCES ARE THE ANTI-ENUMERATION MECHANISM.** anon holds Supabase's default SELECT
+-- privilege, so what returns zero rows is the missing policy, not a missing grant — which is
+-- deny-by-default working as designed. The obvious feature request that would undo it is
+-- "let the applicant check their status later": do not add a policy for it. An
+-- accountless status-lookup surface is a way to ask the database whether a given person
+-- applied, and the answer is PII. PRD §4 defers applicant self-service outright — the
+-- applicant contacts CRRD and CRRD edits the application.
+--
+-- tech_admin is absent from this list, deliberately (PRD OQ-5). officer, regional_rep and
+-- member are absent because an application is not an organizational record they have any
+-- claim on.
+create policy applications_read on public.applications
+  for select to authenticated
+  using (public.auth_role() in ('exec_admin', 'crrd_admin', 'moderator'));
+
+-- ── applications_update ────────────────────────────────────────────────────────────
+-- PRD §4 (Non-Goals, "Applicant self-service edit after submission"): "v1 answer: applicant
+-- contacts CRRD, CRRD edits the application." This is the policy that makes that answer
+-- possible. The same three roles, so a reviewer cannot edit what they cannot read.
+--
+-- The DECISION path is NOT this policy: approve_application() and reject_application()
+-- (0023, 0024) are SECURITY DEFINER and carry their own guards and their own state-machine
+-- trigger. S4-T4 narrows the editable surface further with a column-level GRANT — status,
+-- person_id, reviewed_* and the proof pointers are withheld there, so the decision cannot be
+-- routed around by a hand-written UPDATE. That narrowing is S4's lane and is not done here.
+create policy applications_update on public.applications
+  for update to authenticated
+  using      (public.auth_role() in ('exec_admin', 'crrd_admin', 'moderator'))
+  with check (public.auth_role() in ('exec_admin', 'crrd_admin', 'moderator'));
+
+-- NO applications INSERT policy for `authenticated`, deliberately. A membership application
+-- comes from an applicant; approve_application() creates the person. An admin who needs to
+-- enter an application on someone's behalf does it through the public form.
+--
+-- NO DELETE POLICY, here or anywhere (PRD Reliability NFR, CLAUDE.md). An application that
+-- should not have been submitted is redacted (0020), never removed.
+
+-- ── renewal_submissions_read ───────────────────────────────────────────────────────
+-- See the collision note in the header: this ships now so 026's SELECT-policy invariant
+-- holds, and it is correct on its own terms. The three operational roles read renewals
+-- because reviewing one is their job (PRD US-G7); a person reads their OWN because they
+-- submitted it (PRD US-H4 — the renewal form is the one surface a departed member keeps).
+create policy renewal_submissions_read on public.renewal_submissions
+  for select to authenticated
+  using (
+    public.auth_role() in ('exec_admin', 'crrd_admin', 'moderator')
+    or person_id = public.auth_person_id()
+  );
+
+-- NO INSERT and NO UPDATE policy on renewal_submissions. v1.2 adds the member INSERT policy
+-- — "a person with ANY past membership may insert exactly one renewal row while a renewal
+-- window is open" (ARCHITECTURE.md §4.3) — deliberately, with its own pgTAP assertions.
+-- Until then the table is unwritable by every human role, which is the correct state for a
+-- table nothing in v1.0 writes.
+
+
 grant execute on function public.current_term_id() to anon;
 
 

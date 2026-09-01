@@ -1,0 +1,234 @@
+# CI — the four-job merge gate (BUILD_PLAN S1-T19, S1-T24).
+#
+# All four jobs are required by branch protection. No job may be
+# `continue-on-error`, and the `db` job must never be made non-required:
+# it is the only place the pgTAP FORCE-RLS meta-test runs.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  js:
+    name: js (secrets, env, typecheck, lint, unit, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Enable corepack for the pinned pnpm
+        run: corepack enable
+
+      - name: Set up Node from .nvmrc
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm i --frozen-lockfile
+
+      - name: Secret guard (no keys outside .env.example and admin-client)
+        run: |
+          set -uo pipefail
+          # A committed service-role key, Supabase secret key or private key block
+          # is a data breach, not a lint failure. Allowed only in .env.example
+          # (names, never values), lib/server/admin-client.ts and .github/.
+          patterns='SUPABASE_SERVICE_ROLE_KEY=.|sb_secret_|-----BEGIN'
+          hits=$(git grep -nIE "$patterns" -- \
+            ':!.env.example' \
+            ':!lib/server/admin-client.ts' \
+            ':!.github/' || true)
+          if [ -n "$hits" ]; then
+            echo "::error::Possible secret material in tracked files:"
+            echo "$hits"
+            exit 1
+          fi
+          echo "Secret guard clean."
+
+      - name: Env coverage (every process.env.NAME is documented)
+        run: |
+          set -uo pipefail
+          # A variable that reaches Vercel undocumented is a variable the next
+          # officer cannot rotate. .env.example is the register.
+          if [ ! -f .env.example ]; then
+            echo "::error::.env.example is missing"
+            exit 1
+          fi
+          names=$(git grep -hoE 'process\.env\.[A-Z0-9_]+' -- \
+            app lib components middleware.ts 2>/dev/null \
+            | sed 's/^process\.env\.//' | sort -u || true)
+          missing=""
+          for name in $names; do
+            if ! grep -qE "^[[:space:]]*#?[[:space:]]*${name}=" .env.example; then
+              missing="${missing} ${name}"
+            fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Env vars used in code but absent from .env.example:${missing}"
+            exit 1
+          fi
+          echo "Env coverage clean."
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint and format check
+        run: pnpm check
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+  db:
+    name: db (supabase lint + pgTAP RLS suite)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Enable corepack for the pinned pnpm
+        run: corepack enable
+
+      - name: Set up Node from .nvmrc
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm i --frozen-lockfile
+
+      - name: Start the ephemeral Supabase stack
+        run: npx supabase start
+
+      - name: Lint the schema
+        run: npx supabase db lint
+
+      - name: Run the pgTAP suite
+        run: npx supabase test db
+
+      - name: Stop the Supabase stack
+        if: always()
+        run: npx supabase stop --no-backup
+
+  types-drift:
+    name: types-drift (database.types.ts matches the schema)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Enable corepack for the pinned pnpm
+        run: corepack enable
+
+      - name: Set up Node from .nvmrc
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm i --frozen-lockfile
+
+      - name: Start the ephemeral Supabase stack
+        run: npx supabase start
+
+      - name: Regenerate the database types
+        run: npx supabase gen types typescript --local > database.types.generated.ts
+
+      - name: Compare against the committed types
+        run: |
+          set -uo pipefail
+          if ! diff -u database.types.ts database.types.generated.ts; then
+            echo "::error::database.types.ts is stale. Run pnpm db:types and commit it with the migration."
+            exit 1
+          fi
+          echo "Committed types match the schema."
+
+      - name: Upload the generated types on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-types
+          path: database.types.generated.ts
+
+      - name: Stop the Supabase stack
+        if: always()
+        run: npx supabase stop --no-backup
+
+  e2e:
+    name: e2e (playwright smoke)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: js
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Enable corepack for the pinned pnpm
+        run: corepack enable
+
+      - name: Set up Node from .nvmrc
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm i --frozen-lockfile
+
+      - name: Start the ephemeral Supabase stack
+        run: npx supabase start
+
+      - name: Export the local Supabase keys
+        run: |
+          set -uo pipefail
+          # Local-stack demo keys only. Never a production credential.
+          status=$(npx supabase status -o env)
+          anon=$(printf '%s\n' "$status" | grep -E '^ANON_KEY=' | head -n1 | cut -d= -f2- | tr -d '"')
+          service=$(printf '%s\n' "$status" | grep -E '^SERVICE_ROLE_KEY=' | head -n1 | cut -d= -f2- | tr -d '"')
+          if [ -z "$anon" ] || [ -z "$service" ]; then
+            echo "::error::Could not parse ANON_KEY/SERVICE_ROLE_KEY from supabase status"
+            exit 1
+          fi
+          echo "::add-mask::$anon"
+          echo "::add-mask::$service"
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$anon" >> "$GITHUB_ENV"
+          echo "SUPABASE_SERVICE_ROLE_KEY=$service" >> "$GITHUB_ENV"
+
+      - name: Install the Playwright chromium browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run the Playwright smoke flows
+        env:
+          CI_E2E_CHROMIUM_ONLY: "1"
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+          DOCUMENT_STORE: fake
+          JOB_SHARED_SECRET: ci-test-secret
+        run: pnpm test:e2e
+
+      - name: Upload the Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
+
+      - name: Stop the Supabase stack
+        if: always()
+        run: npx supabase stop --no-backup

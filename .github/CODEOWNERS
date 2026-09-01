@@ -1,0 +1,11 @@
+# CODEOWNERS — BUILD_PLAN S1-T21.
+#
+# The four paths where a mistake is a data breach rather than a bug:
+# the schema, the tests that prove the authorization boundary, the CI gate
+# itself, and the only file permitted to hold the service-role key.
+# All four route to the CTO for review.
+
+supabase/migrations/**   @thanreiz
+supabase/tests/**        @thanreiz
+.github/**               @thanreiz
+lib/server/**            @thanreiz

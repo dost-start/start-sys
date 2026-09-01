@@ -74,7 +74,7 @@ describe("parsePublicEnv", () => {
 
     it(`throws naming ${key} when it is present but empty`, () => {
       // An empty string is the common real failure: the variable exists in Vercel with
-      // nothing in it, which `process.env.X` reports as "" rather than as undefined.
+      // nothing in it, which `process.env` access reports as "" rather than as undefined.
       expect(() => parsePublicEnv({ ...VALID_PUBLIC, [key]: "" })).toThrow(key);
     });
   }

@@ -180,10 +180,11 @@ select columns_are(
     'proof_verified_at',
     'submit_token_hash', 'submit_token_expires_at',
     'person_id', 'reviewed_by', 'reviewed_at', 'review_note',
-    'redacted_at', 'submitted_at', 'created_at'
+    'redacted_at', 'submitted_at', 'created_at',
+    'consented_at', 'privacy_notice_version'
   ]::name[],
-  'public.applications has exactly its 21 documented columns — including the two S3-T4 '
-  'divergences, submit_token_hash and submit_token_expires_at'
+  'public.applications has exactly its 23 documented columns — the two S3-T4 divergences '
+  '(submit_token_hash, submit_token_expires_at) plus 0035''s consent pair'
 );
 
 select columns_are(

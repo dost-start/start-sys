@@ -80,12 +80,12 @@ select pg_temp.login_anon();
 select lives_ok(
   $$ insert into public.applications
        (id, term_id, applicant_email, applicant_given_name, applicant_family_name,
-        payload, submit_token_hash, submit_token_expires_at)
+        payload, submit_token_hash, submit_token_expires_at, consented_at)
      values ('00000000-0000-4000-8000-000000000001',
              public.current_term_id(),
              'happy.path@fixture.start-sys.test', 'Happy', 'Path',
              '{"region_code":"NCR"}'::jsonb,
-             'not-a-real-digest', now() + interval '1 hour') $$,
+             'not-a-real-digest', now() + interval '1 hour', now()) $$,
   'POSITIVE CONTROL: anon CAN insert an application while a membership_application window '
   'is open — PRD US-B1, "reachable without an account, by link"'
 );
@@ -405,10 +405,11 @@ select pg_temp.logout();
 select pg_temp.login_anon();
 select lives_ok(
   $$ insert into public.applications
-       (id, term_id, applicant_email, applicant_given_name, applicant_family_name)
+       (id, term_id, applicant_email, applicant_given_name, applicant_family_name,
+        consented_at)
      values ('00000000-0000-4000-8000-000000000003',
              public.current_term_id(),
-             'happy.path@fixture.start-sys.test', 'Happy', 'Path') $$,
+             'happy.path@fixture.start-sys.test', 'Happy', 'Path', now()) $$,
   'two DRAFTS with the same (term, email) both live — the uniqueness is deferred to '
   'non-draft rows so a dead browser does not lock an applicant out, and so the INSERT is '
   'not an email-enumeration oracle (S3-T4 divergence 1)'
@@ -420,15 +421,16 @@ select pg_temp.logout();
 -- pending_has_proof (0008) requires a proof reference on any non-draft row, so both get one.
 -- consented_at rides along: 0035's submitted_has_consent CHECK requires it on any
 -- non-draft row (the INSERT trigger stamps the version; on UPDATE the value stands).
+-- consent was recorded at the draft INSERT above (0035's trigger stamped the server
+-- values); an UPDATE must NOT touch it — enforce_consent_server_values raises on any
+-- change ("captured at collection and immutable thereafter").
 update public.applications
-   set status = 'pending', proof_drive_file_id = 'ref-live-1', submitted_at = now(),
-       consented_at = now(), privacy_notice_version = 'v1'
+   set status = 'pending', proof_drive_file_id = 'ref-live-1', submitted_at = now()
  where id = '00000000-0000-4000-8000-000000000001';
 
 select throws_ok(
   $$ update public.applications
-        set status = 'pending', proof_drive_file_id = 'ref-live-2', submitted_at = now(),
-            consented_at = now(), privacy_notice_version = 'v1'
+        set status = 'pending', proof_drive_file_id = 'ref-live-2', submitted_at = now()
       where id = '00000000-0000-4000-8000-000000000003' $$,
   '23505'::char(5), null::text,
   'a SECOND live application for the same (term, email) raises 23505 — the constraint still '

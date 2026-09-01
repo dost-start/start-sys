@@ -201,9 +201,13 @@ select ('00000000-0000-4000-e900-' || lpad(k::text, 12, '0'))::uuid,
        'Volume Committee ' || k
 from generate_series(1, 15) k;
 
+-- `1 + ((i / 5) % 15)`, NOT `1 + (i % 15)`: i is always a multiple of 5, and
+-- (multiple-of-5 % 15) cycles only {5, 10, 0} — three committees get every seat and
+-- twelve get none, which under-populates the view and breaks assertion 6. Dividing
+-- by the stride first walks all fifteen.
 insert into public.committee_memberships (membership_id, committee_id)
 select ('00000000-0000-4000-c900-' || lpad(i::text, 12, '0'))::uuid,
-       ('00000000-0000-4000-e900-' || lpad((1 + (i % 15))::text, 12, '0'))::uuid
+       ('00000000-0000-4000-e900-' || lpad((1 + ((i / 5) % 15))::text, 12, '0'))::uuid
 from generate_series(1, 800) i
 where i % 5 = 0;
 
@@ -306,9 +310,10 @@ select is(
 select is(
   (select count(*)::int from public.v_membership_committee_counts
     where term_id = public.current_term_id()),
-  16,
-  '15 committees plus the NULL (unassigned) bucket — the LEFT JOIN is carrying four fifths '
-  'of the term, which is the realistic and the expensive shape'
+  17,
+  '15 volume committees + the base fixture committee (helpers/fixtures.psql, 2 seats) + '
+  'the NULL (unassigned) bucket — the LEFT JOIN is carrying four fifths of the term, '
+  'which is the realistic and the expensive shape'
 );
 
 select is(

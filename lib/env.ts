@@ -2,7 +2,7 @@
 // ENVIRONMENT PARSING — one module, zod-validated, FAILING FAST AND NAMING EVERY
 // MISSING KEY (BUILD_PLAN S7-T2).
 //
-// The failure this replaces: `process.env.SOMETHING` is `undefined`, that `undefined`
+// The failure this replaces: an unset env read is `undefined`, that `undefined`
 // reaches Supabase or Google, and the error that surfaces three layers later names
 // neither the variable nor the file. On a system a student officer inherits, "which of
 // the fourteen variables did I forget" is not a question the stack trace should be

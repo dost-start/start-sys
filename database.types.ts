@@ -1,24 +1,3 @@
-// ═══════════════════════════════════════════════════════════════════════════════════
-// database.types.ts
-//
-// GENERATED FILE — DO NOT HAND-EDIT.
-//
-// Produced by `pnpm db:types` (`supabase gen types typescript --local > database.types.ts`)
-// from the migrations in `supabase/migrations/`, which are the single source of truth for
-// the schema (CONVENTIONS.md §3.4, §5; DATA_MODEL.md §13 rule 6).
-//
-// The CI `types-drift` job regenerates this file and runs `git diff --exit-code`, so a
-// migration merged without a regenerated copy of this file fails the merge gate rather
-// than surfacing as a type error weeks later (BUILD_PLAN S1-T19, S1-T20).
-//
-// If a row shape here looks wrong, the fix is a migration plus `pnpm db:types` in the SAME
-// commit — never an edit to this file, and never a hand-written row type in a feature
-// folder (CONVENTIONS.md §5: "DB row types always come from the generated root
-// database.types.ts; never hand-write a row shape").
-//
-// This file is committed at the REPO ROOT, not under `lib/` or `types/`.
-// ═══════════════════════════════════════════════════════════════════════════════════
-
 export type Json =
   | string
   | number
@@ -28,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instanciate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "13.0.5"
-  }
   public: {
     Tables: {
       affiliations: {
@@ -179,6 +153,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "applications_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "v_member_directory"
+            referencedColumns: ["person_id"]
+          },
+          {
             foreignKeyName: "applications_privacy_notice_version_fkey"
             columns: ["privacy_notice_version"]
             isOneToOne: false
@@ -256,6 +237,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "committees"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "committee_memberships_committee_id_fkey"
+            columns: ["committee_id"]
+            isOneToOne: false
+            referencedRelation: "v_membership_committee_counts"
+            referencedColumns: ["committee_id"]
           },
           {
             foreignKeyName: "committee_memberships_membership_id_fkey"
@@ -344,6 +332,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "people"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "confidentiality_acknowledgements_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "v_member_directory"
+            referencedColumns: ["person_id"]
           },
           {
             foreignKeyName: "confidentiality_acknowledgements_term_id_fkey"
@@ -537,11 +532,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "memberships_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "v_member_directory"
+            referencedColumns: ["person_id"]
+          },
+          {
             foreignKeyName: "memberships_region_id_fkey"
             columns: ["region_id"]
             isOneToOne: false
             referencedRelation: "regions"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "memberships_region_id_fkey"
+            columns: ["region_id"]
+            isOneToOne: false
+            referencedRelation: "v_membership_region_counts"
+            referencedColumns: ["region_id"]
           },
           {
             foreignKeyName: "memberships_term_id_fkey"
@@ -625,6 +634,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "officer_assignments_committee_id_fkey"
+            columns: ["committee_id"]
+            isOneToOne: false
+            referencedRelation: "v_membership_committee_counts"
+            referencedColumns: ["committee_id"]
+          },
+          {
             foreignKeyName: "officer_assignments_department_id_fkey"
             columns: ["department_id"]
             isOneToOne: false
@@ -637,6 +653,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "people"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "officer_assignments_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "v_member_directory"
+            referencedColumns: ["person_id"]
           },
           {
             foreignKeyName: "officer_assignments_role_fkey"
@@ -844,6 +867,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "renewal_submissions_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "v_member_directory"
+            referencedColumns: ["person_id"]
+          },
+          {
             foreignKeyName: "renewal_submissions_term_id_fkey"
             columns: ["term_id"]
             isOneToOne: false
@@ -878,6 +908,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "regions"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rr_region_grants_region_id_fkey"
+            columns: ["region_id"]
+            isOneToOne: false
+            referencedRelation: "v_membership_region_counts"
+            referencedColumns: ["region_id"]
           },
         ]
       }
@@ -986,16 +1023,69 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "user_roles_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: true
+            referencedRelation: "v_member_directory"
+            referencedColumns: ["person_id"]
+          },
+          {
             foreignKeyName: "user_roles_region_id_fkey"
             columns: ["region_id"]
             isOneToOne: false
             referencedRelation: "regions"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "user_roles_region_id_fkey"
+            columns: ["region_id"]
+            isOneToOne: false
+            referencedRelation: "v_membership_region_counts"
+            referencedColumns: ["region_id"]
+          },
         ]
       }
     }
     Views: {
+      pg_all_foreign_keys: {
+        Row: {
+          fk_columns: unknown[] | null
+          fk_constraint_name: unknown
+          fk_schema_name: unknown
+          fk_table_name: unknown
+          fk_table_oid: unknown
+          is_deferrable: boolean | null
+          is_deferred: boolean | null
+          match_type: string | null
+          on_delete: string | null
+          on_update: string | null
+          pk_columns: unknown[] | null
+          pk_constraint_name: unknown
+          pk_index_name: unknown
+          pk_schema_name: unknown
+          pk_table_name: unknown
+          pk_table_oid: unknown
+        }
+        Relationships: []
+      }
+      tap_funky: {
+        Row: {
+          args: string | null
+          is_definer: boolean | null
+          is_strict: boolean | null
+          is_visible: boolean | null
+          kind: unknown
+          langoid: unknown
+          name: unknown
+          oid: unknown
+          owner: unknown
+          returns: string | null
+          returns_set: boolean | null
+          schema: unknown
+          volatility: string | null
+        }
+        Relationships: []
+      }
       v_member_directory: {
         Row: {
           committee_name: string | null
@@ -1022,38 +1112,86 @@ export type Database = {
           },
         ]
       }
+      v_membership_committee_counts: {
+        Row: {
+          committee_code: string | null
+          committee_id: string | null
+          committee_name: string | null
+          member_count: number | null
+          term_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "memberships_term_id_fkey"
+            columns: ["term_id"]
+            isOneToOne: false
+            referencedRelation: "terms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_membership_region_counts: {
+        Row: {
+          island_group: Database["public"]["Enums"]["island_group"] | null
+          member_count: number | null
+          region_code: string | null
+          region_id: string | null
+          region_name: string | null
+          sort_order: number | null
+          term_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "memberships_term_id_fkey"
+            columns: ["term_id"]
+            isOneToOne: false
+            referencedRelation: "terms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_membership_status_counts: {
+        Row: {
+          member_count: number | null
+          status: Database["public"]["Enums"]["membership_status"] | null
+          term_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "memberships_term_id_fkey"
+            columns: ["term_id"]
+            isOneToOne: false
+            referencedRelation: "terms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
-      allocate_member_id: {
-        Args: { p_person_id: string }
-        Returns: string
-      }
-      approve_application: {
-        Args: { p_app_id: string }
-        Returns: string
-      }
-      assert_confidentiality_ack: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      audit_row: {
-        Args: Record<PropertyKey, never>
-        Returns: unknown
-      }
-      auth_person_id: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
-      auth_region_id: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
-      auth_region_ids: {
-        Args: Record<PropertyKey, never>
-        Returns: string[]
-      }
+      _cleanup: { Args: never; Returns: boolean }
+      _contract_on: { Args: { "": string }; Returns: unknown }
+      _currtest: { Args: never; Returns: number }
+      _db_privs: { Args: never; Returns: unknown[] }
+      _extensions: { Args: never; Returns: unknown[] }
+      _get: { Args: { "": string }; Returns: number }
+      _get_latest: { Args: { "": string }; Returns: number[] }
+      _get_note: { Args: { "": string }; Returns: string }
+      _is_verbose: { Args: never; Returns: boolean }
+      _prokind: { Args: { p_oid: unknown }; Returns: unknown }
+      _query: { Args: { "": string }; Returns: string }
+      _refine_vol: { Args: { "": string }; Returns: string }
+      _retval: { Args: { "": string }; Returns: string }
+      _table_privs: { Args: never; Returns: unknown[] }
+      _temptypes: { Args: { "": string }; Returns: string }
+      _todo: { Args: never; Returns: string }
+      allocate_member_id: { Args: { p_person_id: string }; Returns: string }
+      approve_application: { Args: { p_app_id: string }; Returns: string }
+      assert_confidentiality_ack: { Args: never; Returns: undefined }
+      auth_person_id: { Args: never; Returns: string }
+      auth_region_id: { Args: never; Returns: string }
+      auth_region_ids: { Args: never; Returns: string[] }
       auth_role: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: Database["public"]["Enums"]["org_role"]
       }
       check_rate_limit: {
@@ -1061,26 +1199,68 @@ export type Database = {
           p_bucket: string
           p_key_hash: string
           p_limit: number
-          p_window: unknown
+          p_window: string
         }
         Returns: boolean
       }
-      consume_recovery_code: {
-        Args: { p_code: string }
-        Returns: boolean
-      }
-      current_term_id: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
-      enforce_application_status_transition: {
-        Args: Record<PropertyKey, never>
-        Returns: unknown
-      }
-      enforce_member_id_immutable: {
-        Args: Record<PropertyKey, never>
-        Returns: unknown
-      }
+      col_is_null:
+        | {
+            Args: {
+              column_name: unknown
+              description?: string
+              schema_name: unknown
+              table_name: unknown
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              column_name: unknown
+              description?: string
+              table_name: unknown
+            }
+            Returns: string
+          }
+      col_not_null:
+        | {
+            Args: {
+              column_name: unknown
+              description?: string
+              schema_name: unknown
+              table_name: unknown
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              column_name: unknown
+              description?: string
+              table_name: unknown
+            }
+            Returns: string
+          }
+      consume_recovery_code: { Args: { p_code: string }; Returns: boolean }
+      current_term_id: { Args: never; Returns: string }
+      diag:
+        | {
+            Args: { msg: unknown }
+            Returns: {
+              error: true
+            } & "Could not choose the best candidate function between: public.diag(msg => text), public.diag(msg => anyelement). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
+          }
+        | {
+            Args: { msg: string }
+            Returns: {
+              error: true
+            } & "Could not choose the best candidate function between: public.diag(msg => text), public.diag(msg => anyelement). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
+          }
+      diag_test_name: { Args: { "": string }; Returns: string }
+      do_tap:
+        | { Args: never; Returns: string[] }
+        | { Args: { "": string }; Returns: string[] }
+      fail:
+        | { Args: never; Returns: string }
+        | { Args: { "": string }; Returns: string }
       finalize_application: {
         Args: {
           p_app_id: string
@@ -1091,52 +1271,36 @@ export type Database = {
         }
         Returns: undefined
       }
-      get_application_detail: {
-        Args: { p_app_id: string }
-        Returns: Json
-      }
-      get_member_record: {
-        Args: { p_person_id: string }
-        Returns: Json
-      }
-      get_person_sensitive: {
-        Args: { p_person_id: string }
-        Returns: Json
-      }
-      has_aal2: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
-      has_confidentiality_ack: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
-      health_ping: {
-        Args: Record<PropertyKey, never>
-        Returns: number
-      }
-      is_admin_reader: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
-      is_user_roles_writer: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
-      issue_recovery_codes: {
-        Args: Record<PropertyKey, never>
-        Returns: string[]
-      }
-      log_document_view: {
-        Args: { p_app_id: string }
-        Returns: undefined
-      }
-      mask_sensitive: {
-        Args: { p_row: Json; p_table: string }
-        Returns: Json
-      }
+      findfuncs: { Args: { "": string }; Returns: string[] }
+      finish: { Args: { exception_on_failure?: boolean }; Returns: string[] }
+      format_type_string: { Args: { "": string }; Returns: string }
+      get_application_detail: { Args: { p_app_id: string }; Returns: Json }
+      get_member_record: { Args: { p_person_id: string }; Returns: Json }
+      get_person_sensitive: { Args: { p_person_id: string }; Returns: Json }
+      has_aal2: { Args: never; Returns: boolean }
+      has_confidentiality_ack: { Args: never; Returns: boolean }
+      has_unique: { Args: { "": string }; Returns: string }
+      health_ping: { Args: never; Returns: number }
+      in_todo: { Args: never; Returns: boolean }
+      is_admin_reader: { Args: never; Returns: boolean }
+      is_empty: { Args: { "": string }; Returns: string }
+      is_user_roles_writer: { Args: never; Returns: boolean }
+      isnt_empty: { Args: { "": string }; Returns: string }
+      issue_recovery_codes: { Args: never; Returns: string[] }
+      lives_ok: { Args: { "": string }; Returns: string }
+      log_document_view: { Args: { p_app_id: string }; Returns: undefined }
+      mask_sensitive: { Args: { p_row: Json; p_table: string }; Returns: Json }
+      no_plan: { Args: never; Returns: boolean[] }
+      num_failed: { Args: never; Returns: number }
+      os_name: { Args: never; Returns: string }
+      pass:
+        | { Args: never; Returns: string }
+        | { Args: { "": string }; Returns: string }
+      pg_version: { Args: never; Returns: string }
+      pg_version_num: { Args: never; Returns: number }
+      pgtap_version: { Args: never; Returns: number }
       purge_abandoned_drafts: {
-        Args: { p_age?: unknown }
+        Args: { p_age?: string }
         Returns: {
           application_id: string
           storage_ref: string
@@ -1146,14 +1310,9 @@ export type Database = {
         Args: { p_app_id: string; p_reason: string }
         Returns: undefined
       }
-      reject_write_to_archived_term: {
-        Args: Record<PropertyKey, never>
-        Returns: unknown
-      }
-      reject_write_to_archived_term_via_membership: {
-        Args: Record<PropertyKey, never>
-        Returns: unknown
-      }
+      runtests:
+        | { Args: never; Returns: string[] }
+        | { Args: { "": string }; Returns: string[] }
       search_member_directory: {
         Args: {
           p_committee_ids?: string[]
@@ -1179,10 +1338,21 @@ export type Database = {
           year_level: number
         }[]
       }
-      set_updated_at: {
-        Args: Record<PropertyKey, never>
-        Returns: unknown
-      }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
+      skip:
+        | { Args: { "": string }; Returns: string }
+        | { Args: { how_many: number; why: string }; Returns: string }
+      throws_ok: { Args: { "": string }; Returns: string }
+      todo:
+        | { Args: { how_many: number }; Returns: boolean[] }
+        | { Args: { how_many: number; why: string }; Returns: boolean[] }
+        | { Args: { why: string }; Returns: boolean[] }
+        | { Args: { how_many: number; why: string }; Returns: boolean[] }
+      todo_end: { Args: never; Returns: boolean[] }
+      todo_start:
+        | { Args: never; Returns: boolean[] }
+        | { Args: { "": string }; Returns: boolean[] }
       update_member_record: {
         Args: {
           p_expected_updated_at: string
@@ -1234,7 +1404,9 @@ export type Database = {
       term_status: "draft" | "active" | "archived"
     }
     CompositeTypes: {
-      [_ in never]: never
+      _time_trial_type: {
+        a_time: number | null
+      }
     }
   }
 }
@@ -1406,3 +1578,4 @@ export const Constants = {
     },
   },
 } as const
+

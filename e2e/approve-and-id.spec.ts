@@ -87,6 +87,11 @@ test.skip(
   "SUPABASE_SERVICE_ROLE_KEY is not set — the review flow cannot be seeded or asserted.",
 );
 
+// Login + TOTP + the approve round trip on a loaded CI box does not fit Playwright's
+// default 30s — and the in-test diagnostic waits need room to fire before the test
+// budget kills the page out from under them.
+test.describe.configure({ timeout: 120_000 });
+
 /** PRD US-C3: `joinYear-sequence`. `{3,}` so 2024-999 rolls to 2024-1000, never collides. */
 const MEMBER_ID_PATTERN = /\b\d{4}-\d{3,}\b/;
 

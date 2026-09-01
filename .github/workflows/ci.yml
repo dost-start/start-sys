@@ -294,6 +294,10 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
           DOCUMENT_STORE: fake
           JOB_SHARED_SECRET: ci-test-secret
+          # `pnpm start` is NODE_ENV=production, and the rate limiter refuses to run
+          # on a guessable digest there — a real requirement in prod, satisfied with a
+          # throwaway value in CI (local-stack only, nothing sensitive behind it).
+          RATE_LIMIT_HMAC_KEY: ci-test-hmac-key-not-a-secret
         run: pnpm test:e2e
 
       - name: Upload the Playwright report on failure

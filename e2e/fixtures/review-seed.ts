@@ -299,6 +299,7 @@ export async function seedPendingApplication(
     proof_size_bytes: proof?.sizeBytes ?? 1024,
     proof_verified_at: now,
     submitted_at: now,
+    consented_at: now,
   });
   if (error) throw new Error(`seeding application: ${error.message}`);
 

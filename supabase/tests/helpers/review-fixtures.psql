@@ -217,7 +217,7 @@ insert into public.applications (
   proof_drive_file_id, proof_mime_type, proof_size_bytes, proof_verified_at,
   proof_web_view_link,
   person_id, reviewed_by, reviewed_at, review_note,
-  submitted_at
+  submitted_at, consented_at
 )
 values
   -- A1 — pending. The generic target: deny assertions do not consume it, and neither does a
@@ -228,7 +228,7 @@ values
    'ref-review-alpha', 'application/pdf', 524288, now(),
    'https://drive.example.invalid/file/ref-review-alpha/view',
    null, null, null, null,
-   now() - interval '3 days'),
+   now() - interval '3 days', now()),
 
   -- A2 — pending. The APPROVE happy path and the idempotency retry.
   ('00000000-0000-4000-8000-000000000202', pg_temp.fx_active_term(), 'pending',
@@ -237,7 +237,7 @@ values
    'ref-review-bravo', 'image/jpeg', 6291456, now(),
    'https://drive.example.invalid/file/ref-review-bravo/view',
    null, null, null, null,
-   now() - interval '2 days'),
+   now() - interval '2 days', now()),
 
   -- A3 — already APPROVED, linked to P4. The terminal state a re-decision must be refused on.
   ('00000000-0000-4000-8000-000000000203', pg_temp.fx_active_term(), 'approved',
@@ -247,7 +247,7 @@ values
    'https://drive.example.invalid/file/ref-review-charlie/view',
    '00000000-0000-4000-b000-000000000004',
    '00000000-0000-4000-a000-000000000003', now() - interval '1 day', null,
-   now() - interval '5 days'),
+   now() - interval '5 days', now()),
 
   -- A4 — already REJECTED, with a ground long enough to satisfy rejected_has_reason.
   ('00000000-0000-4000-8000-000000000204', pg_temp.fx_active_term(), 'rejected',
@@ -258,7 +258,7 @@ values
    null,
    '00000000-0000-4000-a000-000000000001', now() - interval '1 day',
    'Proof of enrollment did not name the applicant.',
-   now() - interval '6 days'),
+   now() - interval '6 days', now()),
 
   -- A5 — pending, and its applicant_email IS P7's. THE RETURNING-APPLICANT PATH.
   --      Lower case here against the mixed case on the people row: citext, by type.
@@ -268,7 +268,7 @@ values
    'ref-review-echo', 'application/pdf', 393216, now(),
    'https://drive.example.invalid/file/ref-review-echo/view',
    null, null, null, null,
-   now() - interval '1 day')
+   now() - interval '1 day', now())
 on conflict (id) do nothing;
 
 

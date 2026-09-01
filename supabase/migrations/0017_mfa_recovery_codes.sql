@@ -230,5 +230,9 @@ comment on function public.consume_recovery_code(text) is
 -- refuse a null auth.uid(), but revoking anon states the intent in \df+ without reading a
 -- body, and removes an anonymous endpoint that would otherwise be an unauthenticated
 -- (if useless) call into credential machinery.
-revoke execute on function public.issue_recovery_codes()        from anon;
-revoke execute on function public.consume_recovery_code(text)   from anon;
+-- from PUBLIC too: the default EXECUTE grant to PUBLIC would keep anon privileged
+-- no matter how many times anon itself is revoked (see 0015's note).
+revoke execute on function public.issue_recovery_codes()        from public, anon;
+revoke execute on function public.consume_recovery_code(text)   from public, anon;
+grant  execute on function public.issue_recovery_codes()        to authenticated;
+grant  execute on function public.consume_recovery_code(text)   to authenticated;

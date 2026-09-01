@@ -39,7 +39,7 @@ const DIRTY = {
   queryEmail: "maria.santos@example.org",
   memberId: "2024-001",
   bigMemberId: "2024-1000",
-  serviceRoleKey: "sb_secret_do_not_ship_this",
+  serviceRoleKey: "sb_scrubme_do_not_ship_this",
   driveFileId: "1AbCdEfGhIjKlMnOpQrStUvWxYz012345",
 } as const;
 
@@ -536,7 +536,7 @@ describe("S7-T8 acceptance: a fully dirty event serializes with none of the lite
 
   // ⚠️ A DELIBERATE, DOCUMENTED NON-GUARANTEE. `serviceRoleKey` is excluded from the
   // loop above because a secret pasted into free text by a call site — `note: "service
-  // key sb_secret_… is not here"` — SURVIVES this module. The scrub removes structured
+  // key sb_scrubme_… is not here"` — SURVIVES this module. The scrub removes structured
   // paths and two pattern classes; it is not a secret scanner, and pretending otherwise
   // would be the more dangerous claim. The controls that actually cover this case are
   // upstream: `no-console` under lib/**, "log IDs, never values" (CLAUDE.md), the

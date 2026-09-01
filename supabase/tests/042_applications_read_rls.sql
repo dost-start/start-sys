@@ -60,19 +60,22 @@ select plan(24);
 --
 -- THREE, not one, and in three different states, so an accidentally status-filtered read
 -- policy shows up as a wrong count rather than as a plausible one.
+-- consented_at: any non-null value — 0035's BEFORE INSERT trigger overwrites it with
+-- now() and stamps the current notice version, and the submitted_has_consent CHECK
+-- requires it on every non-draft row.
 insert into public.applications
   (id, term_id, status, applicant_email, applicant_given_name, applicant_family_name,
-   payload, proof_drive_file_id, submitted_at)
+   payload, proof_drive_file_id, submitted_at, consented_at)
 values
   ('00000000-0000-4000-8000-00000000000a', pg_temp.fx_active_term(), 'draft',
    'draft.applicant@fixture.start-sys.test', 'Draft', 'Applicant',
-   '{"school_id_no":"FIXT-APP-A"}'::jsonb, null, null),
+   '{"school_id_no":"FIXT-APP-A"}'::jsonb, null, null, null),
   ('00000000-0000-4000-8000-00000000000b', pg_temp.fx_active_term(), 'pending',
    'pending.applicant@fixture.start-sys.test', 'Pending', 'Applicant',
-   '{"school_id_no":"FIXT-APP-B"}'::jsonb, 'ref-pending-b', now()),
+   '{"school_id_no":"FIXT-APP-B"}'::jsonb, 'ref-pending-b', now(), now()),
   ('00000000-0000-4000-8000-00000000000c', pg_temp.fx_active_term(), 'rejected',
    'rejected.applicant@fixture.start-sys.test', 'Rejected', 'Applicant',
-   '{"school_id_no":"FIXT-APP-C"}'::jsonb, 'ref-rejected-c', now());
+   '{"school_id_no":"FIXT-APP-C"}'::jsonb, 'ref-rejected-c', now(), now());
 
 -- One renewal submission, belonging to P4 — the MEMBER fixture's person. That is what makes
 -- assertion 21 a real scoping test: the member sees a row because it is theirs, not because

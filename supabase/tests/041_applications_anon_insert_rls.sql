@@ -398,13 +398,17 @@ select pg_temp.logout();
 -- 21 — but only one LIVE application per email per term. Both rows are promoted here as the
 -- session role, bypassing RLS, so what is being asserted is the INDEX and nothing else.
 -- pending_has_proof (0008) requires a proof reference on any non-draft row, so both get one.
+-- consented_at rides along: 0035's submitted_has_consent CHECK requires it on any
+-- non-draft row (the INSERT trigger stamps the version; on UPDATE the value stands).
 update public.applications
-   set status = 'pending', proof_drive_file_id = 'ref-live-1', submitted_at = now()
+   set status = 'pending', proof_drive_file_id = 'ref-live-1', submitted_at = now(),
+       consented_at = now(), privacy_notice_version = 'v1'
  where id = '00000000-0000-4000-8000-000000000001';
 
 select throws_ok(
   $$ update public.applications
-        set status = 'pending', proof_drive_file_id = 'ref-live-2', submitted_at = now()
+        set status = 'pending', proof_drive_file_id = 'ref-live-2', submitted_at = now(),
+            consented_at = now(), privacy_notice_version = 'v1'
       where id = '00000000-0000-4000-8000-000000000003' $$,
   '23505'::char(5), null::text,
   'a SECOND live application for the same (term, email) raises 23505 — the constraint still '

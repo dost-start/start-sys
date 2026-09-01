@@ -369,6 +369,7 @@ export async function seedPendingApplications(
       proof_size_bytes: 1024,
       proof_verified_at: now,
       submitted_at: now,
+      consented_at: now,
     };
   });
 

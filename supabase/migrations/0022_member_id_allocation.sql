@@ -115,7 +115,13 @@ begin
   -- The 1000th member of a year becomes 2024-1000 rather than colliding with 2024-100 or
   -- being silently truncated. 600 members a year makes this unlikely and not impossible,
   -- and the failure it prevents is a duplicate primary identifier.
-  v_id := v_year::text || '-' || lpad(v_seq::text, 3, '0');
+  -- ⚠ NOT a bare lpad(v_seq::text, 3, '0'): Postgres lpad TRUNCATES to the target
+  -- length, so seq 1000 would become '100' and collide with member 100. DATA_MODEL
+  -- §6/0012's abridged listing carries that bug; the CHECK's `{3,}` ("three OR MORE")
+  -- is the intent — pad below 1000, pass through verbatim from 1000 up (2024-999
+  -- rolls to 2024-1000, never to a collision).
+  v_id := v_year::text || '-' ||
+          case when v_seq < 1000 then lpad(v_seq::text, 3, '0') else v_seq::text end;
 
   update public.people
      set member_id = v_id

@@ -207,7 +207,12 @@ grant select on public.application_windows to anon;
 -- already revoked from anon in 0012. Repeated here because REVOKE is idempotent and this is
 -- the file a reviewer opens when asking "what can the anonymous role reach?"; a one-line
 -- duplicate is cheaper than making them grep three migrations for the answer.
-revoke execute on function public.get_person_sensitive(uuid) from anon;
+-- FROM PUBLIC, not just from anon: CREATE FUNCTION default-grants EXECUTE to PUBLIC,
+-- and has_function_privilege('anon', ...) stays true through the PUBLIC grant no matter
+-- how many times anon itself is revoked. Revoke the PUBLIC grant, then grant back the
+-- one audience each function is for.
+revoke execute on function public.get_person_sensitive(uuid) from public, anon;
+grant  execute on function public.get_person_sensitive(uuid) to authenticated;
 
 -- issue_recovery_codes() and consume_recovery_code() are NOT listed here, and their absence
 -- is ordering, not oversight: they are created in 0017, which applies after this file.
@@ -217,8 +222,10 @@ revoke execute on function public.get_person_sensitive(uuid) from anon;
 -- anon must not be able to call them either. They return only a boolean about the CALLER,
 -- so the disclosure is nil in practice — but "nil in practice" is not a security property,
 -- and an anonymous caller has no business asking the authorization model any question.
-revoke execute on function public.is_admin_reader()       from anon;
-revoke execute on function public.is_user_roles_writer()  from anon;
+revoke execute on function public.is_admin_reader()       from public, anon;
+revoke execute on function public.is_user_roles_writer()  from public, anon;
+grant  execute on function public.is_admin_reader()       to authenticated;
+grant  execute on function public.is_user_roles_writer()  to authenticated;
 
 -- has_aal2() is deliberately NOT revoked: it is SECURITY INVOKER, touches no table, and
 -- reads only the caller's own JWT claim. Revoking it would buy nothing and would break the

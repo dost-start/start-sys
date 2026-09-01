@@ -62,36 +62,40 @@ values ('00000000-0000-4000-9000-000000000002',
         pg_temp.fx_active_term(), 'membership_application',
         now() - interval '1 day', now() + interval '7 days');
 
+-- consented_at on EVERY row, drafts included: since 0035, startApplication records
+-- consent at the draft INSERT (the trigger stamps server values), and the
+-- submitted_has_consent CHECK fires at the draft -> pending flip — a consent-less
+-- draft is not the production shape and would make finalize itself raise 23514.
 insert into public.applications
   (id, term_id, status, applicant_email, applicant_given_name, applicant_family_name,
-   payload, proof_drive_file_id, submit_token_hash, submit_token_expires_at)
+   payload, proof_drive_file_id, submit_token_hash, submit_token_expires_at, consented_at)
 values
   -- A1 — the happy path and the idempotent retry.
   ('00000000-0000-4000-8000-000000000101', pg_temp.fx_active_term(), 'draft',
    'finalize.happy@fixture.start-sys.test', 'Finalize', 'Happy', '{}'::jsonb, null,
-   encode(sha256(convert_to('tok-alpha-happy', 'UTF8')), 'hex'), now() + interval '1 hour'),
+   encode(sha256(convert_to('tok-alpha-happy', 'UTF8')), 'hex'), now() + interval '1 hour', now()),
 
   -- A2 — the wrong-token, metadata-allowlist and closed-window branches.
   ('00000000-0000-4000-8000-000000000102', pg_temp.fx_active_term(), 'draft',
    'finalize.validation@fixture.start-sys.test', 'Finalize', 'Validation', '{}'::jsonb, null,
-   encode(sha256(convert_to('tok-bravo-validation', 'UTF8')), 'hex'), now() + interval '1 hour'),
+   encode(sha256(convert_to('tok-bravo-validation', 'UTF8')), 'hex'), now() + interval '1 hour', now()),
 
   -- A3 — a token that is CORRECT but has EXPIRED. The distinction the applicant must not be
   -- able to make: this raises identically to a wrong token.
   ('00000000-0000-4000-8000-000000000103', pg_temp.fx_active_term(), 'draft',
    'finalize.expired@fixture.start-sys.test', 'Finalize', 'Expired', '{}'::jsonb, null,
-   encode(sha256(convert_to('tok-charlie-expired', 'UTF8')), 'hex'), now() - interval '1 hour'),
+   encode(sha256(convert_to('tok-charlie-expired', 'UTF8')), 'hex'), now() - interval '1 hour', now()),
 
   -- A4 — SAME EMAIL AS A1, in the same term. Once A1 is pending, finalizing this one hits the
   -- partial unique index. That collision is what 17-19 assert gets swallowed.
   ('00000000-0000-4000-8000-000000000104', pg_temp.fx_active_term(), 'draft',
    'finalize.happy@fixture.start-sys.test', 'Finalize', 'Duplicate', '{}'::jsonb, null,
-   encode(sha256(convert_to('tok-delta-duplicate', 'UTF8')), 'hex'), now() + interval '1 hour'),
+   encode(sha256(convert_to('tok-delta-duplicate', 'UTF8')), 'hex'), now() + interval '1 hour', now()),
 
   -- A5 — already DECIDED. pending_has_proof (0008) requires a reference on any non-draft row.
   ('00000000-0000-4000-8000-000000000105', pg_temp.fx_active_term(), 'rejected',
    'finalize.decided@fixture.start-sys.test', 'Finalize', 'Decided', '{}'::jsonb, 'ref-decided',
-   encode(sha256(convert_to('tok-echo-decided', 'UTF8')), 'hex'), now() + interval '1 hour');
+   encode(sha256(convert_to('tok-echo-decided', 'UTF8')), 'hex'), now() + interval '1 hour', now());
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════════

@@ -298,6 +298,10 @@ jobs:
           # on a guessable digest there — a real requirement in prod, satisfied with a
           # throwaway value in CI (local-stack only, nothing sensitive behind it).
           RATE_LIMIT_HMAC_KEY: ci-test-hmac-key-not-a-secret
+          # Every spec and retry shares one 127.0.0.1; production limits starve the
+          # later apply specs. See the comment in lib/applications/actions.ts.
+          E2E_RATE_LIMIT_BOOST: "1"
+
         run: pnpm test:e2e
 
       - name: Upload the Playwright report on failure

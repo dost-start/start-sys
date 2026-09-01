@@ -305,7 +305,11 @@ async function resolveUserId(admin: SupabaseClient, account: ScopeAccount): Prom
  * There is no admin API for this and there should not be: a factor whose possession was
  * never proved is not a second factor.
  */
-async function enrolTotp(email: string, existingSecret: string | undefined): Promise<string> {
+async function enrolTotp(
+  email: string,
+  userId: string,
+  existingSecret: string | undefined,
+): Promise<string> {
   const client = anonClient();
   const { error: signInError } = await client.auth.signInWithPassword({
     email,
@@ -321,8 +325,15 @@ async function enrolTotp(email: string, existingSecret: string | undefined): Pro
     // invalidate a code a retrying test had already generated.
     if (factors.totp.some((f) => f.status === "verified") && existingSecret) return existingSecret;
 
+    // A verified factor whose secret we LOST (fresh fixture-state file, re-run in the
+    // same CI job) cannot be unenrolled from an aal1 session — GoTrue refuses with
+    // "AAL2 required to unenroll verified factor", and without the secret aal2 is
+    // unreachable. Clearing it is privileged test setup, so use the admin API.
     for (const factor of factors.totp) {
-      const { error } = await client.auth.mfa.unenroll({ factorId: factor.id });
+      const { error } = await scopeAdminClient().auth.admin.mfa.deleteFactor({
+        id: factor.id,
+        userId,
+      });
       if (error) throw error;
     }
 
@@ -588,7 +599,7 @@ export async function seedDashboardWorld(): Promise<ScopeState> {
   const totpSecrets: Record<string, string> = {};
   for (const key of SCOPE_ACCOUNT_KEYS) {
     const email = SCOPE_ACCOUNTS[key].email;
-    totpSecrets[email] = await enrolTotp(email, previous?.totpSecrets[email]);
+    totpSecrets[email] = await enrolTotp(email, userIds[email]!, previous?.totpSecrets[email]);
   }
 
   const personIds: Record<string, string> = {};

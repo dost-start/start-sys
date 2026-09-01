@@ -109,8 +109,18 @@ function hashSubmitToken(token: string): string {
 export const startApplication = withPublic<StartApplicationInput, StartApplicationResult>(
   {
     rateLimit: [
-      { bucket: "apply_ip", limit: 10 },
-      { bucket: "apply_email", limit: 3, key: (input) => input.applicant_email.toLowerCase() },
+      // E2E_RATE_LIMIT_BOOST widens the windows for the CI Playwright suite, where
+      // every spec (and every retry) shares one 127.0.0.1 — without it the whole
+      // apply suite exhausts the IP bucket and later specs fail with the generic
+      // refusal. The variable is set ONLY in ci.yml's e2e job; it is not in
+      // .env.example's Vercel surface and setting it in production would be a
+      // reviewable change to that file, not a quiet toggle.
+      { bucket: "apply_ip", limit: process.env.E2E_RATE_LIMIT_BOOST ? 10_000 : 10 },
+      {
+        bucket: "apply_email",
+        limit: process.env.E2E_RATE_LIMIT_BOOST ? 10_000 : 3,
+        key: (input) => input.applicant_email.toLowerCase(),
+      },
     ],
     schema: startApplicationSchema,
   },

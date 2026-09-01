@@ -121,10 +121,17 @@ const reviewScreens = {
   /** The reason textarea in the reject dialog. */
   rejectReason: (page: Page) => page.getByLabel(/reason|ground|why/i).first(),
 
-  /** The confirm control inside whichever dialog is open. */
+  /**
+   * The confirm control inside whichever dialog is open. `alertdialog` FIRST:
+   * Radix AlertDialog (the approve/reject controls) exposes role="alertdialog",
+   * which `getByRole("dialog")` does NOT match — that mismatch once made every
+   * confirm click silently skip.
+   */
   confirm: (page: Page) =>
     page
-      .getByRole("dialog")
+      .getByRole("alertdialog")
+      .or(page.getByRole("dialog"))
+      .first()
       .getByRole("button", { name: /approve|reject|confirm/i })
       .last(),
 
@@ -155,16 +162,21 @@ async function clickAndConfirm(
   page: Page,
   trigger: ReturnType<typeof reviewScreens.approveButton>,
 ) {
-  await trigger.click();
-
-  // The confirm dialog mounts with an animation — an immediate isVisible() races it
-  // and silently skips the confirm click. Wait for it; only a real absence after the
-  // wait means the control acts directly.
-  const dialog = page.getByRole("dialog");
-  const appeared = await dialog
-    .waitFor({ state: "visible", timeout: 5_000 })
-    .then(() => true)
-    .catch(() => false);
+  // TWO races live here, both real on a loaded CI box:
+  //  1. hydration — a click that lands before React attaches the trigger's listener
+  //     is silently lost, the dialog never opens, and the spec waits 30s for a member
+  //     ID that was never requested. Hence the retry loop.
+  //  2. animation — an immediate isVisible() beats the dialog's mount.
+  const dialog = page.getByRole("alertdialog").or(page.getByRole("dialog"));
+  let appeared = false;
+  for (let attempt = 0; attempt < 3 && !appeared; attempt += 1) {
+    await trigger.click();
+    appeared = await dialog
+      .first()
+      .waitFor({ state: "visible", timeout: 5_000 })
+      .then(() => true)
+      .catch(() => false);
+  }
   if (appeared) {
     await reviewScreens.confirm(page).click();
   }

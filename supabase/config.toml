@@ -1,0 +1,70 @@
+# START-SYS — Supabase local/CI configuration.
+#
+# This file is the source of truth for auth and database settings. ARCHITECTURE.md §1
+# and CONVENTIONS.md §3.4: configuration is never clicked into the hosted dashboard,
+# because dashboard drift is how a student-run project loses its history at handover.
+# `supabase config push` applies it to the linked project (docs/runbooks/03).
+#
+# Deliberately minimal. Every key below is a documented CLI 2.x key; an unrecognised
+# key fails `supabase start`, which blocks the CI `db` job for everyone.
+
+project_id = "start-sys"
+
+[api]
+enabled = true
+port = 54321
+# Only `public` is exposed through PostgREST. `auth` is GoTrue-managed and is never
+# reachable from the browser.
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+# ARCHITECTURE.md §1 — PostgreSQL 17, locked.
+major_version = 17
+
+[db.pooler]
+enabled = false
+
+# `supabase/seed.sql` is deliberately absent: the CBL seed is migration 0016_seed.sql,
+# so it applies identically in local, CI and production (DATA_MODEL.md §6/0016).
+[db.seed]
+enabled = false
+
+[studio]
+enabled = true
+port = 54323
+
+# Local mail catcher. Production mail is Resend as custom SMTP (ARCHITECTURE.md §1).
+[inbucket]
+enabled = true
+port = 54324
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000/auth/callback"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+# PRD MVP item 1 — "email-based account invitation (no public signup)". Accounts exist
+# only via inviteUserByEmail from a tech_admin Server Action.
+enable_signup = false
+
+[auth.email]
+# TRUE is correct and deliberate: this key maps to GoTrue's "external email
+# enabled" flag — false disables email+password SIGN-IN entirely ("Email logins
+# are disabled"), not just signup. Public signup is blocked by the top-level
+# [auth] enable_signup = false above; invited accounts still sign in with email.
+enable_signup = true
+# Local dev only: skips the confirmation round trip against Inbucket. Production is
+# configured separately in S7 (docs/runbooks/03-CREDENTIAL_ROTATION.md).
+enable_confirmations = false
+secure_password_change = true
+
+# PRD MVP item 2 / US-A3 — TOTP enrolment is mandatory for every account above Member.
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true

@@ -1,0 +1,336 @@
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- helpers/dashboard-fixtures.psql  —  the S6 dashboard world, layered on the nine fixtures
+--
+-- WHAT:      Adds to the caller's test transaction, on top of helpers/fixtures.psql:
+--              · D01..D07 — seven more scholars in REGION A (NCR): five active, two
+--                GRADUATED, so the status view has a second bucket that is not a rounding
+--                error
+--              · D08..D11 — four more scholars in REGION B (R07): three active, one
+--                RESIGNED, so region B's bucket set DIFFERS from region A's
+--              · a SECOND committee, FIXT_DASH_OPS, hung off the Technology department
+--              · D01 as the SHARED MEMBER — the one scholar sitting on BOTH committees,
+--                which is what makes the committee panel's non-sum measurable rather than
+--                theoretical
+--              · D03 as the designated NO-COMMITTEE scholar (and ten others incidentally)
+--
+-- USAGE:     \ir helpers/auth.psql
+--            \ir helpers/fixtures.psql
+--            \ir helpers/dashboard-fixtures.psql       -- ALWAYS AFTER fixtures.psql
+--
+--            Included by 065, 066, 067 and 068 ONLY. Never by 020, never by 028/029, and
+--            never alongside helpers/records-fixtures.psql or helpers/review-fixtures.psql.
+--
+-- ⚠ **NEVER INCLUDE THIS FILE ALONGSIDE records-fixtures.psql OR review-fixtures.psql.**
+--    All three add people and memberships and all three change the arithmetic. The uuid
+--    blocks do not collide (…b100/…c100 there, …b000-…7 there, …b200/…c200/…e200 here) so a
+--    double include would NOT error — it would just make every exact count in both suites
+--    wrong, silently, which is strictly worse than a failure.
+--
+-- ⚠ **DOES NOT ADD A CONFIDENTIALITY ACKNOWLEDGEMENT.** helpers/fixtures.psql deliberately
+--    omits the moderator's (PRD US-J5's negative case) and nothing in S6 touches a sensitive
+--    column — the three aggregate views expose NO column of public.people at all, which is
+--    the property 066 asserts. If a dashboard ever needs an acknowledgement, that is a
+--    design error in the dashboard, not a missing fixture row.
+--
+-- RUNS AS THE SESSION ROLE, like fixtures.psql. `people` has no INSERT policy for any human
+--    role (0014) and `authenticated` holds no INSERT grant on it (0015); seeding is a
+--    privileged act by construction. Do NOT call login_as() before including this file.
+--
+-- EVERY WRITE IS `on conflict do nothing`, so a second include is a no-op.
+--
+-- CITATION:  BUILD_PLAN S6-T3, S6-T4, S6-T14, S6-T16, S6-T20; ADR 0007;
+--            DATA_MODEL.md §3.1, §6/0006, §6/0007; ARCHITECTURE.md §5;
+--            PRD §3 v1.0 items 13-15; PRD US-D2, US-D4, US-E4, US-F1, US-I1;
+--            CBL Art. III §4 (departments), Art. III §5 (committees are per-term and a
+--            member may serve on more than one — the whole reason the committee panel does
+--            not sum).
+-- ═══════════════════════════════════════════════════════════════════════════════════
+--
+-- ★ THE ARITHMETIC — the ACTIVE term after this file ★
+--   065 and 068 derive from this table. If a policy changes, this is what tells you whether
+--   a new number is correct or a regression. Nothing here is round-numbered by accident:
+--   region A and region B carry DIFFERENT status sets so a scoping bug cannot produce a
+--   plausible-looking symmetric answer.
+--
+--     ┌──────────────┬────────┬────────────┬───────────┬────────────────────────────────┐
+--     │ membership   │ region │ status     │ committee │ source                          │
+--     ├──────────────┼────────┼────────────┼───────────┼────────────────────────────────┤
+--     │ P3  Santos   │ NCR    │ active     │ —         │ fixtures.psql                   │
+--     │ P4  Dela Cruz│ NCR    │ active     │ ETHICS    │ fixtures.psql (planted literals)│
+--     │ D01 Aguilar  │ NCR    │ active     │ ETHICS +  │ HERE — the SHARED member        │
+--     │              │        │            │ DASH_OPS  │                                 │
+--     │ D02 Bautista │ NCR    │ active     │ DASH_OPS  │ HERE                            │
+--     │ D03 Castillo │ NCR    │ active     │ —         │ HERE — the no-committee scholar │
+--     │ D04 Domingo  │ NCR    │ active     │ —         │ HERE                            │
+--     │ D05 Estrada  │ NCR    │ active     │ —         │ HERE                            │
+--     │ D06 Fajardo  │ NCR    │ GRADUATED  │ —         │ HERE                            │
+--     │ D07 Gutierrez│ NCR    │ GRADUATED  │ —         │ HERE                            │
+--     │ P5  Reyes    │ R07    │ active     │ —         │ fixtures.psql                   │
+--     │ P6  Peña     │ R07    │ active     │ ETHICS    │ fixtures.psql                   │
+--     │ D08 Hidalgo  │ R07    │ active     │ —         │ HERE                            │
+--     │ D09 Ilagan   │ R07    │ active     │ —         │ HERE                            │
+--     │ D10 Jimenez  │ R07    │ active     │ —         │ HERE                            │
+--     │ D11 Katigbak │ R07    │ RESIGNED   │ —         │ HERE                            │
+--     └──────────────┴────────┴────────────┴───────────┴────────────────────────────────┘
+--
+--     ACTIVE-TERM TOTALS:  15 memberships
+--       by status     active 12 · graduated 2 · resigned 1                  -> sums to 15
+--       by region     NCR 9 (7 active + 2 graduated) · R07 6 (5 active + 1 resigned)
+--                                                                            -> sums to 15
+--       by committee  FIXT_ETHICS 3 (P4, P6, D01)
+--                     FIXT_DASH_OPS 2 (D01, D02)
+--                     unassigned 11 (15 minus the 4 DISTINCT memberships with a seat)
+--                                                                            -> sums to 16
+--
+--     ★ THE COMMITTEE TOTAL IS 16 AGAINST A HEADCOUNT OF 15, AND THAT IS THE POINT. ★
+--     D01 holds two seats, so D01 is counted twice. CBL Art. III §5 places no limit on how
+--     many committees a member may serve, so the panel CANNOT sum and must be labelled
+--     rather than reconciled (ADR 0007 §4). This fixture exists in this shape so that
+--     property is asserted by a number rather than described in a comment — and so that
+--     anyone who "fixes" the view by picking one committee per member turns 065 red.
+--
+--     The ARCHIVED term (2025-2026) still holds exactly P1's one NCR membership from
+--     fixtures.psql. This file adds nothing to it, so every count above is the ACTIVE term's
+--     and every test query filters on pg_temp.fx_active_term() explicitly.
+--
+-- ★ PER-FIXTURE EXPECTATIONS — what 065 asserts, and why each number is what it is ★
+--
+--                     status view              region view          committee view
+--   exec_admin        act 12 grad 2 res 1      NCR 9 · R07 6        ETH 3 · OPS 2 · — 11
+--   crrd_admin          "  (sum 15)              "  (sum 15)          "  (sum 16)
+--   moderator           "                        "                    "
+--   officer             "                        "                    "
+--   tech_admin        0 rows (sum 0)           0 rows               0 rows
+--   regional_rep_a    act 7 grad 2  (sum 9)    NCR 9  (sum 9)       ETH 2 · OPS 2 · — 6  (10)
+--   regional_rep_b    act 5 res 1   (sum 6)    R07 6  (sum 6)       ETH 1 · — 5          (6)
+--   member (P4)       act 1         (sum 1)    NCR 1  (sum 1)       ETH 1                (1)
+--   anon              REFUSED 42501            REFUSED              REFUSED
+--
+--   Reading the four that are not obvious, each a real property of 0014 rather than a
+--   fixture accident:
+--
+--   • tech_admin sees ZERO of everything. memberships_read (0014 §4) names exec_admin,
+--     crrd_admin, moderator, officer, a region-scoped regional_rep branch and a self-scoped
+--     member branch — and does NOT name tech_admin. That is PRD OQ-5 expressed as a missing
+--     role literal ("configure the system and control access" is not "read everyone's
+--     address"), and it is why BUILD_PLAN S6-T13 lands the CTO on /system rather than on an
+--     all-zero dashboard that would read as a broken system. Pinned as an EXPECTED value so
+--     that the day someone widens the policy, CI says what changed.
+--
+--   • moderator sees EVERYTHING, because memberships_read does name it. Also pinned rather
+--     than assumed — S6's brief calls for exactly this, computed from the policy rather
+--     than guessed.
+--
+--   • rep_a's committee view has THREE rows and rep_b's has TWO. rep_b cannot see
+--     FIXT_DASH_OPS in the aggregate at all, because no R07 membership holds a seat on it —
+--     even though `committees_read` is `using (true)` and rep_b can read the committee ROW
+--     itself. The aggregate is scoped by the MEMBERSHIPS it counts, not by the committee it
+--     names, which is the correct behaviour and a strong signal: a leak would show up as a
+--     fourth bucket appearing for rep_b out of nowhere.
+--
+--   • anon is REFUSED rather than returning zero. 0032 revokes all from anon on all three
+--     views, so the failure is a GRANT failure (42501) and not the empty-set-by-missing-
+--     policy shape the rest of this suite tests. Both halves matter and 066 asserts the
+--     grant directly; 065 asserts what a request actually hits.
+-- ═══════════════════════════════════════════════════════════════════════════════════
+
+
+-- Repeated from auth.psql so this file is usable after any include order. Idempotent.
+do $$
+begin
+  execute format('grant usage on schema %s to public', pg_my_temp_schema()::regnamespace);
+end;
+$$;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- 1 — eleven more scholars
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- uuid block …b200-… so a double include alongside records-fixtures.psql (…b100-…) or
+-- review-fixtures.psql (…b000-…7) would be silently WRONG rather than loudly broken — which
+-- is exactly why the header forbids it.
+--
+-- member_id is written literally, following fixtures.psql's own practice, and DOES NOT
+-- advance member_id_counters. That is safe here and only here: nothing in S6 approves an
+-- application, and 048_member_id_concurrency.sql — the suite that would care — does not
+-- include this file. The 2026-1NN block cannot collide with fixtures.psql's
+-- 2022-001/2022-002/2023-001/2024-001/2024-1000/2025-007.
+--
+-- The sensitive block carries DISTINCT, plainly non-planted values. fixtures.psql reserves
+-- four canonical literals on P4 for the middleware-off crawls (BUILD_PLAN S2-T42, S6-T15
+-- step 4, S7-T29 check 1); reusing them here would leave `grep -F` unable to say WHICH
+-- surface leaked. Nothing in S6 can reach these columns — the three aggregate views expose
+-- no `people` column at all — but a fixture that is realistic when it costs nothing stays
+-- usable when a later suite includes it.
+insert into public.people (
+  id, member_id, join_year, given_name, middle_name, family_name,
+  birthdate, contact_number, personal_email,
+  address_line, city_municipality, province, postal_code,
+  school, school_id_no
+)
+values
+  -- ── region A (NCR) ──
+  ('00000000-0000-4000-b200-000000000001', '2026-101', 2026, 'Ana',    'Lopez',  'Aguilar',
+   date '2004-01-02', '+639200000001', 'ana.aguilar@fixture.start-sys.test',
+   'Dashboard Street 1',  'Quezon City', 'Metro Manila', '1101',
+   'University of the Philippines Diliman', 'DASH-SCH-01'),
+  ('00000000-0000-4000-b200-000000000002', '2026-102', 2026, 'Ben',    'Cruz',   'Bautista',
+   date '2004-02-03', '+639200000002', 'ben.bautista@fixture.start-sys.test',
+   'Dashboard Street 2',  'Manila',      'Metro Manila', '1002',
+   'Polytechnic University of the Philippines', 'DASH-SCH-02'),
+  ('00000000-0000-4000-b200-000000000003', '2026-103', 2026, 'Cara',   'Diaz',   'Castillo',
+   date '2004-03-04', '+639200000003', 'cara.castillo@fixture.start-sys.test',
+   'Dashboard Street 3',  'Pasig',       'Metro Manila', '1603',
+   'Ateneo de Manila University', 'DASH-SCH-03'),
+  ('00000000-0000-4000-b200-000000000004', '2026-104', 2026, 'Dino',   'Enriquez', 'Domingo',
+   date '2004-04-05', '+639200000004', 'dino.domingo@fixture.start-sys.test',
+   'Dashboard Street 4',  'Makati',      'Metro Manila', '1204',
+   'Mapua University', 'DASH-SCH-04'),
+  ('00000000-0000-4000-b200-000000000005', '2026-105', 2026, 'Elsa',   'Flores', 'Estrada',
+   date '2004-05-06', '+639200000005', 'elsa.estrada@fixture.start-sys.test',
+   'Dashboard Street 5',  'Taguig',      'Metro Manila', '1630',
+   'De La Salle University', 'DASH-SCH-05'),
+  ('00000000-0000-4000-b200-000000000006', '2026-106', 2025, 'Fiona',  'Garcia', 'Fajardo',
+   date '2003-06-07', '+639200000006', 'fiona.fajardo@fixture.start-sys.test',
+   'Dashboard Street 6',  'Marikina',    'Metro Manila', '1800',
+   'University of Santo Tomas', 'DASH-SCH-06'),
+  ('00000000-0000-4000-b200-000000000007', '2026-107', 2025, 'Gino',   'Herrera', 'Gutierrez',
+   date '2003-07-08', '+639200000007', 'gino.gutierrez@fixture.start-sys.test',
+   'Dashboard Street 7',  'Caloocan',    'Metro Manila', '1400',
+   'Technological University of the Philippines', 'DASH-SCH-07'),
+
+  -- ── region B (R07) ──
+  ('00000000-0000-4000-b200-000000000008', '2026-108', 2026, 'Hana',   'Ibanez', 'Hidalgo',
+   date '2004-08-09', '+639200000008', 'hana.hidalgo@fixture.start-sys.test',
+   'Dashboard Street 8',  'Cebu City',   'Cebu', '6001',
+   'University of San Carlos', 'DASH-SCH-08'),
+  ('00000000-0000-4000-b200-000000000009', '2026-109', 2026, 'Ivan',   'Javier', 'Ilagan',
+   date '2004-09-10', '+639200000009', 'ivan.ilagan@fixture.start-sys.test',
+   'Dashboard Street 9',  'Mandaue',     'Cebu', '6014',
+   'Cebu Institute of Technology', 'DASH-SCH-09'),
+  ('00000000-0000-4000-b200-000000000010', '2026-110', 2026, 'Joy',    'Kalaw',  'Jimenez',
+   date '2004-10-11', '+639200000010', 'joy.jimenez@fixture.start-sys.test',
+   'Dashboard Street 10', 'Lapu-Lapu',   'Cebu', '6015',
+   'University of Cebu', 'DASH-SCH-10'),
+  ('00000000-0000-4000-b200-000000000011', '2026-111', 2025, 'Karl',   'Lim',    'Katigbak',
+   date '2003-11-12', '+639200000011', 'karl.katigbak@fixture.start-sys.test',
+   'Dashboard Street 11', 'Talisay',     'Cebu', '6045',
+   'Cebu Normal University', 'DASH-SCH-11')
+on conflict (id) do nothing;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- 2 — eleven more memberships, ALL in the ACTIVE term
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- Every row is inserted as 'active' and three are moved to their real status in §4.
+-- enforce_membership_transition() (0028) permits only 'active' or 'renewal_pending' as a
+-- STARTING state — a person cannot be born graduated — so a fixture that seeded 'graduated'
+-- directly would fail at the trigger with an error naming a file nobody would think to open.
+--
+-- Regions are resolved by CODE, never by a hardcoded uuid: 0016 generates region ids with
+-- gen_random_uuid(), so a literal would be wrong on every fresh database. Region A = NCR,
+-- region B = R07 (Central Visayas), per the cross-lane contract fixtures.psql establishes.
+--
+-- year_level and expected_grad_year vary so nothing downstream can accidentally depend on a
+-- constant, and both satisfy their CHECKs (1..8, 2000..2100).
+insert into public.memberships (
+  id, person_id, term_id, status, region_id, year_level, expected_grad_year
+)
+select v.id, v.person_id, pg_temp.fx_active_term(), 'active'::public.membership_status,
+       r.id, v.year_level, v.expected_grad_year
+from (values
+  -- ── region A (NCR) — five stay active, D06/D07 become graduated in §4 ──
+  ('00000000-0000-4000-c200-000000000001'::uuid, '00000000-0000-4000-b200-000000000001'::uuid, 'NCR', 1, 2030),
+  ('00000000-0000-4000-c200-000000000002'::uuid, '00000000-0000-4000-b200-000000000002'::uuid, 'NCR', 2, 2029),
+  ('00000000-0000-4000-c200-000000000003'::uuid, '00000000-0000-4000-b200-000000000003'::uuid, 'NCR', 2, 2029),
+  ('00000000-0000-4000-c200-000000000004'::uuid, '00000000-0000-4000-b200-000000000004'::uuid, 'NCR', 3, 2028),
+  ('00000000-0000-4000-c200-000000000005'::uuid, '00000000-0000-4000-b200-000000000005'::uuid, 'NCR', 3, 2028),
+  ('00000000-0000-4000-c200-000000000006'::uuid, '00000000-0000-4000-b200-000000000006'::uuid, 'NCR', 4, 2026),
+  ('00000000-0000-4000-c200-000000000007'::uuid, '00000000-0000-4000-b200-000000000007'::uuid, 'NCR', 4, 2026),
+  -- ── region B (R07) — three stay active, D11 becomes resigned in §4 ──
+  ('00000000-0000-4000-c200-000000000008'::uuid, '00000000-0000-4000-b200-000000000008'::uuid, 'R07', 1, 2030),
+  ('00000000-0000-4000-c200-000000000009'::uuid, '00000000-0000-4000-b200-000000000009'::uuid, 'R07', 2, 2029),
+  ('00000000-0000-4000-c200-000000000010'::uuid, '00000000-0000-4000-b200-000000000010'::uuid, 'R07', 3, 2028),
+  ('00000000-0000-4000-c200-000000000011'::uuid, '00000000-0000-4000-b200-000000000011'::uuid, 'R07', 4, 2027)
+) as v(id, person_id, region_code, year_level, expected_grad_year)
+join public.regions r on r.code = v.region_code
+on conflict do nothing;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- 3 — a SECOND committee, and the shared member
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- CBL Art. III §5: committees are discretionary and per-term, which is why 0016 seeds none
+-- and both of this suite's committees are created in fixtures. FIXT_ETHICS
+-- (…e000-000000000001, from fixtures.psql) hangs off the CRRD department; this one hangs off
+-- TECHNOLOGY, so the committee view is exercised across two different parent departments and
+-- nothing can quietly come to depend on there being one.
+--
+-- Department is resolved by CODE for the ACTIVE term. 0016 seeds the seven CBL Art. III §4
+-- departments per term with stable cross-term codes, so 'TECH' is the same department every
+-- year while its id is not.
+insert into public.committees (id, term_id, department_id, code, name)
+select '00000000-0000-4000-e200-000000000001',
+       pg_temp.fx_active_term(),
+       d.id,
+       'FIXT_DASH_OPS',
+       'Fixture Dashboard Operations Committee'
+from public.departments d
+where d.term_id = pg_temp.fx_active_term()
+  and d.code    = 'TECH'
+on conflict (id) do nothing;
+
+-- ★ D01 IS THE SHARED MEMBER — one scholar, two seats. ★
+-- This is the row that makes the committee panel's non-sum a measured fact:
+--   4 distinct memberships hold a seat (P4, P6, D01, D02)
+--   but 5 committee_memberships rows exist,
+--   so the named buckets total 5 and the unassigned bucket is 15 - 4 = 11, giving 16 against
+--   a headcount of 15.
+-- ADR 0007 §4. Remove this row and 065 stops proving the property the view exists to have.
+--
+-- D01 and D02 are both NCR on purpose: it puts BOTH committees inside region A, so rep_a
+-- sees three buckets and rep_b sees two. A committee whose members straddled the regions
+-- symmetrically would let a scoping bug return a plausible-looking answer.
+insert into public.committee_memberships (membership_id, committee_id)
+values
+  ('00000000-0000-4000-c200-000000000001', '00000000-0000-4000-e000-000000000001'),  -- D01 -> ETHICS
+  ('00000000-0000-4000-c200-000000000001', '00000000-0000-4000-e200-000000000001'),  -- D01 -> DASH_OPS  (the shared seat)
+  ('00000000-0000-4000-c200-000000000002', '00000000-0000-4000-e200-000000000001')   -- D02 -> DASH_OPS
+on conflict do nothing;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- 4 — the two non-active statuses
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- active -> graduated and active -> resigned are both legal edges in the ONE inline VALUES
+-- list in enforce_membership_transition() (0028) and NEITHER carries a role guard: only the
+-- two `terminated` edges are reserved to exec_admin (CBL Art. VII §3.2.3, §3.2.5-3.2.6), and
+-- only they require a written ground in ended_reason. These two therefore succeed as the
+-- session role with no JWT claims set, which is the state this file runs in.
+--
+-- ⚠ THIS MUST STAY AN UPDATE AND CANNOT BECOME AN INSERT. See §2's note: the trigger's
+--   INSERT branch admits only 'active' and 'renewal_pending'.
+--
+-- ⚠ AND IT MUST STAY ON THE ACTIVE TERM. trg_memberships_freeze_archived (0006) fires BEFORE
+--   UPDATE as well as BEFORE INSERT, so the same two statements against an archived term
+--   would raise 42501. This file adds nothing to the archived term at all.
+--
+-- Two graduated in region A and one resigned in region B, deliberately asymmetric: region A
+-- and region B carry DIFFERENT status sets, so a scoping bug cannot produce a symmetric
+-- answer that still looks right.
+update public.memberships
+   set status = 'graduated'
+ where id in ('00000000-0000-4000-c200-000000000006',   -- D06, NCR
+              '00000000-0000-4000-c200-000000000007')   -- D07, NCR
+   and status = 'active';
+
+update public.memberships
+   set status = 'resigned'
+ where id = '00000000-0000-4000-c200-000000000011'      -- D11, R07
+   and status = 'active';
+
+-- No convenience lookup functions are defined here, deliberately. fixtures.psql exports
+-- fx_active_term(), fx_archived_term() and fx_region() because their ids are GENERATED
+-- (gen_random_uuid() in 0016) and cannot be written down; every id this file adds is a fixed
+-- literal from the arithmetic table above, so a helper would only be a second place to keep
+-- the same constant.

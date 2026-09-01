@@ -1,0 +1,608 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# THE SINGLE SCHEDULER FOR START-SYS (BUILD_PLAN S7-T14, S7-T17).
+#
+# Every recurring job in this system lives in this one file. Not pg_cron, not pg_net,
+# not Vercel Cron, not Redis/BullMQ/Inngest/QStash — all banned outright (CLAUDE.md
+# "Infrastructure"; ARCHITECTURE.md §7).
+#
+# The reason is a handover reason, not a technical one: ONE ADEQUATE SCHEDULER BEATS
+# THREE OPTIMAL ONES when the reader has never seen the system before. The nightly
+# `pg_dump` has to live in GitHub Actions regardless, so everything else joins it —
+# one syntax, one log viewer, one place a 2029 maintainer looks when they ask "what
+# runs on its own?".
+#
+# ── FOUR JOBS ────────────────────────────────────────────────────────────────
+#   backup                  nightly 02:00 PHT — encrypted off-provider dump
+#   purge-abandoned-drafts  nightly 03:00 PHT — RA 10173 sweep of never-submitted drafts
+#   drive-health            daily   03:00 PHT — is the document store still reachable
+#   benchmark               weekly  Mon 04:30 PHT — the 3s Performance NFR, measured
+#
+# ARCHITECTURE.md §8 lists `notify-failure` as a fifth job. It is implemented here as an
+# `if: failure()` STEP inside each job instead: as a separate job it would need `needs:`
+# wiring from all four, would report success when the job it reports on failed, and
+# would be one more thing to read. Same alert, less machinery — noted so the difference
+# from §8 is a decision rather than an omission.
+#
+# ── TWO JOBS ARCHITECTURE.md §8 LISTS THAT ARE NOT HERE, DELIBERATELY ────────
+#   campaign-sweep   v1.1 — every 15 min, resume a campaign stalled mid-chunk. There is
+#                    no campaign table yet (`0010_email.sql` is a reserved number).
+#   ra10173-purge    v1.2 — monthly `redact_expired_pii()` + document deletes. The
+#                    five-year clock cannot expire before the org's first term does, and
+#                    OQ-8 (when the clock starts) is unresolved.
+#   Listed rather than silently absent, so a reader comparing this file to §8 finds a
+#   documented gap instead of an apparent oversight.
+#
+# ── SECRETS FAIL LOUD, NEVER SKIP ────────────────────────────────────────────
+# Every job whose secrets are absent FAILS with a `::error::` naming the launch-debt
+# issue. It does not skip and it does not exit 0. A backup job that is quietly green
+# while writing nothing is worse than no backup at all: it manufactures confidence in
+# a restore that will not work, and nobody discovers that until the day they need it.
+#
+# CRON IS UTC. Philippine Standard Time is UTC+8 with no daylight saving, so `HH:MM PHT`
+# is `HH-8` UTC. Every schedule below carries the PHT time it means, and each job selects
+# its own cron with an `if:` — GitHub applies `on.schedule` to the whole workflow.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+name: scheduled
+
+on:
+  schedule:
+    # 02:00 PHT daily — the backup, before the sweep that mutates rows.
+    - cron: "0 18 * * *"
+    # 03:00 PHT daily — the draft sweep and the document-store health check.
+    - cron: "0 19 * * *"
+    # 04:30 PHT Monday — the weekly benchmark (Sunday 20:30 UTC).
+    - cron: "30 20 * * 0"
+  # Manual runs matter: the first thing an incoming officer does with a job is run it
+  # once by hand to see what it prints (docs/RUNBOOK.md, docs/ANNUAL_HANDOVER.md).
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Which job to run"
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - backup
+          - purge-abandoned-drafts
+          - drive-health
+          - benchmark
+
+permissions:
+  contents: read
+
+jobs:
+  # ───────────────────────────────────────────────────────────────────────────
+  # 1. ENCRYPTED OFF-PROVIDER BACKUP — BUILD_PLAN S7-T14; PRD item 17, US-J4.
+  #
+  # Tier 2 of two. Tier 1 is Supabase's own daily automated backup, which exists only
+  # on the Pro plan — if the project is still on Free, THIS IS THE ONLY BACKUP THAT
+  # EXISTS and Pro is a hard launch blocker (S7-T15,
+  # docs/issues/2026-09-06-supabase-free-tier-backup-gap.md).
+  #
+  # It is off-provider on purpose: Backblaze B2, not the org's Google Drive and not
+  # Supabase. One lost Google account at handover must not take both the proof-of-
+  # enrollment documents and the backups (ARCHITECTURE.md §1).
+  #
+  # ⚠️ THE NON-EMPTY ASSERTION IS THE MOST IMPORTANT STEP IN THIS FILE. A dump taken by
+  # a role subject to FORCE ROW LEVEL SECURITY returns STRUCTURALLY VALID SQL WITH ZERO
+  # ROWS. It encrypts, it uploads, it looks perfect, and it restores an empty database.
+  # Nothing else in the system would notice for months. So the job greps the data dump
+  # for the `COPY public.regions` block and requires at least 18 rows — 18 is a
+  # constitutional constant (DATA_MODEL.md §6/0016, RA 12000's Negros Island Region),
+  # it is seeded, and it is never zero in a healthy dump.
+  #
+  # ⚠️ IF DOCUMENT_STORE=supabase_storage (ADR 0005): storage objects are NOT included
+  # in `supabase db dump`, so this job needs an object-sync step or every proof
+  # document falls outside the Backup NFR entirely, with nothing failing to say so.
+  # ───────────────────────────────────────────────────────────────────────────
+  backup:
+    name: Nightly encrypted backup to Backblaze B2
+    if: >-
+      (github.event_name == 'schedule' && github.event.schedule == '0 18 * * *') ||
+      (github.event_name == 'workflow_dispatch' &&
+       (inputs.job == 'all' || inputs.job == 'backup'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: scheduled-backup
+      cancel-in-progress: false
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      # ── Preflight: refuse to run half-configured ──────────────────────────
+      # Checked BEFORE any dump, so a misconfigured repository costs a five-second
+      # failure rather than a successful-looking run that uploads nothing.
+      - name: Preflight — every backup secret is present
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          B2_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          B2_BUCKET: ${{ secrets.B2_BUCKET }}
+          B2_S3_ENDPOINT: ${{ secrets.B2_S3_ENDPOINT }}
+        run: |
+          set -euo pipefail
+
+          missing=""
+          for name in SUPABASE_DB_URL B2_KEY_ID B2_APPLICATION_KEY B2_BUCKET B2_S3_ENDPOINT; do
+            # Indirect expansion: check the value without ever printing it.
+            if [ -z "${!name:-}" ]; then missing="${missing} ${name}"; fi
+          done
+
+          if [ -n "$missing" ]; then
+            echo "::error::Backup cannot run — missing repository secret(s):${missing}"
+            echo "::error::This job FAILS rather than skipping. A silently green backup job that"
+            echo "::error::writes nothing is worse than no backup: it manufactures confidence in a"
+            echo "::error::restore that will not work. Set the secrets per"
+            echo "::error::docs/runbooks/03-CREDENTIAL_ROTATION.md, or record the gap in"
+            echo "::error::docs/issues/2026-09-06-launch-debt.md and disable this schedule"
+            echo "::error::deliberately, in a commit somebody has to review."
+            exit 1
+          fi
+          echo "All five backup secrets present."
+
+      - name: Preflight — the age recipient key is real
+        run: |
+          set -euo pipefail
+
+          if [ ! -f keys/backup.age.pub ]; then
+            echo "::error::keys/backup.age.pub is missing."
+            exit 1
+          fi
+
+          # The committed file ships as a placeholder on purpose: a keypair generated by
+          # CI would mean the PRIVATE half existed somewhere other than the CTO's own
+          # custody, and custody is the security property here (see that file's header).
+          if grep -q 'REPLACE_ME_WITH_THE_REAL_PUBLIC_KEY' keys/backup.age.pub; then
+            echo "::error::keys/backup.age.pub is still the committed PLACEHOLDER."
+            echo "::error::Encrypting to it would produce an archive NOBODY can decrypt — the"
+            echo "::error::worst possible outcome, because it looks exactly like a working backup."
+            echo "::error::Fix: the CTO runs \`age-keygen -o backup.age.key\`, commits ONLY the"
+            echo "::error::age1... public line into keys/backup.age.pub, and keeps the private half"
+            echo "::error::offline (escrowed with the faculty adviser) —"
+            echo "::error::docs/runbooks/02-RESTORE_FROM_BACKUP.md step 1."
+            exit 1
+          fi
+
+          # An age recipient is exactly one age1... line. Anything else is a paste error.
+          if ! grep -qE '^age1[0-9a-z]+$' keys/backup.age.pub; then
+            echo "::error::keys/backup.age.pub contains no valid age1... recipient line."
+            exit 1
+          fi
+          echo "age recipient key looks valid."
+
+      - name: Enable corepack for the pinned pnpm
+        run: corepack enable
+
+      - name: Set up Node from .nvmrc
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies (the pinned supabase CLI)
+        run: pnpm i --frozen-lockfile
+
+      - name: Install age
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq age
+          age --version
+
+      # ── The dump: schema THEN data, concatenated ──────────────────────────
+      # `supabase db dump` writes the schema; `--data-only` writes the rows. BOTH are
+      # required, and the schema half is not optional decoration: it carries the RLS
+      # POLICIES. A data-only backup restores an OPEN DATABASE — every row present, no
+      # policy protecting any of them — which is why the restore drill asserts
+      # `count(*) from pg_policies > 0` (scripts/restore-drill.sh assertion 4).
+      - name: Dump schema and data
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+
+          stamp="$(date -u +%Y-%m-%d)"
+          echo "STAMP=${stamp}" >> "$GITHUB_ENV"
+
+          mkdir -p backup
+
+          # No `set -x` anywhere in this job: the connection string is a superuser
+          # credential that BYPASSES RLS ENTIRELY — the most dangerous secret in the
+          # system (ARCHITECTURE.md §1). It is passed by env, never echoed, never a
+          # command-line argument in a log line.
+          pnpm exec supabase db dump --db-url "$SUPABASE_DB_URL" -f backup/schema.sql
+          pnpm exec supabase db dump --db-url "$SUPABASE_DB_URL" --data-only -f backup/data.sql
+
+          cat backup/schema.sql backup/data.sql > "backup/startsys-${stamp}.sql"
+          rm -f backup/schema.sql backup/data.sql
+
+          bytes=$(wc -c < "backup/startsys-${stamp}.sql")
+          echo "Dump written: ${bytes} bytes."
+
+      - name: Assert the dump is not silently empty
+        run: |
+          set -euo pipefail
+
+          file="backup/startsys-${STAMP}.sql"
+
+          # THE ASSERTION THIS WHOLE JOB TURNS ON. See the job header: a dump taken by a
+          # role subject to FORCE ROW LEVEL SECURITY is valid SQL containing no rows.
+          #
+          # `regions` is the right canary precisely because it is boring: 18 rows, seeded,
+          # constitutional, never edited by a user, and present in every healthy dump
+          # (DATA_MODEL.md §6/0016). A count below 18 means the dumping role could not see
+          # reference data, which means it could not see anything.
+          rows=$(awk '
+            /^COPY public\.regions /      { inblock = 1; next }
+            inblock && /^\\\.$/            { inblock = 0; next }
+            inblock                        { count++ }
+            END                            { print count + 0 }
+          ' "$file")
+
+          echo "COPY public.regions rows found in the dump: ${rows}"
+
+          if [ "$rows" -lt 18 ]; then
+            echo "::error::The dump contains ${rows} region rows; 18 are expected."
+            echo "::error::A dump taken by a role subject to FORCE ROW LEVEL SECURITY returns"
+            echo "::error::structurally valid SQL with ZERO rows. It encrypts, it uploads, and it"
+            echo "::error::restores an EMPTY database — and nothing else would notice for months."
+            echo "::error::Check the role in SUPABASE_DB_URL and its BYPASSRLS / ownership."
+            exit 1
+          fi
+
+          # A second, cheaper canary on the schema half: no policies means no protection.
+          policies=$(grep -c '^CREATE POLICY' "$file" || true)
+          echo "CREATE POLICY statements in the dump: ${policies}"
+          if [ "$policies" -lt 1 ]; then
+            echo "::error::The dump contains no CREATE POLICY statements — restoring it would"
+            echo "::error::produce an OPEN database with every scholar's PII and no RLS."
+            exit 1
+          fi
+
+      - name: Encrypt with age
+        run: |
+          set -euo pipefail
+
+          file="backup/startsys-${STAMP}.sql"
+          age --encrypt --recipients-file keys/backup.age.pub \
+              --output "backup/startsys-${STAMP}.sql.age" "$file"
+
+          # The plaintext must not survive the job, even on an ephemeral runner:
+          # 600 scholars' PII on disk beside a network-capable process.
+          rm -f "$file"
+          ls -l "backup/startsys-${STAMP}.sql.age"
+
+      # B2's S3-compatible endpoint, driven by the AWS CLI that ubuntu-latest already
+      # carries. Chosen over the `b2` CLI to avoid a pip install whose command names
+      # changed between v3 and v4 — one fewer thing to break silently in 2029.
+      - name: Upload to B2 (daily)
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          AWS_DEFAULT_REGION: us-east-005
+          B2_BUCKET: ${{ secrets.B2_BUCKET }}
+          B2_S3_ENDPOINT: ${{ secrets.B2_S3_ENDPOINT }}
+        run: |
+          set -euo pipefail
+
+          aws --endpoint-url "$B2_S3_ENDPOINT" s3 cp \
+            "backup/startsys-${STAMP}.sql.age" \
+            "s3://${B2_BUCKET}/daily/startsys-${STAMP}.sql.age"
+
+          echo "Uploaded daily/startsys-${STAMP}.sql.age"
+
+      - name: Copy to the monthly set on the 1st
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          AWS_DEFAULT_REGION: us-east-005
+          B2_BUCKET: ${{ secrets.B2_BUCKET }}
+          B2_S3_ENDPOINT: ${{ secrets.B2_S3_ENDPOINT }}
+        run: |
+          set -euo pipefail
+
+          if [ "$(date -u +%d)" != "01" ]; then
+            echo "Not the 1st — no monthly copy today."
+            exit 0
+          fi
+
+          aws --endpoint-url "$B2_S3_ENDPOINT" s3 cp \
+            "s3://${B2_BUCKET}/daily/startsys-${STAMP}.sql.age" \
+            "s3://${B2_BUCKET}/monthly/startsys-${STAMP}.sql.age"
+
+          echo "Copied to monthly/startsys-${STAMP}.sql.age"
+
+      # 30 dailies + 12 monthlies (ARCHITECTURE.md §8). Retention is not tidiness: an
+      # unbounded archive of PII is itself a retention problem under RA 10173.
+      - name: Prune beyond 30 dailies and 12 monthlies
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          AWS_DEFAULT_REGION: us-east-005
+          B2_BUCKET: ${{ secrets.B2_BUCKET }}
+          B2_S3_ENDPOINT: ${{ secrets.B2_S3_ENDPOINT }}
+        run: |
+          set -euo pipefail
+
+          prune() {
+            prefix="$1"
+            keep="$2"
+
+            # Names are date-stamped, so a lexical sort is a chronological sort.
+            keys=$(aws --endpoint-url "$B2_S3_ENDPOINT" s3api list-objects-v2 \
+                     --bucket "$B2_BUCKET" --prefix "${prefix}/" \
+                     --query 'Contents[].Key' --output text 2>/dev/null | tr '\t' '\n' \
+                   | grep -E "^${prefix}/startsys-.*\.sql\.age$" | sort || true)
+
+            total=$(printf '%s\n' "$keys" | grep -c . || true)
+            echo "${prefix}: ${total} object(s), keeping ${keep}."
+
+            if [ "$total" -le "$keep" ]; then return 0; fi
+
+            printf '%s\n' "$keys" | head -n "$((total - keep))" | while read -r key; do
+              [ -z "$key" ] && continue
+              echo "  pruning ${key}"
+              aws --endpoint-url "$B2_S3_ENDPOINT" s3 rm "s3://${B2_BUCKET}/${key}"
+            done
+          }
+
+          prune daily 30
+          prune monthly 12
+
+      - name: Notify on failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          text="START-SYS: the NIGHTLY BACKUP failed. ${run_url}"
+
+          if [ -n "${DISCORD_WEBHOOK_URL:-}" ]; then
+            # No --fail here: a broken webhook must not mask the real failure above.
+            curl -sS -X POST -H 'content-type: application/json' \
+              -d "$(printf '{"content":"%s"}' "$text")" \
+              "$DISCORD_WEBHOOK_URL" || echo "Discord notify failed; the backup failure stands."
+          else
+            echo "::warning::DISCORD_WEBHOOK_URL is not set — nobody was paged."
+            echo "$text"
+          fi
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 2. ABANDONED-DRAFT SWEEP — BUILD_PLAN S3-T22; PRD US-J2, US-J3; RA 10173.
+  #
+  # Redacts application drafts older than 30 days that were never submitted, deletes the
+  # proof-of-enrollment document each one produced, and reconciles orphaned objects
+  # whose upload succeeded but whose finalize never ran.
+  #
+  # A draft holds a real person's birthdate, address, contact number and school ID for
+  # someone who never completed a submission: THE WEAKEST RETENTION BASIS IN THE SYSTEM.
+  #
+  # The endpoint returns COUNTS ONLY. Nothing an applicant typed can reach this log,
+  # which is visible to anyone with read access to the repository.
+  # ───────────────────────────────────────────────────────────────────────────
+  purge-abandoned-drafts:
+    name: Purge abandoned application drafts
+    if: >-
+      (github.event_name == 'schedule' && github.event.schedule == '0 19 * * *') ||
+      (github.event_name == 'workflow_dispatch' &&
+       (inputs.job == 'all' || inputs.job == 'purge-abandoned-drafts'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: scheduled-purge-abandoned-drafts
+      cancel-in-progress: false
+    steps:
+      - name: Call the job endpoint
+        env:
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+          JOB_SHARED_SECRET: ${{ secrets.JOB_SHARED_SECRET }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${APP_BASE_URL:-}" ] || [ -z "${JOB_SHARED_SECRET:-}" ]; then
+            echo "::error::APP_BASE_URL and JOB_SHARED_SECRET must both be set as repository secrets."
+            echo "::error::See docs/runbooks/03-CREDENTIAL_ROTATION.md."
+            exit 1
+          fi
+
+          # --fail-with-body so a non-2xx exits non-zero AND still prints the body.
+          # The secret goes in a HEADER, never in the URL: a query string lands in access
+          # logs, proxy logs and browser history (CLAUDE.md "Privacy").
+          # -sS keeps the log quiet on success but keeps real errors visible.
+          curl --fail-with-body -sS -X POST \
+            -H "x-job-secret: ${JOB_SHARED_SECRET}" \
+            -H "content-length: 0" \
+            "${APP_BASE_URL%/}/api/jobs/purge-abandoned-drafts"
+
+          echo ""
+          echo "Sweep complete. Counts above; the per-row record is in audit_log."
+
+      - name: Notify on failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          text="START-SYS: the ABANDONED-DRAFT SWEEP failed (RA 10173 retention). ${run_url}"
+
+          if [ -n "${DISCORD_WEBHOOK_URL:-}" ]; then
+            curl -sS -X POST -H 'content-type: application/json' \
+              -d "$(printf '{"content":"%s"}' "$text")" \
+              "$DISCORD_WEBHOOK_URL" || echo "Discord notify failed; the sweep failure stands."
+          else
+            echo "::warning::DISCORD_WEBHOOK_URL is not set — nobody was paged."
+            echo "$text"
+          fi
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 3. DOCUMENT-STORE HEALTH — BUILD_PLAN S7-T5, S7-T17.
+  #
+  # The check that tells you the service-account key expired BEFORE an applicant
+  # discovers it mid-upload. Uploads only happen during application season, so without a
+  # daily probe the first symptom is a scholar on a phone at 11pm watching a progress bar
+  # fail — and no way to tell whether it is their connection or our credential.
+  #
+  # The response names the ACTIVE DRIVER (drive | supabase_storage | fake), which is also
+  # what the privacy notice's processor list and the RA 10173 register must agree with
+  # (ADR 0005). A production deployment answering `fake` is itself a finding.
+  # ───────────────────────────────────────────────────────────────────────────
+  drive-health:
+    name: Document store health check
+    if: >-
+      (github.event_name == 'schedule' && github.event.schedule == '0 19 * * *') ||
+      (github.event_name == 'workflow_dispatch' &&
+       (inputs.job == 'all' || inputs.job == 'drive-health'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: scheduled-drive-health
+      cancel-in-progress: false
+    steps:
+      - name: Probe /api/health/drive
+        env:
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+          JOB_SHARED_SECRET: ${{ secrets.JOB_SHARED_SECRET }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${APP_BASE_URL:-}" ] || [ -z "${JOB_SHARED_SECRET:-}" ]; then
+            echo "::error::APP_BASE_URL and JOB_SHARED_SECRET must both be set as repository secrets."
+            echo "::error::See docs/runbooks/03-CREDENTIAL_ROTATION.md."
+            exit 1
+          fi
+
+          body=$(curl --fail-with-body -sS \
+            -H "x-job-secret: ${JOB_SHARED_SECRET}" \
+            "${APP_BASE_URL%/}/api/health/drive")
+
+          echo "$body"
+
+          # A 200 carrying an error body must count as down — the same rule the two
+          # Better Stack monitors apply to /api/health (S7-T6).
+          case "$body" in
+            *'"status":"ok"'*) : ;;
+            *)
+              echo "::error::/api/health/drive returned 200 without status=ok."
+              exit 1
+              ;;
+          esac
+
+          case "$body" in
+            *'"driver":"fake"'*)
+              echo "::warning::The active document store is \`fake\`. Correct for a preview"
+              echo "::warning::deployment; a FINDING in production — uploads are going to a temp"
+              echo "::warning::directory and the privacy notice names a processor that is not in use."
+              ;;
+          esac
+
+      - name: Notify on failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          text="START-SYS: the DOCUMENT STORE health check failed — proof-of-enrollment uploads are probably broken. ${run_url}"
+
+          if [ -n "${DISCORD_WEBHOOK_URL:-}" ]; then
+            curl -sS -X POST -H 'content-type: application/json' \
+              -d "$(printf '{"content":"%s"}' "$text")" \
+              "$DISCORD_WEBHOOK_URL" || echo "Discord notify failed; the probe failure stands."
+          else
+            echo "::warning::DISCORD_WEBHOOK_URL is not set — nobody was paged."
+            echo "$text"
+          fi
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 4. WEEKLY BENCHMARK — BUILD_PLAN S7-T17, S7-T19; PRD Performance NFR,
+  #    Success Metric 4 (dashboard and member list under 3 seconds at full scale).
+  #
+  # Deliberately NOT in the merge gate: it needs a 600-member fixture and a deployed URL,
+  # and it would make every pull request wait on both. Weekly still catches a regression
+  # — one week later, but caught, and by a job whose failure names the p95 rather than a
+  # person's impression that "the dashboard feels slow".
+  #
+  # `scripts/benchmark.ts` belongs to S7-T19. Until it exists this job reports that
+  # plainly and exits 0 rather than failing: a red X every Monday for a script that was
+  # never written trains people to ignore the one that matters. A MISSING BENCHMARK IS
+  # NOT A PERFORMANCE FAILURE — it is a gap, and it is announced as one.
+  # ───────────────────────────────────────────────────────────────────────────
+  benchmark:
+    name: Weekly performance benchmark
+    if: >-
+      (github.event_name == 'schedule' && github.event.schedule == '30 20 * * 0') ||
+      (github.event_name == 'workflow_dispatch' &&
+       (inputs.job == 'all' || inputs.job == 'benchmark'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: scheduled-benchmark
+      cancel-in-progress: false
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Enable corepack for the pinned pnpm
+        run: corepack enable
+
+      - name: Set up Node from .nvmrc
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm i --frozen-lockfile
+
+      - name: Run the benchmark
+        env:
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+          # The threshold is the PRD's number, not a taste: 3s for a common page load.
+          BENCHMARK_P95_BUDGET_MS: "3000"
+        run: |
+          set -euo pipefail
+
+          if [ ! -f scripts/benchmark.ts ]; then
+            echo "::warning::scripts/benchmark.ts does not exist yet (BUILD_PLAN S7-T19)."
+            echo "::warning::Reporting the gap instead of failing: a red X every Monday for a"
+            echo "::warning::script nobody wrote trains people to ignore the one that matters."
+            exit 0
+          fi
+
+          if [ -z "${APP_BASE_URL:-}" ]; then
+            echo "::error::APP_BASE_URL is not set, so there is nothing to measure."
+            echo "::error::An unlabelled performance claim is worse than none — see"
+            echo "::error::docs/perf/README.md."
+            exit 1
+          fi
+
+          # Exits non-zero over the p95 budget. The report it writes carries the base URL
+          # and the seeded row counts, because a performance number without its dataset is
+          # a claim nobody can check (S7-T19).
+          #
+          # Run through Node's own type stripping — no tsx, no ts-node, no new dependency
+          # for a 2029 maintainer to upgrade. Node 24 (pinned in .nvmrc) runs .ts directly.
+          node scripts/benchmark.ts
+
+      - name: Notify on failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          text="START-SYS: the WEEKLY BENCHMARK failed or exceeded the 3000ms p95 budget. ${run_url}"
+
+          if [ -n "${DISCORD_WEBHOOK_URL:-}" ]; then
+            curl -sS -X POST -H 'content-type: application/json' \
+              -d "$(printf '{"content":"%s"}' "$text")" \
+              "$DISCORD_WEBHOOK_URL" || echo "Discord notify failed; the benchmark failure stands."
+          else
+            echo "::warning::DISCORD_WEBHOOK_URL is not set — nobody was paged."
+            echo "$text"
+          fi

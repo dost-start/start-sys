@@ -1,0 +1,305 @@
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- helpers/records-fixtures.psql  —  the S5 member-records world, layered on the nine fixtures
+--
+-- WHAT:      Adds to the caller's test transaction, on top of helpers/fixtures.psql:
+--              · R1  — the DEDUPE scholar: one membership, TWO committees, one department
+--              · a second committee (FIXT_OUTREACH) so R1 can sit on two
+--              · L1..L9 — the TRANSITION LAB: nine memberships in a region no rep fixture
+--                covers, so 060 can walk the whole state machine without perturbing any
+--                scoping count asserted by 061 or 063
+--              · L10 — a person with NO membership, so the trigger's INSERT branch has
+--                somewhere to insert
+--              · the MODERATOR's confidentiality acknowledgement
+--
+-- USAGE:     \ir helpers/auth.psql
+--            \ir helpers/fixtures.psql
+--            \ir helpers/records-fixtures.psql      -- ALWAYS AFTER fixtures.psql
+--
+--            Included by 060, 061, 062, 063 and 064 ONLY. Never by 020, never by 028/029,
+--            never by the S4 review suites (which have their own layer, review-fixtures.psql,
+--            and would double-count).
+--
+-- ⚠⚠ **NEVER INCLUDE THIS FILE FROM 020_confidentiality_gate.sql.** ⚠⚠
+--    §5 below inserts the MODERATOR's confidentiality acknowledgement, which
+--    helpers/fixtures.psql deliberately omits — the unacknowledged moderator IS 020's
+--    negative case for PRD US-J5. Same rule, and the same reason, as review-fixtures.psql.
+--    062 and 064 need the moderator's POSITIVE case (all three permitted roles admitted),
+--    and they get the negative half by DELETING all three acknowledgements part-way through
+--    the file rather than by starting without one.
+--
+-- ⚠ **NEVER INCLUDE THIS FILE ALONGSIDE helpers/review-fixtures.psql.** Both add people and
+--    both change the arithmetic; a file including both would have to re-derive every count in
+--    two tables at once. The uuid blocks do not collide (…b000-…7 there, …b100-… here) so a
+--    double include would not error — it would just make every exact count in both suites
+--    wrong, silently, which is worse.
+--
+-- RUNS AS THE SESSION ROLE, like fixtures.psql. `people` has no INSERT policy and no INSERT
+--    privilege for `authenticated` (0014, 0015); `confidentiality_acknowledgements` is
+--    exec_admin-INSERT-only. Seeding is a privileged act by construction. Do NOT call
+--    login_as() before including this file.
+--
+-- EVERY WRITE IS `on conflict do nothing`, so a second include is a no-op.
+--
+-- CITATION:  BUILD_PLAN S5-T2, S5-T8, S5-T9, S5-T10, S5-T11; DATA_MODEL.md §3.1, §6/0006,
+--            §6/0007, §8.4; PRD US-D1, US-D5, US-D6, US-F1, US-I2, US-I3, US-J5;
+--            CBL Art. VII §3, Art. VIII §7.1.
+-- ═══════════════════════════════════════════════════════════════════════════════════
+--
+-- ★ THE ARITHMETIC — what each fixture sees after this file ★
+--   060 through 064 derive from this table. If a policy changes, this is what tells you
+--   whether a new number is correct or a regression.
+--
+--     people ..................................... 17   (fixtures.psql 6 + R1 + L1..L9 + L10)
+--     memberships ................................ 15   (fixtures.psql 5 + R1 + L1..L9)
+--       in the ACTIVE term ....................... 14
+--         status active .......................... 12   (P3 P4 P5 P6 R1 L3..L9)
+--         status renewal_pending .................  2   (L1 L2)
+--       in the ARCHIVED term ....................  1   (P1, NCR)
+--     committees ................................. 2   (FIXT_ETHICS, FIXT_OUTREACH)
+--     committee_memberships ...................... 4   (P4+P6 ethics, R1 ethics, R1 outreach)
+--     department_assignments ..................... 1   (R1 -> CRRD)
+--     confidentiality acknowledgements ........... 3   (P1 exec, P2 crrd, P3 moderator)
+--
+--   Per fixture, and the two asymmetries are real properties of 0014 rather than accidents:
+--
+--                          people   memberships   v_member_directory (distinct membership_id)
+--     exec_admin / crrd /     17         15                     15
+--       moderator / officer
+--     regional_rep_a (NCR)     3          4                      3
+--     regional_rep_b (R07)     2          2                      2
+--     member (P4)              1          1                      1
+--     tech_admin               0          0                      0
+--     anon                     0          0                      0
+--
+--   ⚠ rep_a sees FOUR memberships but only THREE people and THREE directory rows, and that
+--     is not a bug. memberships_read scopes a rep by region with NO term predicate, so P1's
+--     ARCHIVED-term NCR membership is visible; people_read's regional_rep branch additionally
+--     requires a membership in current_term_id(), so P1 the PERSON is not. v_member_directory
+--     INNER JOINs people, so P1's row drops out of the directory too. 061 asserts all three
+--     numbers precisely because the difference between them is the difference between two
+--     policies, and a suite that asserted only one would not notice if they converged.
+--
+--   ⚠ THE TRANSITION LAB LIVES IN R03 (Central Luzon) ON PURPOSE. No regional-rep fixture is
+--     bound to R03, so 060 can drive L1..L9 through graduated / resigned / left / terminated
+--     without moving a single number in the table above. Putting the lab in NCR would couple
+--     061's and 063's scoping counts to 060's mutation order across separate files.
+-- ═══════════════════════════════════════════════════════════════════════════════════
+
+
+-- Repeated from auth.psql so this file is self-sufficient if included on its own. Idempotent.
+do $$
+begin
+  execute format('grant usage on schema %s to public', pg_my_temp_schema()::regnamespace);
+end;
+$$;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- 1 — people
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- uuid block …b100-… so nothing here can collide with fixtures.psql (…b000-…) or with
+-- review-fixtures.psql (…b000-…7). member_id literals rather than allocate_member_id()
+-- calls, matching fixtures.psql's own choice: nothing in this suite allocates, and writing
+-- the counter rows to match would only invite a test to depend on them.
+--
+-- Names are deliberately BORING and share no substring with the fixtures.psql names that
+-- 063's search assertions rely on — no 'Dela', no 'Peña', no '2024-'. A lab person whose
+-- surname happened to contain 'Dela' would change a search count in a different file.
+insert into public.people (
+  id, member_id, join_year, given_name, middle_name, family_name,
+  birthdate, contact_number, personal_email,
+  address_line, city_municipality, province, postal_code,
+  school, school_id_no
+)
+values
+  -- R1 — THE DEDUPE SCHOLAR. NCR (region A), two committees, one department. The row that
+  -- makes 063's array_agg assertion a real test: without a member on two committees, a
+  -- function that forgot to GROUP BY would return the same count as one that did.
+  ('00000000-0000-4000-b100-000000000001', '2026-101', 2026,
+   'Bianca', 'Cruz', 'Rivera',
+   date '2005-01-01', '+639190000101', 'bianca.rivera@fixture.start-sys.test',
+   'Records Fixture Street 1', 'Taguig', 'Metro Manila', '1630',
+   'De La Salle University', 'FIXT-SCH-R1'),
+
+  -- L1..L9 — the transition lab, R03 (Central Luzon). One person per edge, because pgTAP
+  -- keeps its running test number in a temp table and `rollback to savepoint` after plan()
+  -- rewinds that counter into duplicate test numbers — so 060 cannot reset a row between
+  -- assertions and every edge needs its own.
+  ('00000000-0000-4000-b100-000000000011', '2026-102', 2026,
+   'Lab', 'One',   'Transition', date '2005-02-01', '+639190000102',
+   'lab.one@fixture.start-sys.test',   'Lab Street 1', 'Malolos', 'Bulacan', '3000',
+   'Bulacan State University', 'FIXT-SCH-L1'),
+  ('00000000-0000-4000-b100-000000000012', '2026-103', 2026,
+   'Lab', 'Two',   'Transition', date '2005-02-02', '+639190000103',
+   'lab.two@fixture.start-sys.test',   'Lab Street 2', 'Malolos', 'Bulacan', '3000',
+   'Bulacan State University', 'FIXT-SCH-L2'),
+  ('00000000-0000-4000-b100-000000000013', '2026-104', 2026,
+   'Lab', 'Three', 'Transition', date '2005-02-03', '+639190000104',
+   'lab.three@fixture.start-sys.test', 'Lab Street 3', 'Malolos', 'Bulacan', '3000',
+   'Bulacan State University', 'FIXT-SCH-L3'),
+  ('00000000-0000-4000-b100-000000000014', '2026-105', 2026,
+   'Lab', 'Four',  'Transition', date '2005-02-04', '+639190000105',
+   'lab.four@fixture.start-sys.test',  'Lab Street 4', 'Malolos', 'Bulacan', '3000',
+   'Bulacan State University', 'FIXT-SCH-L4'),
+  ('00000000-0000-4000-b100-000000000015', '2026-106', 2026,
+   'Lab', 'Five',  'Transition', date '2005-02-05', '+639190000106',
+   'lab.five@fixture.start-sys.test',  'Lab Street 5', 'Malolos', 'Bulacan', '3000',
+   'Bulacan State University', 'FIXT-SCH-L5'),
+  ('00000000-0000-4000-b100-000000000016', '2026-107', 2026,
+   'Lab', 'Six',   'Transition', date '2005-02-06', '+639190000107',
+   'lab.six@fixture.start-sys.test',   'Lab Street 6', 'Malolos', 'Bulacan', '3000',
+   'Bulacan State University', 'FIXT-SCH-L6'),
+  ('00000000-0000-4000-b100-000000000017', '2026-108', 2026,
+   'Lab', 'Seven', 'Transition', date '2005-02-07', '+639190000108',
+   'lab.seven@fixture.start-sys.test', 'Lab Street 7', 'Malolos', 'Bulacan', '3000',
+   'Bulacan State University', 'FIXT-SCH-L7'),
+  ('00000000-0000-4000-b100-000000000018', '2026-109', 2026,
+   'Lab', 'Eight', 'Transition', date '2005-02-08', '+639190000109',
+   'lab.eight@fixture.start-sys.test', 'Lab Street 8', 'Malolos', 'Bulacan', '3000',
+   'Bulacan State University', 'FIXT-SCH-L8'),
+  ('00000000-0000-4000-b100-000000000019', '2026-110', 2026,
+   'Lab', 'Nine',  'Transition', date '2005-02-09', '+639190000110',
+   'lab.nine@fixture.start-sys.test',  'Lab Street 9', 'Malolos', 'Bulacan', '3000',
+   'Bulacan State University', 'FIXT-SCH-L9'),
+
+  -- L10 — NO MEMBERSHIP, deliberately. enforce_membership_transition()'s INSERT branch
+  -- (0028) permits only `active` and `renewal_pending`, and `memberships` is UNIQUE on
+  -- (person_id, term_id), so asserting that branch needs a person with a free slot in the
+  -- active term. Every other person here already occupies theirs.
+  ('00000000-0000-4000-b100-000000000020', '2026-111', 2026,
+   'Lab', 'Ten',   'Unenrolled', date '2005-02-10', '+639190000111',
+   'lab.ten@fixture.start-sys.test',   'Lab Street 10', 'Malolos', 'Bulacan', '3000',
+   'Bulacan State University', 'FIXT-SCH-L10')
+on conflict (id) do nothing;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- 2 — memberships
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- Regions resolved by CODE (0016 generates region ids with gen_random_uuid(), so a literal
+-- would be wrong on every fresh database).
+--
+-- Every row starts `active` or `renewal_pending` because that is all
+-- enforce_membership_transition()'s INSERT branch permits (0028). A fixture seeded as
+-- 'graduated' would fail HERE, in a helper nobody would think to open, rather than in the
+-- test that cares. 060 walks the rest of the machine at runtime.
+insert into public.memberships (
+  id, person_id, term_id, status, region_id, year_level, expected_grad_year
+)
+select v.id, v.person_id, pg_temp.fx_active_term(), v.status::public.membership_status,
+       r.id, v.year_level, v.expected_grad_year
+from (values
+  -- ── NCR (region A) — R1, the dedupe scholar ──
+  ('00000000-0000-4000-c100-000000000001'::uuid, '00000000-0000-4000-b100-000000000001'::uuid,
+   'active',          'NCR', 2, 2029),
+
+  -- ── R03 (Central Luzon) — the transition lab. NO rep fixture covers R03. ──
+  ('00000000-0000-4000-c100-000000000011'::uuid, '00000000-0000-4000-b100-000000000011'::uuid,
+   'renewal_pending', 'R03', 3, 2028),   -- L1: renewal_pending -> active
+  ('00000000-0000-4000-c100-000000000012'::uuid, '00000000-0000-4000-b100-000000000012'::uuid,
+   'renewal_pending', 'R03', 3, 2028),   -- L2: renewal_pending -> left
+  ('00000000-0000-4000-c100-000000000013'::uuid, '00000000-0000-4000-b100-000000000013'::uuid,
+   'active',          'R03', 4, 2027),   -- L3: -> graduated, then the illegal edges out of it
+  ('00000000-0000-4000-c100-000000000014'::uuid, '00000000-0000-4000-b100-000000000014'::uuid,
+   'active',          'R03', 3, 2028),   -- L4: -> resigned
+  ('00000000-0000-4000-c100-000000000015'::uuid, '00000000-0000-4000-b100-000000000015'::uuid,
+   'active',          'R03', 2, 2029),   -- L5: -> left
+  ('00000000-0000-4000-c100-000000000016'::uuid, '00000000-0000-4000-b100-000000000016'::uuid,
+   'active',          'R03', 3, 2028),   -- L6: -> terminated -> active  (US-D5 then US-D6)
+  ('00000000-0000-4000-c100-000000000017'::uuid, '00000000-0000-4000-b100-000000000017'::uuid,
+   'active',          'R03', 2, 2029),   -- L7: stays active — the refusal target
+  ('00000000-0000-4000-c100-000000000018'::uuid, '00000000-0000-4000-b100-000000000018'::uuid,
+   'active',          'R03', 1, 2030),   -- L8: stays active — officer / rep zero-rows target
+  ('00000000-0000-4000-c100-000000000019'::uuid, '00000000-0000-4000-b100-000000000019'::uuid,
+   'active',          'R03', 4, 2027)    -- L9: terminated and LEFT terminated
+) as v(id, person_id, status, region_code, year_level, expected_grad_year)
+join public.regions r on r.code = v.region_code
+on conflict do nothing;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- 3 — a second committee, so somebody can sit on two
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- CBL Art. III §5 makes committees discretionary and per term, so none is seeded by 0016 and
+-- both of this suite's committees are created by fixtures. FIXT_ETHICS comes from
+-- fixtures.psql; FIXT_OUTREACH is here for one reason: R1 must sit on TWO of them, which is
+-- what makes search_member_directory()'s GROUP BY a testable property rather than an
+-- unexercised clause.
+insert into public.committees (id, term_id, department_id, code, name)
+select '00000000-0000-4000-e100-000000000001',
+       pg_temp.fx_active_term(),
+       d.id,
+       'FIXT_OUTREACH',
+       'Fixture Outreach Committee'
+from public.departments d
+where d.term_id = pg_temp.fx_active_term()
+  and d.code = 'CRRD'
+on conflict (id) do nothing;
+
+-- R1 on BOTH committees. This is the whole point of the row.
+insert into public.committee_memberships (membership_id, committee_id)
+values
+  ('00000000-0000-4000-c100-000000000001', '00000000-0000-4000-e000-000000000001'),  -- FIXT_ETHICS
+  ('00000000-0000-4000-c100-000000000001', '00000000-0000-4000-e100-000000000001')   -- FIXT_OUTREACH
+on conflict do nothing;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- 4 — one department assignment
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- So `department_names` is asserted non-empty for at least one row. Without it the array
+-- would be '{}' everywhere and a bug that dropped the department join entirely would still
+-- pass every assertion in 063.
+insert into public.department_assignments (membership_id, department_id)
+select '00000000-0000-4000-c100-000000000001', d.id
+from public.departments d
+where d.term_id = pg_temp.fx_active_term()
+  and d.code = 'CRRD'
+on conflict do nothing;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- 5 — the moderator's confidentiality acknowledgement  (CBL Art. VIII §7.1)
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- ⚠ SEE THE BANNER AT THE TOP OF THIS FILE BEFORE INCLUDING IT ANYWHERE NEW.
+--
+-- fixtures.psql gives an acknowledgement to P1 (exec_admin) and P2 (crrd_admin) and
+-- deliberately withholds one from P3 (moderator), because 020_confidentiality_gate.sql needs
+-- an unacknowledged PRIVILEGED fixture to assert PRD US-J5's refusal against.
+--
+-- 062 and 064 need the opposite: all THREE permitted roles admitted, so that the subsequent
+-- ack-less assertions are measuring the acknowledgement gate rather than a role guard that
+-- would have refused anyway. They get the negative half by deleting all three rows part-way
+-- through the file — which is exactly what 049_document_view_audit.sql does, and for the
+-- same reason (no savepoints after plan()).
+--
+-- recorded_by is the exec_admin account, matching the exec_admin-only INSERT policy in 0014.
+insert into public.confidentiality_acknowledgements (
+  person_id, term_id, agreement_version, recorded_by
+)
+values
+  ('00000000-0000-4000-b000-000000000003', pg_temp.fx_active_term(),
+   'CBL-2026-VIII-7', '00000000-0000-4000-a000-000000000001')
+on conflict do nothing;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- 6 — convenience lookups
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- Plain SECURITY INVOKER, like fixtures.psql's own helpers: called after login_as() they
+-- correctly return what that fixture can actually see, so a helper can never hand a test a
+-- row its role could not have read.
+create or replace function pg_temp.fx_committee(p_code text) returns uuid
+language sql stable as $$
+  select id from public.committees
+   where code = p_code and term_id = pg_temp.fx_active_term();
+$$;
+
+create or replace function pg_temp.fx_department(p_code text) returns uuid
+language sql stable as $$
+  select id from public.departments
+   where code = p_code and term_id = pg_temp.fx_active_term();
+$$;
+
+comment on function pg_temp.fx_committee(text) is
+  'Current-term committee id by CODE. Never hardcode a committee uuid outside this helper set.';

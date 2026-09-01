@@ -1,0 +1,33 @@
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- 0001_extensions.sql
+--
+-- WHAT:      Enables the only two Postgres extensions this system uses.
+--              pg_trgm — trigram GIN indexes behind fuzzy member name / member-ID search.
+--              pgtap   — the RLS test suite. CI-only in effect; harmless in production.
+--
+-- WHY:       PRD MVP item 12 / US-I2 requires partial, case-tolerant name search that
+--            returns "within 3 seconds at full scale" (Performance NFR). A trigram GIN
+--            index is what makes an ILIKE '%pena%' an index scan instead of a seq scan.
+--            pgTAP is the executable specification of the authorization model
+--            (ARCHITECTURE.md §5) and blocks merge, so it must exist from migration one.
+--
+-- CITATION:  PRD §3 v1.0 item 12; PRD §5 US-I2; PRD §6 NFR register rows 2 and 3;
+--            ARCHITECTURE.md §1 (Data) and §5 (the RLS test suite).
+--
+-- DELIBERATELY ABSENT — do not add these back without an ADR:
+--   pgcrypto  gen_random_uuid() is core in PostgreSQL 13+. Nothing else needs pgcrypto;
+--             sha256() used by S3's submit-token gate is also core in PG17.
+--   pg_cron   CLAUDE.md banned patterns / ARCHITECTURE.md §7: scheduled logic hidden
+--   pg_net    inside the database is logic nobody thinks to look for. Every recurring
+--             job lives in .github/workflows/scheduled.yml — one scheduler, one syntax,
+--             one log viewer for a 2029 maintainer.
+--   unaccent  Not in the locked list. Accent-folded search (BUILD_PLAN S5-T4) ships
+--             with its own migration and its own ADR, or not at all.
+--
+-- ROLLBACK:  Forward-only. Dropping pg_trgm would drop every index that depends on it;
+--            dropping pgtap would silently disarm the CI security gate. If either must
+--            go, it is a new migration with an ADR in docs/decisions/.
+-- ═══════════════════════════════════════════════════════════════════════════════════
+
+create extension if not exists pg_trgm;
+create extension if not exists pgtap;

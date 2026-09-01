@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+
+# Env files — never commit real values; .env.example is the exception
+.env*
+!.env.example
+
+# Secrets / keys
+*.pem
+service-account*.json
+
+# OS
+.DS_Store
+
+# Test artifacts
+e2e-artifacts/
+playwright-report/
+test-results/
+coverage/
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Supabase local
+supabase/.temp
+
+# Generated DB types working copy (committed copy is database.types.ts at repo root)
+database.types.generated.ts
+.vercel

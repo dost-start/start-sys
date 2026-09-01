@@ -1,0 +1,316 @@
+# CI — the four-job merge gate (BUILD_PLAN S1-T19, S1-T24).
+#
+# All four jobs are required by branch protection. No job may be
+# `continue-on-error`, and the `db` job must never be made non-required:
+# it is the only place the pgTAP FORCE-RLS meta-test runs.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  js:
+    name: js (secrets, env, typecheck, lint, unit, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Enable corepack for the pinned pnpm
+        run: corepack enable
+
+      - name: Set up Node from .nvmrc
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm i --frozen-lockfile
+
+      - name: Secret guard (no keys outside .env.example and admin-client)
+        run: |
+          set -uo pipefail
+          # A committed service-role key, Supabase secret key or private key block
+          # is a data breach, not a lint failure. Allowed only in .env.example
+          # (names, never values), lib/server/admin-client.ts and .github/.
+          patterns='SUPABASE_SERVICE_ROLE_KEY=.|sb_secret_|-----BEGIN'
+          hits=$(git grep -nIE "$patterns" -- \
+            ':!.env.example' \
+            ':!lib/server/admin-client.ts' \
+            ':!.github/' \
+            ':!BUILD_PLAN.md' || true)
+          if [ -n "$hits" ]; then
+            echo "::error::Possible secret material in tracked files:"
+            echo "$hits"
+            exit 1
+          fi
+          echo "Secret guard clean."
+
+      - name: Env coverage (every process.env.NAME is documented)
+        run: |
+          set -uo pipefail
+          # A variable that reaches Vercel undocumented is a variable the next
+          # officer cannot rotate. .env.example is the register.
+          if [ ! -f .env.example ]; then
+            echo "::error::.env.example is missing"
+            exit 1
+          fi
+          names=$(git grep -hoE 'process\.env\.[A-Z0-9_]+' -- \
+            app lib components middleware.ts 2>/dev/null \
+            | sed 's/^process\.env\.//' | sort -u || true)
+          missing=""
+          for name in $names; do
+            if ! grep -qE "^[[:space:]]*#?[[:space:]]*${name}=" .env.example; then
+              missing="${missing} ${name}"
+            fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Env vars used in code but absent from .env.example:${missing}"
+            exit 1
+          fi
+          echo "Env coverage clean."
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint and format check
+        run: pnpm check
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      # ── Client bundle audit (BUILD_PLAN S7-T10, S7-T30) ────────────────────
+      # MUST run after Build: it reads the BUILT ARTIFACT under .next/static, because
+      # what ships to a browser is the output of tree-shaking and code-splitting, not
+      # the source. A source file can look server-only while a fragment of it lands in
+      # a chunk.
+      #
+      # Fails on evidence, never on vocabulary: a secret literal, a non-NEXT_PUBLIC_
+      # env name, or a PostgREST select naming a sensitive column. A form field called
+      # `birthdate` is a COLUMN NAME and is expected in the client bundle — the script's
+      # header explains at length why conflating the two produces a check that gets
+      # switched off within a week.
+      #
+      # Deliberately NOT `continue-on-error`: security invariant 9 (no sensitive PII in
+      # a client bundle) is either enforced or it is decoration.
+      - name: Client bundle audit
+        run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/audit-client-bundle.mjs
+
+  db:
+    name: db (supabase lint + pgTAP RLS suite + member-ID race)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Enable corepack for the pinned pnpm
+        run: corepack enable
+
+      - name: Set up Node from .nvmrc
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm i --frozen-lockfile
+
+      - name: Start the ephemeral Supabase stack
+        run: npx supabase start
+
+      - name: Lint the schema
+        run: npx supabase db lint
+
+      - name: Guard the seed-rerun copy against drift
+        # 033_seed_idempotency.sql re-executes the seed via a committed copy
+        # (supabase test db mounts only supabase/tests/). This diff is what keeps
+        # that copy honest — a drifted copy fails here, not silently in the test.
+        run: diff supabase/migrations/0016_seed.sql supabase/tests/helpers/seed-rerun.psql
+
+      - name: Guard the privacy-notice digest against drift
+        # privacy_notice_versions v1 is IMMUTABLE (no UPDATE policy, 0035) and records
+        # the sha256 the applicant consented to. If the notice file is edited without a
+        # new version row, "which text did this applicant agree to" becomes a lie —
+        # this step is what makes the two move together.
+        run: |
+          set -uo pipefail
+          want=$(grep -oE "[0-9a-f]{64}" supabase/migrations/0035_application_consent.sql | head -n1)
+          have=$(shasum -a 256 docs/privacy/PRIVACY_NOTICE.md | cut -d' ' -f1)
+          if [ "$want" != "$have" ]; then
+            echo "::error::privacy notice digest drift: migration seeds $want but the file hashes to $have. Amending the notice takes a NEW privacy_notice_versions row, not an edit."
+            exit 1
+          fi
+          echo "Privacy notice digest matches."
+
+      - name: Run the pgTAP suite
+        run: npx supabase test db
+
+      # ── The DB-backed Vitest suite (BUILD_PLAN S4-T12) ─────────────────────
+      # pgTAP CANNOT prove the member-ID race: `supabase test db` wraps each file in
+      # a transaction that is rolled back, so a second connection never sees the
+      # fixtures and 50-way parallelism is unachievable there
+      # (supabase/tests/048_member_id_concurrency.sql says so in its own header).
+      #
+      # This step is the other half: 50 genuinely concurrent PostgREST connections
+      # approving 50 applications, asserting 50 distinct, GAPLESS member IDs. It runs
+      # in `db` rather than `js` because it is the only job with a live database, and
+      # it is REQUIRED — the suite skips itself when the three variables are absent,
+      # so without this step it would skip silently in CI forever and "green" would
+      # mean nothing.
+      - name: Export the local Supabase keys
+        run: |
+          set -uo pipefail
+          # Local-stack demo keys only. Never a production credential.
+          status=$(npx supabase status -o env)
+          api=$(printf '%s\n' "$status" | grep -E '^API_URL=' | head -n1 | cut -d= -f2- | tr -d '"')
+          anon=$(printf '%s\n' "$status" | grep -E '^ANON_KEY=' | head -n1 | cut -d= -f2- | tr -d '"')
+          service=$(printf '%s\n' "$status" | grep -E '^SERVICE_ROLE_KEY=' | head -n1 | cut -d= -f2- | tr -d '"')
+          if [ -z "$api" ] || [ -z "$anon" ] || [ -z "$service" ]; then
+            echo "::error::Could not parse API_URL/ANON_KEY/SERVICE_ROLE_KEY from supabase status"
+            exit 1
+          fi
+          echo "::add-mask::$anon"
+          echo "::add-mask::$service"
+          echo "NEXT_PUBLIC_SUPABASE_URL=$api" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$anon" >> "$GITHUB_ENV"
+          echo "SUPABASE_SERVICE_ROLE_KEY=$service" >> "$GITHUB_ENV"
+
+      - name: DB-backed vitest (member-ID concurrency)
+        # If the suite reports "skipped" here, the environment did not reach it and the
+        # race was NOT proved. Treat that as a failure to investigate, not as a pass.
+        run: pnpm vitest run lib/applications/approve-application.test.ts
+
+      - name: Stop the Supabase stack
+        if: always()
+        run: npx supabase stop --no-backup
+
+  types-drift:
+    name: types-drift (database.types.ts matches the schema)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Enable corepack for the pinned pnpm
+        run: corepack enable
+
+      - name: Set up Node from .nvmrc
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm i --frozen-lockfile
+
+      - name: Start the ephemeral Supabase stack
+        run: npx supabase start
+
+      - name: Regenerate the database types
+        run: npx supabase gen types typescript --local > database.types.generated.ts
+
+      - name: Compare against the committed types
+        run: |
+          set -uo pipefail
+          if ! diff -u database.types.ts database.types.generated.ts; then
+            echo "::error::database.types.ts is stale. Run pnpm db:types and commit it with the migration."
+            exit 1
+          fi
+          echo "Committed types match the schema."
+
+      - name: Upload the generated types on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-types
+          path: database.types.generated.ts
+
+      - name: Stop the Supabase stack
+        if: always()
+        run: npx supabase stop --no-backup
+
+  e2e:
+    name: e2e (playwright smoke)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: js
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Enable corepack for the pinned pnpm
+        run: corepack enable
+
+      - name: Set up Node from .nvmrc
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm i --frozen-lockfile
+
+      - name: Start the ephemeral Supabase stack
+        run: npx supabase start
+
+      - name: Export the local Supabase keys
+        run: |
+          set -uo pipefail
+          # Local-stack demo keys only. Never a production credential.
+          status=$(npx supabase status -o env)
+          anon=$(printf '%s\n' "$status" | grep -E '^ANON_KEY=' | head -n1 | cut -d= -f2- | tr -d '"')
+          service=$(printf '%s\n' "$status" | grep -E '^SERVICE_ROLE_KEY=' | head -n1 | cut -d= -f2- | tr -d '"')
+          if [ -z "$anon" ] || [ -z "$service" ]; then
+            echo "::error::Could not parse ANON_KEY/SERVICE_ROLE_KEY from supabase status"
+            exit 1
+          fi
+          echo "::add-mask::$anon"
+          echo "::add-mask::$service"
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$anon" >> "$GITHUB_ENV"
+          echo "SUPABASE_SERVICE_ROLE_KEY=$service" >> "$GITHUB_ENV"
+
+      - name: Install the Playwright chromium browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run the Playwright smoke flows
+        env:
+          CI_E2E_CHROMIUM_ONLY: "1"
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+          DOCUMENT_STORE: fake
+          JOB_SHARED_SECRET: ci-test-secret
+          # `pnpm start` is NODE_ENV=production, and the rate limiter refuses to run
+          # on a guessable digest there — a real requirement in prod, satisfied with a
+          # throwaway value in CI (local-stack only, nothing sensitive behind it).
+          RATE_LIMIT_HMAC_KEY: ci-test-hmac-key-not-a-secret
+          # Every spec and retry shares one 127.0.0.1; production limits starve the
+          # later apply specs. See the comment in lib/applications/actions.ts.
+          E2E_RATE_LIMIT_BOOST: "1"
+
+        run: pnpm test:e2e
+
+      - name: Upload the Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
+
+      - name: Stop the Supabase stack
+        if: always()
+        run: npx supabase stop --no-backup

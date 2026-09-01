@@ -162,6 +162,12 @@ test.describe("Epic A — access and identity", () => {
     await page.goto("/dashboard");
     await expect(page).toHaveURL(/\/auth\/mfa\/verify/);
 
+    // That probe REWROTE the challenge's `next` to /dashboard (the middleware carries
+    // the page you were headed to). Re-arm the original target before typing the code,
+    // or the success assertion below is comparing against the probe's destination.
+    await page.goto("/audit");
+    await expect(page).toHaveURL(/\/auth\/mfa\/verify\?next=%2Faudit/);
+
     await completeTotpChallenge(page, "crrd_admin");
     await expect(page).toHaveURL(/\/audit(\?.*)?$/);
   });

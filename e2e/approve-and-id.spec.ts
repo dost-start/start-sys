@@ -182,8 +182,17 @@ test("a CRRD admin approves a pending application and sees the minted member ID 
   await clickAndConfirm(page, reviewScreens.approveButton(page));
 
   // ── On screen: the ID itself. PRD US-C3 names "e.g. 2024-001" as the acceptance
-  //    criterion, and that string is the org's proof the feature works.
-  await expect(reviewScreens.memberId(page)).toBeVisible();
+  //    criterion, and that string is the org's proof the feature works. Generous
+  //    timeout: the approve action + revalidate round trip runs on a loaded CI box.
+  try {
+    await expect(reviewScreens.memberId(page)).toBeVisible({ timeout: 30_000 });
+  } catch (cause) {
+    const alerts = await page.getByRole("alert").allInnerTexts();
+    const body = (await page.locator("body").innerText()).slice(0, 1500);
+    throw new Error(`member ID never appeared. alerts=${JSON.stringify(alerts)} body:\n${body}`, {
+      cause,
+    });
+  }
 
   // ── And the decision controls are gone: `approved` is terminal, and
   //    `enforce_application_status_transition()` (0024) refuses a re-decision at the

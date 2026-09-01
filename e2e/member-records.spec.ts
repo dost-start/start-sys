@@ -416,7 +416,9 @@ test.describe("member records (US-I2, US-I3, US-D1, US-D3)", () => {
 
     await memberScreens.contactField(page).fill(nextNumber);
     await memberScreens.saveButton(page).click();
-    await waitForGrid(page);
+    // Wait for the round trip to FINISH, not merely start — reading the database while
+    // the button still says "Saving…" is how this spec failed its first CI run.
+    await expect(page.getByText(/^Saved\.$/)).toBeVisible({ timeout: 20_000 });
 
     const person = await readPerson(admin, member.personId);
     if (person.contact_number !== nextNumber) {
@@ -455,11 +457,12 @@ test.describe("member records (US-I2, US-I3, US-D1, US-D3)", () => {
     // `terminated` it is also a database CHECK (0028), so the form cannot be looser.
     await memberScreens.statusReason(page).fill("Confirmed graduation, e2e fixture record.");
     await dialog.getByRole("button", { name: /^confirm$/i }).click();
-    await waitForGrid(page);
+    // The dialog closing + the badge moving is the signal the action ROUND-TRIPPED;
+    // only then is the database read meaningful.
+    await expect(dialog).toBeHidden({ timeout: 20_000 });
+    await expect(page.getByText(/graduated/i).first()).toBeVisible({ timeout: 20_000 });
 
     expect(await readMembershipStatus(admin, member.membershipId)).toBe("graduated");
-
-    await expect(page.getByText(/graduated/i).first()).toBeVisible();
 
     // The reverse edge is terminal within the term (DATA_MODEL §3.1). The editor must not
     // offer what the trigger will refuse: `legalNextStatuses('graduated', …)` is empty, so

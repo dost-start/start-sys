@@ -30,3 +30,4 @@ supabase/.temp
 
 # Generated DB types working copy (committed copy is database.types.ts at repo root)
 database.types.generated.ts
+.vercel

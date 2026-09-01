@@ -305,7 +305,15 @@ async function fillIfPresent(locator: Locator, value: string): Promise<boolean> 
   const target = locator.first();
   if ((await target.count()) === 0) return false;
   if (!(await target.isVisible().catch(() => false))) return false;
-  await target.fill(value);
+  // `fill()` throws on a <select> — and callers swallow that throw, which is how the
+  // year-level select silently stayed unset and the whole submission bounced on
+  // "Select your year level". Dispatch on the tag instead.
+  const tag = await target.evaluate((n) => n.tagName.toLowerCase());
+  if (tag === "select") {
+    await target.selectOption(value);
+  } else {
+    await target.fill(value);
+  }
   return true;
 }
 

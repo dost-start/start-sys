@@ -662,7 +662,7 @@ export async function seedAuthFixtures(): Promise<FixtureState> {
 export const authScreens = {
   emailField: (page: Page) => page.getByLabel(/email/i),
   passwordField: (page: Page) => page.getByLabel(/^password$/i),
-  newPasswordField: (page: Page) => page.getByLabel(/new password/i),
+  newPasswordField: (page: Page) => page.getByRole("textbox", { name: /^new password$/i }),
   submitLogin: (page: Page) => page.getByRole("button", { name: /sign in|log ?in/i }),
   /** The six-digit TOTP input on both the verify and the reset challenge screens. */
   totpField: (page: Page) =>

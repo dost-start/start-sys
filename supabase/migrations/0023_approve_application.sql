@@ -127,9 +127,14 @@ begin
   v_person := a.person_id;
 
   if v_person is null then
+    -- lower(::text) on BOTH sides, not the bare citext `=`: this function runs under
+    -- `SET search_path = ''`, and citext's operators live in the `extensions` schema —
+    -- unqualified, the citext equality is unresolvable here and the comparison degrades
+    -- to case-sensitive text, silently minting a SECOND person for `Liza@` vs `liza@`.
+    -- That is precisely the bug US-C4/US-H5 exist to prevent (pgTAP 047 tests 18-19).
     select p.id into v_person
       from public.people p
-     where p.personal_email = a.applicant_email   -- citext: case-insensitive by type
+     where lower(p.personal_email::text) = lower(a.applicant_email::text)
      limit 1;
   end if;
 

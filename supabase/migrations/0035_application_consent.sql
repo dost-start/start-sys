@@ -181,7 +181,7 @@ insert into public.privacy_notice_versions (version, effective_at, body_sha256, 
 values (
   'v1',
   now(),
-  '23ac7ea81155d632c500f5f3e212f3753be8e413de689998ad04d9e25c6bf8ec',
+  '4a3bf0841945f4acc0fed1285ca448aa83432ed27dc94047acb181fa9c0d4beb',
   '/privacy'
 )
 on conflict (version) do nothing;

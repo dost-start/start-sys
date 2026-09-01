@@ -134,10 +134,14 @@ export async function listAuditEntries(
 ): Promise<AuditPage> {
   if (!canReadAuditLog(ctx.role)) return EMPTY_PAGE;
 
+  // Ordered by `id` ALONE, because the keyset cursor pages on `.lt("id", …)`. A
+  // created_at-first ordering would disagree with the id cursor whenever two
+  // transactions commit out of id order (`now()` is transaction start, ids are
+  // assigned at INSERT) and silently skip rows across a page boundary. `id` is a
+  // bigserial, so id-descending IS newest-first for an append-only log.
   let query = ctx.supabase
     .from("audit_log")
     .select(AUDIT_COLUMNS)
-    .order("created_at", { ascending: false })
     .order("id", { ascending: false })
     .limit(AUDIT_PAGE_SIZE + 1);
 

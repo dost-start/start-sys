@@ -19,6 +19,7 @@ import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { verifyMfa } from "@/lib/auth/mfa-actions";
+import { safeNextPath } from "@/lib/auth/safe-next";
 
 export type TotpFactorOption = {
   id: string;
@@ -26,14 +27,13 @@ export type TotpFactorOption = {
 };
 
 /**
- * Only a same-origin RELATIVE path is ever followed. `//evil.example` and
- * `https://evil.example` are both rejected — an open redirect on the one screen a
- * user reaches from an emailed link is a phishing primitive.
+ * Only a same-origin RELATIVE path is ever followed — an open redirect on the one
+ * screen a user reaches from an emailed link is a phishing primitive. Delegates to
+ * the ONE shared allowlist (`lib/auth/safe-next.ts`), which also rejects the
+ * backslash-authority forms (`/\evil.example`) browsers resolve off-origin.
  */
 function safeNext(next: string | null, fallback: string): string {
-  if (next === null || next === "") return fallback;
-  if (!next.startsWith("/") || next.startsWith("//")) return fallback;
-  return next;
+  return safeNextPath(next) ?? fallback;
 }
 
 export function TotpVerify({

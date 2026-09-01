@@ -71,6 +71,15 @@ export async function getPublicWindowState(): Promise<PublicWindowState> {
   // exactly what "the period is closed" looks like to an anonymous caller.
   if (error || !data) return CLOSED;
 
+  // Compare the timestamps HERE too, not only in the policy: a SIGNED-IN visitor to
+  // /apply reads through `application_windows_read` (authenticated, `using (true)`),
+  // so row presence alone would render an open form for a closed or scheduled window
+  // and the eventual INSERT would fail confusingly. The anon policy stays the
+  // enforcement; this is the page telling the truth.
+  const now = Date.now();
+  const isOpen = Date.parse(data.opens_at) <= now && now < Date.parse(data.closes_at);
+  if (!isOpen) return CLOSED;
+
   return { open: true, opensAt: data.opens_at, closesAt: data.closes_at };
 }
 

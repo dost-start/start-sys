@@ -208,9 +208,17 @@ export const openApplicationWindow = withRole<unknown, ApplicationWindowResult>(
     if (readError) return { ok: false, error: mapDbError(readError) };
 
     if (existing !== null && Date.parse(existing.closes_at) > Date.now()) {
+      // A live row occupies the term's (term_id, form_kind) slot whether the period is
+      // already OPEN or merely SCHEDULED (opens_at still in the future). Both are
+      // escapable the same way — Close cancels the row (closes_at = now()), then Open
+      // upserts the new dates — but the message must say which state it found, or an
+      // officer staring at a scheduled window is told it is "already open".
+      const scheduled = Date.parse(existing.opens_at) > Date.now();
       return err<ApplicationWindowResult>(
         "conflict",
-        "The application period is already open. Close it first if you need to change its dates.",
+        scheduled
+          ? "An application period is already scheduled for this term. Close it first to replace its dates."
+          : "The application period is already open. Close it first if you need to change its dates.",
       );
     }
 

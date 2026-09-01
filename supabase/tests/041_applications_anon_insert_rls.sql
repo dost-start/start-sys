@@ -45,7 +45,7 @@ begin;
 \ir helpers/auth.psql
 \ir helpers/fixtures.psql
 
-select plan(21);
+select plan(22);
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════════
@@ -88,6 +88,26 @@ select lives_ok(
              'not-a-real-digest', now() + interval '1 hour') $$,
   'POSITIVE CONTROL: anon CAN insert an application while a membership_application window '
   'is open — PRD US-B1, "reachable without an account, by link"'
+);
+
+-- 1b — REGRESSION (QA hunt, 2026-09-02): an anon INSERT ... RETURNING must RAISE.
+-- Postgres applies SELECT policies to the returned row, and `applications` deliberately
+-- has NO anon SELECT policy (the anti-enumeration mechanism, 0008 §5). startApplication
+-- once used `.insert().select()` — supabase-js's RETURNING form — and every real
+-- submission failed 42501 while this suite stayed green, because every insert here was
+-- a plain INSERT. This is the assertion that keeps `.select()` off that insert.
+select throws_ok(
+  $$ insert into public.applications
+       (term_id, applicant_email, applicant_given_name, applicant_family_name,
+        payload, submit_token_hash, submit_token_expires_at)
+     values (public.current_term_id(),
+             'returning.probe@fixture.start-sys.test', 'Returning', 'Probe',
+             '{"region_code":"NCR"}'::jsonb,
+             'not-a-real-digest', now() + interval '1 hour')
+     returning id $$,
+  '42501'::char(5), null::text,
+  'anon INSERT ... RETURNING raises 42501 — the missing anon SELECT policy applies to the '
+  'returned row, so application code must mint ids client-side and never .select() this insert'
 );
 
 select pg_temp.logout();

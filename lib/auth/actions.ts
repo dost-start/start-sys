@@ -18,27 +18,20 @@ import { redirect } from "next/navigation";
 
 import { type ActionResult, err, validationFailure } from "@/lib/action-result";
 import { homeForRole } from "@/lib/auth/route-access";
+import { safeNextPath } from "@/lib/auth/safe-next";
 import { signInSchema } from "@/lib/auth/schema";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 const GENERIC_LOGIN_ERROR = "Invalid email or password";
 
 /**
- * A same-origin relative path only. `/admin/members` is accepted; `https://evil`,
- * `//evil.example` (protocol-relative) and a bare `evil.example` are all rejected —
- * each of those would send an authenticated session off-origin (CONVENTIONS §4.3,
- * "never trust a client-supplied redirect target").
- */
-function isSafeNextPath(next: unknown): next is string {
-  return typeof next === "string" && next.startsWith("/") && !next.startsWith("//");
-}
-
-/**
  * Resolve where a successful login should land: the page the caller was originally
  * headed to (US-A1), or the role's home route when `next` is absent or unsafe.
+ * The allowlist is `safeNextPath` — the ONE shared redirect-target check.
  */
 async function resolveDestination(next: string | undefined): Promise<string> {
-  if (isSafeNextPath(next)) return next;
+  const safe = safeNextPath(next);
+  if (safe !== null) return safe;
 
   const supabase = await createServerSupabase();
   const {

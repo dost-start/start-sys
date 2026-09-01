@@ -307,6 +307,23 @@ select throws_ok(
   'an OFFICER updating `people` raises 42501 too — "no update, create or delete path exists '
   'for the Officer tier on any record" (PRD US-D2)'
 );
+
+-- The officer counterpart of the rep's zero-rows probe above: memberships carries the
+-- UPDATE table privilege (moderators need it), so for an officer the refusal arrives
+-- as a MISSING POLICY — zero rows affected, no error (PRD US-D2).
+do $$
+declare n int;
+begin
+  update public.memberships set year_level = 1 where true;
+  get diagnostics n = row_count;
+  insert into fx_rows values ('officer_membership_update', n);
+end;
+$$;
+select is(
+  (select v from fx_rows where k = 'officer_membership_update'), 0,
+  'an OFFICER''s membership update affects ZERO rows and raises nothing — the refusal is a '
+  'MISSING POLICY, not a hidden button (PRD US-D2)'
+);
 select pg_temp.logout();
 
 

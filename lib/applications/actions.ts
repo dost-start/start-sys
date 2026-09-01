@@ -143,30 +143,34 @@ export const startApplication = withPublic<StartApplicationInput, StartApplicati
     const consentGivenAt = new Date().toISOString();
     const payload = buildApplicationPayload(input, consentGivenAt);
 
-    const { data: inserted, error: insertError } = await ctx.supabase
-      .from("applications")
-      .insert({
-        term_id: termId,
-        applicant_email: input.applicant_email,
-        applicant_given_name: input.applicant_given_name,
-        applicant_family_name: input.applicant_family_name,
-        payload,
-        // RA 10173 consent, captured AT COLLECTION (0035, BUILD_PLAN S7-T22). Sending this
-        // field AT ALL is the affirmative act, and it is only reachable here because
-        // `consent_privacy_notice: z.literal(true)` already parsed — an unticked box never
-        // gets this far. The VALUE is thrown away: enforce_consent_server_values() overwrites
-        // it with the server's own clock and stamps the current privacy_notice_version, so a
-        // backdated consent or a claim against a superseded notice is unrepresentable. Omit
-        // it and the draft can never be finalized: submitted_has_consent refuses the
-        // draft -> pending flip, which is what makes "consent at collection" structural.
-        consented_at: consentGivenAt,
-        submit_token_hash: hashSubmitToken(uploadToken),
-        submit_token_expires_at: expiresAt,
-      })
-      .select("id")
-      .single();
+    // The id is minted HERE, not returned by the database. An `.insert().select()`
+    // becomes INSERT … RETURNING, and Postgres applies SELECT policies to the
+    // returned row — `applications` deliberately has NO anon SELECT policy (the
+    // anti-enumeration mechanism, 0008 §5), so a RETURNING insert raises 42501 for
+    // every applicant. Client-side UUID + a plain INSERT keeps that policy absent.
+    const applicationId = crypto.randomUUID();
 
-    if (insertError || !inserted) {
+    const { error: insertError } = await ctx.supabase.from("applications").insert({
+      id: applicationId,
+      term_id: termId,
+      applicant_email: input.applicant_email,
+      applicant_given_name: input.applicant_given_name,
+      applicant_family_name: input.applicant_family_name,
+      payload,
+      // RA 10173 consent, captured AT COLLECTION (0035, BUILD_PLAN S7-T22). Sending this
+      // field AT ALL is the affirmative act, and it is only reachable here because
+      // `consent_privacy_notice: z.literal(true)` already parsed — an unticked box never
+      // gets this far. The VALUE is thrown away: enforce_consent_server_values() overwrites
+      // it with the server's own clock and stamps the current privacy_notice_version, so a
+      // backdated consent or a claim against a superseded notice is unrepresentable. Omit
+      // it and the draft can never be finalized: submitted_has_consent refuses the
+      // draft -> pending flip, which is what makes "consent at collection" structural.
+      consented_at: consentGivenAt,
+      submit_token_hash: hashSubmitToken(uploadToken),
+      submit_token_expires_at: expiresAt,
+    });
+
+    if (insertError) {
       // 42501 here is the anon INSERT policy refusing, and by far the likeliest reason
       // is that no window is open. Saying so is correct and is not a leak: whether
       // applications are open is something the org publishes.
@@ -183,14 +187,14 @@ export const startApplication = withPublic<StartApplicationInput, StartApplicati
     // create objects with no row pointing at them, which nothing sweeps.
     try {
       const session = await getDocumentStore().createUploadSession({
-        applicationId: inserted.id,
+        applicationId,
         fileName: input.proof_file_name,
         mimeType: input.proof_mime_type,
         sizeBytes: input.proof_size_bytes,
       });
 
       return ok({
-        applicationId: inserted.id,
+        applicationId,
         uploadToken,
         uploadUrl: session.uploadUrl,
         storageRef: session.storageRef,

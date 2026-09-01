@@ -29,7 +29,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createClient } from "@supabase/supabase-js";
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomBytes } from "node:crypto";
+import { console } from "node:console";
+import process from "node:process";
 import { writeFileSync } from "node:fs";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -56,17 +58,73 @@ const SAMPLE_MEMBERSHIP = (n) => `00000000-0000-4000-dd00-${String(n).padStart(1
 const COMMITTEE = (n) => `00000000-0000-4000-dc00-${String(n).padStart(12, "0")}`;
 
 const ACCOUNTS = [
-  { email: "demo.ceo@start-sys.test",       role: "exec_admin",   region: null,  person: 1, name: ["Diana", "Reyes"] },
-  { email: "demo.cto@start-sys.test",       role: "tech_admin",   region: null,  person: null, name: null },
-  { email: "demo.ccdo@start-sys.test",      role: "crrd_admin",   region: null,  person: 2, name: ["Carlos", "Domingo"] },
-  { email: "demo.moderator@start-sys.test", role: "moderator",    region: null,  person: 3, name: ["Mia", "Santos"] },
-  { email: "demo.officer@start-sys.test",   role: "officer",      region: null,  person: null, name: null },
-  { email: "demo.rep@start-sys.test",       role: "regional_rep", region: "NCR", person: null, name: null },
-  { email: "demo.member@start-sys.test",    role: "member",       region: null,  person: 4, name: ["Juan", "Dela Cruz"] },
+  {
+    email: "demo.ceo@start-sys.test",
+    role: "exec_admin",
+    region: null,
+    person: 1,
+    name: ["Diana", "Reyes"],
+  },
+  { email: "demo.cto@start-sys.test", role: "tech_admin", region: null, person: null, name: null },
+  {
+    email: "demo.ccdo@start-sys.test",
+    role: "crrd_admin",
+    region: null,
+    person: 2,
+    name: ["Carlos", "Domingo"],
+  },
+  {
+    email: "demo.moderator@start-sys.test",
+    role: "moderator",
+    region: null,
+    person: 3,
+    name: ["Mia", "Santos"],
+  },
+  { email: "demo.officer@start-sys.test", role: "officer", region: null, person: null, name: null },
+  {
+    email: "demo.rep@start-sys.test",
+    role: "regional_rep",
+    region: "NCR",
+    person: null,
+    name: null,
+  },
+  {
+    email: "demo.member@start-sys.test",
+    role: "member",
+    region: null,
+    person: 4,
+    name: ["Juan", "Dela Cruz"],
+  },
 ];
 
-const FIRST = ["Alon", "Bea", "Caloy", "Dara", "Eli", "Fara", "Gio", "Hana", "Iking", "Jaya", "Kiko", "Lara"];
-const LAST = ["Aquino", "Bautista", "Cruz", "Dizon", "Estrada", "Flores", "Garcia", "Hilario", "Ignacio", "Javier", "Katigbak", "Lopez"];
+const FIRST = [
+  "Alon",
+  "Bea",
+  "Caloy",
+  "Dara",
+  "Eli",
+  "Fara",
+  "Gio",
+  "Hana",
+  "Iking",
+  "Jaya",
+  "Kiko",
+  "Lara",
+];
+const LAST = [
+  "Aquino",
+  "Bautista",
+  "Cruz",
+  "Dizon",
+  "Estrada",
+  "Flores",
+  "Garcia",
+  "Hilario",
+  "Ignacio",
+  "Javier",
+  "Katigbak",
+  "Lopez",
+];
 
 async function must(promise, what) {
   const { data, error } = await promise;
@@ -97,7 +155,10 @@ async function main() {
   const regions = await must(admin.from("regions").select("id, code"), "regions");
   const regionId = (code) => regions.find((r) => r.code === code)?.id;
   const termId = (await must(admin.rpc("current_term_id"), "current_term_id()")) ?? null;
-  if (!termId) throw new Error("No active term — did the migrations/seed apply? Run `supabase db push` first.");
+  if (!termId)
+    throw new Error(
+      "No active term — did the migrations/seed apply? Run `supabase db push` first.",
+    );
 
   const creds = [];
 
@@ -158,7 +219,12 @@ async function main() {
     if (personId && ["exec_admin", "crrd_admin", "moderator"].includes(a.role)) {
       await must(
         admin.from("confidentiality_acknowledgements").upsert(
-          { person_id: personId, term_id: termId, agreement_version: "CBL-2026-VIII-7", recorded_by: userId },
+          {
+            person_id: personId,
+            term_id: termId,
+            agreement_version: "CBL-2026-VIII-7",
+            recorded_by: userId,
+          },
           { onConflict: "person_id,term_id", ignoreDuplicates: true },
         ),
         `ack for ${a.email}`,
@@ -212,21 +278,28 @@ async function main() {
     );
   }
 
-  for (const [n, name] of [[1, "Community Outreach"], [2, "Scholars' Tech Guild"]]) {
+  for (const [n, name] of [
+    [1, "Community Outreach"],
+    [2, "Scholars' Tech Guild"],
+  ]) {
     await must(
-      admin.from("committees").upsert(
-        { id: COMMITTEE(n), term_id: termId, code: `DEMO_CMTE_${n}`, name },
-        { onConflict: "term_id,code" },
-      ),
+      admin
+        .from("committees")
+        .upsert(
+          { id: COMMITTEE(n), term_id: termId, code: `DEMO_CMTE_${n}`, name },
+          { onConflict: "term_id,code" },
+        ),
       `committee ${n}`,
     );
   }
   for (let i = 1; i <= 8; i += 1) {
     await must(
-      admin.from("committee_memberships").upsert(
-        { membership_id: SAMPLE_MEMBERSHIP(i), committee_id: COMMITTEE(1 + (i % 2)) },
-        { onConflict: "membership_id,committee_id", ignoreDuplicates: true },
-      ),
+      admin
+        .from("committee_memberships")
+        .upsert(
+          { membership_id: SAMPLE_MEMBERSHIP(i), committee_id: COMMITTEE(1 + (i % 2)) },
+          { onConflict: "membership_id,committee_id", ignoreDuplicates: true },
+        ),
       `committee seat ${i}`,
     );
   }
@@ -236,7 +309,12 @@ async function main() {
   const closes = new Date(Date.now() + 30 * 86400000).toISOString();
   await must(
     admin.from("application_windows").upsert(
-      { term_id: termId, form_kind: "membership_application", opens_at: opens, closes_at: closes },
+      {
+        term_id: termId,
+        form_kind: "membership_application",
+        opens_at: opens,
+        closes_at: closes,
+      },
       { onConflict: "term_id,form_kind" },
     ),
     "application window",

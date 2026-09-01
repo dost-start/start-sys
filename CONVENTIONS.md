@@ -1,0 +1,500 @@
+# CONVENTIONS.md — START-SYS
+
+**Purpose:** prevent naming and structural drift across weeks of AI-assisted work and across annual officer handovers. This file is normative. If code and this file disagree, the code is wrong.
+
+**Audience:** every contributor, human or LLM. Read this before writing the first line of any change.
+
+**Authority order:** the **START-DOST Constitution and By-Laws 2026** (org structure, tenure, separation from office, membership termination) → `PRD.md` (scope) → `ARCHITECTURE.md` (locked stack) → `DATA_MODEL.md` (schema) → this file (how it is spelled) → personal preference (never).
+
+Markers used below:
+- `<!-- decision: ... -->` — the locked stack is silent here; the boring option was chosen. Change only via an ADR.
+- **[extrapolated]** — not stated in the PRD; inferred from it. Where the CBL settles the point, the marker is replaced by the citation, not kept alongside it.
+- **`CBL Art. N §M`** — fixed by the Constitution. Not ours to change: it moves by an Art. XII amendment, which lands as a migration citing the amendment, never as a code edit.
+
+---
+
+## 0. The eight rules that matter most
+
+| # | Rule | Why it is not negotiable |
+|---|---|---|
+| 1 | All user-facing data access goes through `@supabase/supabase-js` with the caller's JWT. | It is the only path where RLS applies. No `pg`, no Prisma, no Drizzle, no direct `postgres://`. |
+| 2 | The service-role client is imported **only** by `lib/server/admin-client.ts`. | An ESLint `no-restricted-imports` rule fails the build otherwise. Do not edit that rule to make a query work. |
+| 3 | Every table in `public` gets `ENABLE` **and** `FORCE ROW LEVEL SECURITY` in the same migration that creates it. | A pgTAP meta-test over `pg_tables` fails CI otherwise. |
+| 4 | No `DELETE` policies. No `DROP TABLE`. No `TRUNCATE`. | Removal is a status change; term end is a flag. Mass deletion is structurally impossible by design. |
+| 5 | `people.member_id` is written exactly once, by `approve_application()`. Nothing else ever writes it. | PRD: `2024-001` must never become `2025-001`. A trigger raises if you try. |
+| 6 | Every Server Action opens with `withRole([...])` and validates with its zod schema before touching the DB. | Defence in depth; RLS is the boundary, this is the guard. |
+| 7 | Current-term scoping comes from `current_term_id()`, never from a hardcoded year or a client-supplied term. | Term rollover is a state change, not a migration. |
+| 8 | Every merged PR names the doc it updated, or says "none" and why. | PRD Maintainability NFR: "Documentation for every system change or issue must be written and organized." |
+
+---
+
+## 1. Files and directories
+
+### 1.1 Naming
+
+| Thing | Convention | Example |
+|---|---|---|
+| All source files and folders | `kebab-case` | `application-review-table.tsx`, `lib/email-campaigns/` |
+| React component files | `kebab-case.tsx`, PascalCase export | `member-status-badge.tsx` → `export function MemberStatusBadge()` |
+| Non-component TS modules | `kebab-case.ts` | `resolve-recipients.ts` |
+| SQL migrations | `<utc-timestamp>_<snake_case_verb_phrase>.sql` (Supabase CLI default) | `20260901T031500_add_rr_send_grants.sql` |
+| pgTAP tests | `supabase/tests/<nnn>_<area>_rls.sql` | `supabase/tests/030_memberships_rls.sql` |
+| Email templates | `PascalCase.tsx` in `/emails` (React Email convention) | `emails/MembershipRenewal.tsx` |
+| Env vars | `SCREAMING_SNAKE_CASE`; `NEXT_PUBLIC_` prefix **only** on values safe to ship to a browser | `GOOGLE_SA_PRIVATE_KEY` |
+
+The kebab-case-file / PascalCase-export split matches the vendored shadcn/ui components already in `components/ui/`. Do not introduce a second style beside them.
+
+### 1.2 Directory layout (feature folders — the Maintainability + Extensibility NFRs, concretely)
+
+```
+app/
+  (public)/          apply                           <!-- decision: (public) group name; locked stack names the routes, not the group -->
+  (auth)/            login, auth/reset, auth/mfa
+  (admin)/           dashboard, members, applications, committees, departments,
+                     officers, campaigns, audit, system/ (tech_admin: terms, windows, user_roles)
+  (officer)/         directory — v_member_directory, read-only
+  (member)/          portal, renewal
+  (rr)/              region — regional rep dashboard, scoped to auth_region_id()
+  api/               route handlers ONLY (see §4.4)
+components/
+  ui/                vendored shadcn/ui — edit freely, it is our source now
+  <feature>/         feature-specific presentational components
+lib/
+  <feature>/         actions.ts | queries.ts | schema.ts | types.ts
+  server/            admin-client.ts (service role lives here and nowhere else)
+  documents/         the single Drive interface — all uploads and reads funnel through it
+  supabase/          client.ts (browser), server.ts (RSC/action), middleware.ts
+emails/              React Email templates
+database.types.ts    REPO ROOT. GENERATED by `supabase gen types typescript`. Never hand-edit.
+supabase/
+  migrations/        forward-only plain SQL
+  tests/             pgTAP
+e2e/                 Playwright specs
+docs/
+  RUNBOOK.md         index of the five numbered runbooks
+  runbooks/          01-TERM_ROLLOVER … 05-INCIDENT_RESPONSE
+  ANNUAL_HANDOVER.md the outgoing CTO signs this
+  privacy/           RA 10173: processing register, DPAs, privacy notice
+  decisions/         ADRs
+  issues/            incident + issue log
+```
+
+Rule: a feature owns one folder under `lib/` and one under `app/(group)/`. If a change touches three feature folders, it probably needs an ADR first.
+
+### 1.3 Server / client boundary
+
+- Server Components are the default. `'use client'` is added only for interactivity (forms, tables, dialogs).
+- A file containing `'use client'` **must not** import anything under `lib/server/` or `lib/documents/`.
+- PII is read in Server Components and passed down as already-filtered props. Never fetch PII from a client component.
+
+---
+
+## 2. Routes
+
+| Rule | Detail |
+|---|---|
+| Segment casing | `kebab-case`, lowercase, no underscores. `/email-campaigns`, not `/emailCampaigns`. |
+| Resource segments | plural nouns: `/members`, `/applications`, `/committees`. |
+| Dynamic segments | `[id]` for a UUID PK, `[term]` for a term label. Locked example: `/api/applications/[id]/proof`. |
+| Route groups | parenthesised, name the audience not the layout: `(public)`, `(auth)`, `(admin)`, `(officer)`, `(member)`, `(rr)`. One group per PRD tier, plus `(public)` and `(auth)`. |
+| Verbs in paths | banned. `/applications/[id]` + a Server Action, never `/applications/approve`. |
+| Reserved public paths | `/apply`, `/login`, `/auth/*`. Everything else is behind `middleware.ts`. |
+| Filter + pagination state | **URL search params only.** No client state library. Params are snake_case and plural: `?region_id=...&status=active&page=2`. |
+
+TanStack Table state (sorting, faceted filters, page) is driven from search params, not from `useState`. Filtered member views must be shareable links and the back button must work.
+
+---
+
+## 3. Database
+
+### 3.1 Casing and number
+
+| Object | Convention | Examples |
+|---|---|---|
+| Table | `snake_case`, **plural** | `people`, `memberships`, `application_windows`, `rr_send_grants` |
+| Column | `snake_case`, **singular** | `member_id`, `join_year`, `island_group` |
+| Join table | plural noun phrase, owner first | `committee_memberships`, `member_affiliations`, `officer_assignments` |
+| Enum type | `snake_case`, **singular** | `org_role`, `membership_status` |
+| Enum value | `snake_case`, lowercase | `exec_admin`, `renewal_pending` |
+| View | `v_` prefix | `v_member_directory`, `v_email_merge_fields` |
+| Function | `snake_case` verb phrase | `approve_application`, `roll_over_term`, `redact_expired_pii` |
+| Auth helper fn | `auth_*` / `current_*` | `auth_role()`, `auth_region_id()`, `current_term_id()` |
+| RLS policy | `<table>_<action>[_<audience>]` | `memberships_read`, `memberships_write`, `applications_insert_anon` |
+| Trigger | `trg_<table>_<what>` | `trg_people_freeze_member_id` <!-- decision: trigger naming --> |
+
+**One grandfathered exception:** `audit_log` is singular. It is named that way in the locked stack; do not rename it, and do not use it as precedent.
+
+### 3.2 Keys, FKs, indexes
+
+- PK: `id uuid primary key default gen_random_uuid()`, except where the locked schema specifies a natural key (`member_id_counters.join_year int primary key`).
+- FK column: `<singular_referenced_table>_id`. **`people` → `person_id`** (irregular; this is the one everyone gets wrong), `terms` → `term_id`, `regions` → `region_id`, `email_campaigns` → `campaign_id`.
+- Auto-named constraints keep the Postgres defaults: `<table>_pkey`, `<table>_<col>_fkey`, `<table>_<cols>_key`. Do not rename them.
+- Explicitly created indexes: `idx_<table>_<col>[_<col>]`; unique: `uq_<table>_<cols>`. Grandfathered exception: `one_active_term` (the partial unique index locked in ARCHITECTURE.md).
+- Every FK column that is filtered on gets an index. Current-term dashboards use a partial index on `term_id`; name search uses a `pg_trgm` GIN index on name.
+
+### 3.3 Timestamps and dates — the `_at` / `_on` rule
+
+| Suffix | Type | Meaning | Examples |
+|---|---|---|---|
+| `_at` | `timestamptz` | an instant | `created_at`, `updated_at`, `submitted_at`, `reviewed_at`, `sent_at`, `expires_at` |
+| `_on` | `date` | a calendar day | `starts_on`, `ends_on` |
+| `_year` | `int` | a year number | `join_year`, `expected_grad_year` |
+
+- Every table has `created_at timestamptz not null default now()`.
+- Every mutable table has `updated_at timestamptz not null default now()` maintained by a shared `set_updated_at()` trigger — never set in application code. <!-- decision: updated_at maintained by trigger, not by the client -->
+- All instants are stored UTC and rendered in `Asia/Manila`. Never store a naive `timestamp`.
+- Booleans are `is_*` / `has_*`. Prefer a status enum over two booleans.
+
+### 3.4 Migrations
+
+- Forward-only. **Never edit an applied migration** — write a new one.
+- **Never click schema changes into the Supabase dashboard.** Dashboard drift is how a student-run project loses its schema history permanently.
+- One logical change per migration file. Header comment is mandatory (see §8.2).
+- A migration that creates a table in `public` must, **in the same file**: enable + force RLS, create its policies, and grant only what is needed. A migration that adds a table without policies is a table nobody can read — and CI will fail it anyway.
+- `ALTER TYPE ... ADD VALUE` goes in its own migration and the new value is not used until a later one.
+- Regenerate `database.types.ts` (repo root) in the **same commit** as the migration. CI verifies it matches.
+- Every `SECURITY DEFINER` function declares `SET search_path = ''` and fully-qualifies every object name. No exceptions.
+
+---
+
+## 4. Server Actions, queries, and route handlers
+
+### 4.1 Placement and naming
+
+| Kind | File | Naming |
+|---|---|---|
+| Mutations | `lib/<feature>/actions.ts` (starts with `'use server'`) | `camelCase` verb-first: `approveApplication`, `updateMembershipStatus`, `sendCampaign`, `grantSendPermission`, `rollOverTerm` |
+| Reads | `lib/<feature>/queries.ts` | `get*` for one row, `list*` for many, `count*` for a number: `getMemberById`, `listMembersByRegion`, `countCampaignRecipients` |
+| Validation | `lib/<feature>/schema.ts` | `<entity><Verb>Schema`: `applicationSubmitSchema`, `memberUpdateSchema` |
+| Hand-written types | `lib/<feature>/types.ts` | PascalCase |
+
+### 4.2 Shape of every Server Action
+
+```ts
+export type ActionResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: ActionError };
+
+export type ActionError = {
+  code: ErrorCode;
+  message: string;                        // safe to render to a user
+  fields?: Record<string, string[]>;      // field-level messages, keyed by zod path
+};
+
+export type ErrorCode =
+  | 'validation' | 'unauthorized' | 'not_found' | 'conflict'
+  | 'window_closed' | 'upstream' | 'unknown';
+```
+<!-- decision: ActionResult / ErrorCode shape; the locked stack names withRole but not the return shape -->
+
+Every exported action, in this order: `withRole([...])` → `schema.safeParse(input)` → supabase call → map error → `revalidatePath` → return `ActionResult`.
+
+### 4.3 Error handling
+
+- **Return** expected failures. **Throw** only for programmer errors — Sentry catches those.
+- Never return a raw PostgREST/Postgres error object, message, or code to the client. Log the raw error server-side, return a mapped `ErrorCode`.
+- An empty result caused by RLS is `not_found`, never `unauthorized`. Saying "forbidden" confirms the row exists; that is an information leak about a scholar's record.
+- Never write a `catch {}` that swallows. If you cannot handle it, let it throw.
+
+### 4.4 Route handlers — the short allowlist
+
+`app/api/*` exists for four things only. Everything else is a Server Action.
+
+| Path | Purpose |
+|---|---|
+| `/api/applications/[id]/proof` | streams Drive bytes after an RLS-checked `SELECT`; writes an `audit_log` row per view |
+| `/api/webhooks/resend` | delivery events → `email_events` |
+| `/api/health`, `/api/health/drive` | real `SELECT 1` / Drive ping for Better Stack |
+| `/api/jobs/*` | endpoints called by `.github/workflows/scheduled.yml`, guarded by `JOB_SHARED_SECRET` |
+
+Handlers return `NextResponse.json` using the same `ActionError` shape. Status codes used: `200`, `400`, `401`, `404`, `500`. Nothing else. <!-- decision: status code allowlist -->
+
+---
+
+## 5. TypeScript
+
+| Rule | Detail |
+|---|---|
+| `type` vs `interface` | Use `type` everywhere. `interface` only when declaration merging is genuinely required (it is not, here). |
+| `any` | Banned. `@typescript-eslint/no-explicit-any` is an **error**. Use `unknown` at boundaries and narrow with zod. |
+| `as` casts | Avoid. A cast on DB data means the generated types are stale — regenerate instead. |
+| `!` non-null | Requires a one-line comment saying why it cannot be null. |
+| `eslint-disable` | Requires a reason on the same line and a mention in the PR description. |
+| Strictness | `strict: true`, `noUncheckedIndexedAccess: true`. Do not weaken `tsconfig.json`. |
+| DB row types | Always from the generated root `database.types.ts` (`Tables<'memberships'>`). Never hand-write a row shape. |
+| Input types | Always `z.infer<typeof schema>`. Never hand-write a shape that a schema already describes. |
+| Key casing | **Anything that is or becomes a DB row / RPC payload keeps `snake_case` keys verbatim.** camelCase is for function names, local variables, and props that are not row fields. There is no mapping layer, and adding one is a rejected design. <!-- decision: no snake→camel mapping layer; supabase-js returns rows verbatim and generated types are snake_case --> |
+| Type location | Generated → root `database.types.ts`. Inferred → next to its schema. Shared hand-written → `lib/<feature>/types.ts`. Never a global `types.ts` dumping ground. |
+
+---
+
+## 6. Forms and validation
+
+- **One zod schema per form/entity, in `lib/<feature>/schema.ts`, imported by both the client form and the Server Action.** This is the Data Integrity NFR implemented once instead of twice and drifting.
+- Client: `react-hook-form` + `@hookform/resolvers/zod`. Server: `schema.safeParse` again, always — the client check is UX, not enforcement.
+- Field names in the form == keys in the schema == DB column names.
+- Server field errors come back in `error.fields` and are fed into RHF with `setError`. Do not render a generic toast and drop them.
+- A disabled submit button is never the only guard.
+- Dates from forms are ISO strings; parse with `z.coerce.date()` or `z.iso.date()`, never `new Date(userInput)` on the client and hope.
+- **File inputs never POST bytes to us.** The action mints a Drive resumable session URI; the browser PUTs to Google. Vercel's 4.5MB body cap makes any other path fail on a normal phone photo.
+- Email merge tokens are `{{snake_case}}` and must exist in `v_email_merge_fields`. Unknown token = throw at render, never ship `{{frist_name}}` to 600 scholars.
+
+---
+
+## 7. Git
+
+### 7.1 Branches
+
+`<type>/<short-kebab-summary>` — e.g. `feat/application-review-queue`, `fix/renewal-eligibility-predicate`, `sql/add-rr-send-grants`.
+Types are the commit types below. No work on `main`. No long-lived branches — a branch older than a week is a merge conflict waiting for the person who least understands it. <!-- decision: branch naming -->
+
+### 7.2 Commits — Conventional Commits
+
+`<type>(<scope>): <imperative subject>` — lowercase, ≤72 chars, no trailing period.
+
+| Type | Use for |
+|---|---|
+| `feat` | new user-visible capability |
+| `fix` | bug fix |
+| `sql` | migration, policy, function, view, index <!-- decision: `sql` type added because schema changes are the highest-risk change class here and deserve a grep-able prefix --> |
+| `docs` | any file under `docs/` or a root `*.md` |
+| `test` | vitest / pgTAP / playwright |
+| `refactor` | no behaviour change |
+| `chore` | deps, config, tooling |
+| `ci` | workflow files |
+| `perf` | measured performance work |
+
+Scopes: `db`, `auth`, `rls`, `email`, `drive`, `members`, `applications`, `terms`, `ui`, `ci`.
+
+Examples: `sql(rls): restrict officer reads to v_member_directory` · `feat(applications): add approve/reject queue` · `fix(email): throw on unknown merge token`
+
+### 7.3 Pull requests
+
+- One concern per PR. If the title needs "and", split it.
+- Squash merge. The squash subject must itself be a valid conventional commit.
+- CI must be green: typecheck, eslint, vitest, `supabase db lint`, pgTAP, Playwright smoke. Never merge red, never re-run until it passes.
+- Description must contain:
+
+```
+## What
+## Why  (link the PRD requirement or the issue in docs/issues/)
+## Docs        — which doc changed, or "none — <reason>"
+## Security    — new tables? touched a policy, a SECURITY DEFINER fn, or lib/server/? (yes → list them; no → "no")
+## Verified    — how you checked it, beyond CI
+```
+
+Any `yes` in **Security** requires a matching pgTAP test in the same PR.
+
+---
+
+## 8. Tests
+
+### 8.1 Placement and naming
+
+| Layer | Location | File name | Test name |
+|---|---|---|---|
+| Vitest unit | colocated | `<module>.test.ts` | `describe('allocateMemberId')` / `it('assigns distinct ids under 50 parallel approvals')` |
+| pgTAP RLS | `supabase/tests/` | `<nnn>_<area>_rls.sql` | one plan per file, fixtures named for roles |
+| Playwright E2E | `e2e/` | `<flow>.spec.ts` | `test('regional rep cannot see another region')` |
+
+- pgTAP role fixtures use exactly these nine names: `anon`, `member`, `officer`, `regional_rep_a`, `regional_rep_b`, `moderator`, `crrd_admin`, `exec_admin`, `tech_admin`. Assert **exact row counts and exact visible column sets** — not "greater than zero".
+- The six locked Playwright flows: `login`, `apply-with-upload`, `approve-and-id`, `campaign-send`, `term-rollover`, `rr-scope-leak`.
+- **`SECURITY DEFINER` functions need a deny test per role, not just a happy path.** A function that guards on one role is one careless `or` away from granting everyone. For `roll_over_term()`: assert `tech_admin` succeeds and that all seven other fixtures raise `42501`. Same rule for `unfreeze_term()`. This is the only test standing between the term-lifecycle guard and a silent widening.
+- No coverage target. Tests exist where a wrong answer is expensive.
+
+### 8.2 What a change obligates you to test
+
+| If you change… | You must add/update |
+|---|---|
+| any table, policy, view, or GRANT | a pgTAP assertion in `supabase/tests/` |
+| member ID allocation | the Vitest concurrency test **and** the pgTAP 50-parallel test |
+| the audience filter / `resolve_recipients` | the Vitest audience-filter test |
+| `roll_over_term` | the Vitest rollover test, the `term-rollover` Playwright flow, **and** the pgTAP authorization assertion (below) |
+| a user-visible flow in the six locked flows | that Playwright spec |
+
+---
+
+## 9. Comments and documentation
+
+The PRD's Maintainability NFR — *"Documentation for every system change or issue must be written and organized"* — is encoded as five checkable rules. Vague intent becomes a merge blocker.
+
+| # | Rule |
+|---|---|
+| D1 | Every PR fills the **Docs** line: the doc it updated, or `none — <reason>`. An empty Docs line is a blocked review. |
+| D2 | Every migration file opens with a header comment: **what** it changes, **why**, the **PRD requirement or CBL article** it serves, and the **rollback note** (or "forward-only: no rollback, see ADR"). |
+| D3 | Every deviation from the locked stack in `ARCHITECTURE.md` requires an ADR at `docs/decisions/NNNN-slug.md` — Context / Decision / Consequences / Date / Author — merged **before** the code. <!-- decision: ADR path and 4-heading format --> |
+| D4 | Every production issue or incident gets `docs/issues/YYYY-MM-DD-slug.md`: symptom, impact, cause, fix, prevention. Operational fixes also update the matching runbook. <!-- decision: issue-log path --> |
+| D5 | Anything a future officer must *do* (rotate a key, upgrade Resend for application season, run the rollover) belongs in `docs/RUNBOOK.md` (or the numbered runbook it concerns), not in a comment. Comments are read by whoever opens the file; runbooks are read by whoever is on duty. |
+
+### 9.1 Code comments
+
+- Comments explain **why**, not what. If a comment restates the code, delete it.
+- Comments are **mandatory** on: every RLS policy, every `SECURITY DEFINER` function, every `eslint-disable`, every `!` assertion, every place that exists because of RA 10173 or a specific PRD line (cite it).
+- Do not leave `TODO` without an owner and a date, or an issue link. Untracked TODOs are deleted on sight.
+- No commented-out code. Git remembers.
+
+---
+
+## 10. Drift traps — right way / wrong way
+
+These are the ten places an LLM (and a tired officer) most reliably goes wrong.
+
+**1. Data access**
+```ts
+// WRONG — bypasses RLS entirely; silently returns all 600 scholars' PII
+import { Pool } from 'pg';
+const rows = await pool.query('select * from people');
+
+// RIGHT — carries the caller's JWT, RLS applies by construction
+const supabase = await createServerClient();
+const { data, error } = await supabase.from('people').select('id, given_name, family_name');
+```
+
+**2. "Just use the service key to make it work"**
+```ts
+// WRONG — build fails on no-restricted-imports, and editing that rule is not the fix
+import { adminClient } from '@/lib/server/admin-client';   // inside app/(admin)/members/page.tsx
+
+// RIGHT — the query returned nothing because a policy says so. Fix the policy in a migration,
+// with a pgTAP test, or accept the empty result. See ARCHITECTURE.md
+// "If your query returns nothing, read this first."
+```
+
+**3. Server Action shape**
+```ts
+// WRONG — no role guard, no validation, throws raw DB text at the user
+export async function approveApplication(id: string) {
+  const { error } = await supabase.rpc('approve_application', { app_id: id });
+  if (error) throw new Error(error.message);
+}
+
+// RIGHT
+export const approveApplication = withRole(['crrd_admin', 'moderator', 'exec_admin'], async (ctx, input: unknown) => {
+  const parsed = approveApplicationSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: toFieldErrors(parsed.error) };
+  const { data, error } = await ctx.supabase.rpc('approve_application', { app_id: parsed.data.id });
+  if (error) return { ok: false, error: mapDbError(error) };   // raw error logged, not returned
+  revalidatePath('/applications');
+  return { ok: true, data };
+});
+```
+
+**4. New table**
+```sql
+-- WRONG — ships readable-by-nobody or, worse, readable-by-everyone; CI meta-test fails
+create table public.committee_notes (id uuid primary key default gen_random_uuid(), body text);
+
+-- RIGHT — same file, every time
+create table public.committee_notes (
+  id uuid primary key default gen_random_uuid(),
+  committee_id uuid not null references public.committees(id),
+  body text not null,
+  created_at timestamptz not null default now()
+);
+alter table public.committee_notes enable row level security;
+alter table public.committee_notes force row level security;
+-- why: officers are view-only per PRD Security NFR; CRRD chief and moderators write.
+create policy committee_notes_read on public.committee_notes for select
+  using (auth_role() in ('exec_admin','crrd_admin','moderator','officer'));
+create policy committee_notes_write on public.committee_notes for insert
+  with check (auth_role() in ('exec_admin','crrd_admin','moderator'));
+-- no delete policy, by design
+```
+
+**5. Removing a member**
+```ts
+// WRONG — there is no delete policy; this silently affects 0 rows and looks like it worked
+await supabase.from('memberships').delete().eq('id', id);
+
+// RIGHT — membership end is a status change (PRD: records remain archived)
+await supabase.from('memberships').update({ status: 'resigned' }).eq('id', id);
+// …and in the same action: await adminAuth.signOut(userId, 'global')
+```
+
+**6. Member ID on renewal**
+```ts
+// WRONG — this is the exact thing the PRD forbids: 2024-001 becoming 2025-001
+await supabase.from('people').update({ member_id: `${newYear}-${seq}` }).eq('id', personId);
+
+// RIGHT — renewal inserts a membership row and never touches people
+await supabase.from('memberships').insert({ person_id: personId, term_id: newTermId, status: 'active' });
+```
+
+**7. Term scoping**
+```ts
+// WRONG — hardcoded, and it breaks silently every August
+.eq('term_id', '2025-2026')
+
+// WRONG — client-supplied current term; a regional rep can page through history
+.eq('term_id', searchParams.get('term_id'))
+
+// RIGHT
+.eq('term_id', await getCurrentTermId())   // wraps current_term_id(); history needs an explicit admin-only term_id
+```
+
+**8. Validation duplicated**
+```ts
+// WRONG — two schemas that will drift within a fortnight
+const clientSchema = z.object({ given_name: z.string().min(1) });          // in the form
+const serverSchema = z.object({ given_name: z.string() });                 // in the action
+
+// RIGHT — one module, imported by both
+import { applicationSubmitSchema } from '@/lib/applications/schema';
+```
+
+**9. Filters and pagination**
+```tsx
+// WRONG — unshareable, back button broken, second source of truth
+const [region, setRegion] = useState<string | null>(null);
+
+// RIGHT
+const params = useSearchParams();
+const region = params.get('region_id');
+router.push(`/members?${new URLSearchParams({ region_id: next }).toString()}`);
+```
+
+**10. Key casing and types**
+```ts
+// WRONG — invents a camelCase shape, then needs a mapping layer nobody maintains
+type Member = { memberId: string; joinYear: number };
+const m = row as Member;
+
+// RIGHT — generated, verbatim, snake_case
+type Member = Tables<'people'>;   // member_id, join_year
+```
+
+---
+
+## 11. Banned list
+
+| Banned | Instead |
+|---|---|
+| `pg`, Prisma, Drizzle, any ORM or direct `postgres://` from app code | `@supabase/supabase-js` |
+| Role in `user_metadata` / `raw_user_meta_data` | the `user_roles` table via `auth_role()` |
+| Roles stamped into the JWT (custom access token hook) | `auth_role()` lookup — instant revocation is the requirement |
+| `DELETE` policies, `DROP TABLE`, `TRUNCATE` | status change / archive flag |
+| `_archive` tables, annual ETL for rollover | `roll_over_term()` state change |
+| Schema changes made in the Supabase dashboard | a migration file in git |
+| `any`, unexplained `as`, `catch {}` | `unknown` + zod, regenerate types, let it throw |
+| A client state library for filters (Zustand, TanStack Query) | URL search params |
+| An installed component library (MUI etc.) | vendored shadcn/ui in `components/ui/` |
+| Posting file bytes to a Server Action or Route Handler | Drive resumable session URI + direct browser PUT |
+| "Anyone with the link" sharing on Drive files | the RLS-checked `/api/applications/[id]/proof` proxy |
+| `pg_cron`, `pg_net`, Vercel Cron, Redis/BullMQ/Inngest | `.github/workflows/scheduled.yml` |
+| Mail-merging any column not in `v_email_merge_fields` | add it to the view in a reviewed migration, or don't |
+| Personal Gmail / personal cards owning any account | org-owned accounts, credentials in Bitwarden |
+
+---
+
+## 12. When in doubt
+
+1. **Boring beats clever.** The next maintainer is a student who has never seen this code.
+2. **If the query returns nothing, it is RLS.** Read that section of `ARCHITECTURE.md` before changing anything.
+3. **If you are about to widen a policy, stop** and write the pgTAP test first. If the test feels wrong to write, the policy is wrong.
+4. **If you need a new secret**, it goes in Vercel env + Bitwarden + `docs/runbooks/03-CREDENTIAL_ROTATION.md`, in the same PR.
+5. **If the locked stack does not cover it**, pick the option with the fewest new concepts, and leave a `<!-- decision: ... -->` note.
+6. **If you are adding a dependency**, justify it in the PR. Every dependency is something a 2029 officer must upgrade.
+7. **If it touches PII**, assume RA 10173 applies and say so in the PR.
+8. **If you cannot name the PRD requirement** a change serves, it may be out of scope — the PRD explicitly excludes operations, events, finance, general file storage and advanced analytics.
+9. **If two docs disagree**, `ARCHITECTURE.md` wins on stack, `PRD.md` wins on scope — and fix the loser in the same PR.
+10. **If you are unsure whether to document it**, document it. That is the NFR.

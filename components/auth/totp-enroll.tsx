@@ -1,0 +1,188 @@
+"use client";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TOTP enrolment screen (BUILD_PLAN S2-T36 / US-A3).
+//
+// Renders NO organizational data at any stage. An officer who has not enrolled sees
+// this screen and an empty system — that is the requirement, not a side effect.
+//
+// The recovery codes live in component state and nowhere else. There is no route that
+// re-renders them, no query that returns them, and navigating away loses them: the
+// database stores only a salted digest. That is why the "I have saved these" step is
+// an explicit, blocking confirmation rather than a toast.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+
+import { Button } from "@/components/ui/button";
+import { enrollTotp, verifyEnrolment, type TotpEnrolment } from "@/lib/auth/mfa-actions";
+
+type Stage =
+  | { kind: "starting" }
+  | { kind: "scan"; enrolment: TotpEnrolment }
+  | { kind: "codes"; codes: string[] };
+
+export function TotpEnroll({ homePath }: { homePath: string }) {
+  const router = useRouter();
+  const [stage, setStage] = useState<Stage>({ kind: "starting" });
+  const [code, setCode] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  // React 19 StrictMode double-invokes effects in development. Without this ref the
+  // second invocation enrolls a second factor, and the QR on screen is then the one
+  // that was just unenrolled — a genuinely confusing failure.
+  const started = useRef(false);
+
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+
+    void (async () => {
+      const result = await enrollTotp();
+      if (result.ok) {
+        setStage({ kind: "scan", enrolment: result.data });
+      } else {
+        setError(result.error.message);
+      }
+    })();
+  }, []);
+
+  async function onVerify(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (stage.kind !== "scan" || busy) return;
+
+    setBusy(true);
+    setError(null);
+
+    const result = await verifyEnrolment({ factorId: stage.enrolment.factorId, code });
+    setBusy(false);
+
+    if (result.ok) {
+      setCode("");
+      setStage({ kind: "codes", codes: result.data });
+      return;
+    }
+
+    // Server field errors are attached to their input, never dropped into a toast
+    // (CONVENTIONS §6).
+    setError(result.error.fields?.["code"]?.[0] ?? result.error.message);
+  }
+
+  if (stage.kind === "codes") {
+    return (
+      <section className="mx-auto w-full max-w-md space-y-6" aria-labelledby="codes-heading">
+        <div className="space-y-2">
+          <h1 id="codes-heading" className="text-xl font-semibold">
+            Save your recovery codes
+          </h1>
+          <p className="text-muted-foreground text-sm">
+            These ten codes are shown <strong>once</strong> and cannot be retrieved again. Each one
+            works a single time, and they are your only way in if you lose your phone. Store them
+            somewhere safe and offline.
+          </p>
+        </div>
+
+        <ul className="bg-muted grid grid-cols-2 gap-2 rounded-md p-4 font-mono text-sm">
+          {stage.codes.map((recoveryCode) => (
+            <li key={recoveryCode}>{recoveryCode}</li>
+          ))}
+        </ul>
+
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={saved}
+            onChange={(event) => setSaved(event.target.checked)}
+          />
+          <span>
+            I have saved these codes somewhere I can reach without this device. I understand they
+            will not be shown again.
+          </span>
+        </label>
+
+        <Button
+          type="button"
+          disabled={!saved}
+          onClick={() => {
+            router.replace(homePath);
+            router.refresh();
+          }}
+        >
+          Continue
+        </Button>
+      </section>
+    );
+  }
+
+  return (
+    <section className="mx-auto w-full max-w-md space-y-6" aria-labelledby="enroll-heading">
+      <div className="space-y-2">
+        <h1 id="enroll-heading" className="text-xl font-semibold">
+          Set up two-factor authentication
+        </h1>
+        <p className="text-muted-foreground text-sm">
+          Every account above Member tier must enrol an authenticator app before it can reach any
+          organizational data. Scan the code below with Google Authenticator, 1Password, Authy or
+          any TOTP app.
+        </p>
+      </div>
+
+      {stage.kind === "starting" ? (
+        <p className="text-muted-foreground text-sm" role="status">
+          Preparing your enrolment…
+        </p>
+      ) : (
+        <>
+          {/*
+            GoTrue returns the QR as an SVG document string. It is generated by the
+            auth server from the caller's own factor — not remote markup and not user
+            input — so injecting it is safe here and avoids adding a QR dependency.
+          */}
+          <div
+            className="bg-background w-fit rounded-md border p-3 [&_svg]:h-44 [&_svg]:w-44"
+            aria-label="Two-factor QR code"
+            dangerouslySetInnerHTML={{ __html: stage.enrolment.qrCode }}
+          />
+
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Cannot scan? Enter this key manually:</p>
+            <p className="bg-muted rounded-md p-2 font-mono text-sm break-all">
+              {stage.enrolment.secret}
+            </p>
+          </div>
+
+          <form onSubmit={onVerify} className="space-y-3">
+            <label htmlFor="code" className="block text-sm font-medium">
+              Enter the 6-digit code from your app
+            </label>
+            <input
+              id="code"
+              name="code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={7}
+              required
+              value={code}
+              onChange={(event) => setCode(event.target.value)}
+              aria-invalid={error !== null}
+              className="border-input h-9 w-40 rounded-md border px-3 font-mono text-sm"
+            />
+            <Button type="submit" disabled={busy}>
+              {busy ? "Verifying…" : "Verify and continue"}
+            </Button>
+          </form>
+        </>
+      )}
+
+      {error !== null ? (
+        <p className="text-destructive text-sm" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </section>
+  );
+}

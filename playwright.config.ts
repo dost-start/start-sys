@@ -18,6 +18,10 @@ const allProjects = [
 export default defineConfig({
   testDir: "./e2e",
   outputDir: "./e2e-artifacts",
+  // BUILD_PLAN S2-T41: seeds the eight auth fixtures (accounts, roles, org rows and
+  // real TOTP factors) once, before any project runs. Self-skips when
+  // SUPABASE_SERVICE_ROLE_KEY is absent, so a DB-less clone still runs the smoke spec.
+  globalSetup: "./e2e/global-setup.ts",
   fullyParallel: true,
   forbidOnly: isCI,
   retries: isCI ? 1 : 0,

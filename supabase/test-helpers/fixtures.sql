@@ -1,0 +1,490 @@
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- test-helpers/fixtures.sql  —  the nine-fixture world
+--
+-- WHAT:      Seeds one deliberately ASYMMETRIC dataset inside the caller's test
+--            transaction: 8 accounts, 6 people, 5 memberships across 2 terms and 2
+--            regions, 1 cross-region committee, 4 officer assignments and 2 of the 3
+--            possible confidentiality acknowledgements.
+--
+-- WHY ASYMMETRIC: every count below is DIFFERENT per role on purpose. A fixture where an
+--            admin and a regional rep both see "some rows" proves nothing; a fixture where
+--            the admin sees 6 and each rep sees exactly 2 disjoint rows is what turns
+--            028_role_matrix_rowcounts.sql into a real specification. Nothing here is
+--            round-numbered by accident — see the arithmetic table below, which is the
+--            authoritative source those downstream suites derive from.
+--
+-- USAGE:     \ir ../test-helpers/auth.sql
+--            \ir ../test-helpers/fixtures.sql
+--            INCLUDE ONCE PER TEST FILE, at the top, while the session role is postgres.
+--            Every write uses ON CONFLICT DO NOTHING so a second include is a harmless
+--            no-op rather than a constraint violation, but there is no reason to do it.
+--
+-- RUNS AS THE SESSION ROLE. Do not call login_as() before including this file: `people`
+--            has no INSERT policy for any human role (0014 — a person row is created only
+--            by approve_application()), and `authenticated` holds no INSERT grant on it
+--            either (0015). Seeding is a privileged act by construction.
+--
+-- CITATION:  BUILD_PLAN S2-T14; CONVENTIONS.md §8.1 (the nine fixture names are fixed);
+--            ARCHITECTURE.md §5; DATA_MODEL.md §2.2, §3.1, §3.4, §8.1, §8.4;
+--            CBL Art. III §2/§3/§4, Art. V §1, Art. VI, Art. VIII §7.1.
+--
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- THE ACCOUNTS  —  auth.users.id, fixed by the cross-lane contract
+-- ═══════════════════════════════════════════════════════════════════════════════════
+--
+--   exec_admin       …a000-000000000001   person P1   —          CEO
+--   tech_admin       …a000-000000000002   person NULL —          (see note A)
+--   crrd_admin       …a000-000000000003   person P2   —          CCDO
+--   moderator        …a000-000000000004   person P3   —          DCCDO-C
+--   officer          …a000-000000000005   person NULL —
+--   regional_rep_a   …a000-000000000006   person NULL region NCR
+--   regional_rep_b   …a000-000000000007   person NULL region R07
+--   member           …a000-000000000008   person P4   —
+--
+-- NOTE A — tech_admin.person_id is deliberately NULL. DATA_MODEL.md §6/0004 types the
+--   column as "null for a tech_admin who is not a member", and that nullable case has to
+--   be exercised by something. It also makes auth_person_id() NULL for tech_admin, which
+--   is the belt to the OQ-5 braces: even if the role guard on get_person_sensitive() were
+--   removed tomorrow, tech_admin still could not satisfy the CBL Art. VIII §7.1
+--   acknowledgement lookup, because that lookup keys on auth_person_id().
+--   The CTO's *seat* still needs a person to hang off (officer_assignments.person_id is
+--   NOT NULL), so P5 holds the CTO assignment without being bound to the tech_admin
+--   account. That split is intentional and is the only place in this fixture where a
+--   position holder and an account are not the same identity.
+--
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- THE PEOPLE  —  public.people.id  …b000-00000000000N
+-- ═══════════════════════════════════════════════════════════════════════════════════
+--
+--   P1  …001  Danielle  Quiambao   exec_admin's person   CEO      ack YES   membership: ARCHIVED term only (NCR)
+--   P2  …002  Ethan     Baltazar   crrd_admin's person   CCDO     ack YES   membership: NONE
+--   P3  …003  Maria     Santos     moderator's person    DCCDO-C  ack NO    membership: active term, NCR
+--   P4  …004  Juan      Dela Cruz  member's person       —        ack NO    membership: active term, NCR
+--   P5  …005  Andrea    Reyes      (no account)          CTO      ack NO    membership: active term, R07
+--   P6  …006  José      Peña       (no account)          —        ack NO    membership: active term, R07
+--
+--   P2 has NO membership at all and P1 has an ARCHIVED-TERM-ONLY membership. Both shapes
+--   exist so a downstream suite can tell the difference between "invisible because of the
+--   region predicate" and "invisible because there is no current-term row to match" —
+--   which is exactly the difference between memberships_read and people_read below.
+--
+--   P3 deliberately has NO confidentiality acknowledgement. PRD US-J5 / CBL Art. VIII §7.1:
+--   a sensitive-column read by a user with no current-term acknowledgement must be REFUSED
+--   WITH AN ERROR, not returned empty. The moderator fixture is the negative case for
+--   020_confidentiality_gate.sql, and the "day-one failure mode" ARCHITECTURE.md §5 says
+--   belongs in the rollover runbook. Do not add an ack row for the moderator to make a
+--   test go green — that test is asserting the refusal.
+--
+--   P6 carries a diacritic (José Peña) so accent behaviour in pg_trgm name search is
+--   exercised by real data rather than assumed (PRD US-I2; BUILD_PLAN S5-T4).
+--
+-- ── PLANTED SENSITIVE LITERALS ─────────────────────────────────────────────────────
+--   P4 carries the four canonical planted values that the middleware-off crawls
+--   (BUILD_PLAN S2-T42, S6-T15 step 4, S7-T29 check 1) grep rendered HTML for. They are
+--   distinctive strings precisely so `grep -F` gives a zero-or-nonzero answer with no
+--   judgement call:
+--
+--       birthdate       2003-04-15
+--       contact_number  +639171234567
+--       address_line    Planted Address Line 42
+--       school_id_no    PLANTED-SCH-001
+--
+--   The other five people carry plainly different values, so a leak names the person it
+--   leaked. DO NOT reuse these four literals on another row — the grep would then be
+--   unable to say which surface leaked.
+--
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- ★ THE ARITHMETIC — expected EXACT row counts per fixture ★
+--   028_role_matrix_rowcounts.sql derives from this table. If a policy changes, this
+--   table is what tells you whether the new number is correct or a regression.
+-- ═══════════════════════════════════════════════════════════════════════════════════
+--
+--                       people  memberships  cmte_mbr  cfd_ack  user_roles  terms  officer_asg
+--   exec_admin             6         5          2         2          8        2         4
+--   tech_admin             0         0          0         2          8        2         4
+--   crrd_admin             6         5          2         1          1        2         4
+--   moderator              6         5          2         0          1        2         4
+--   officer                6         5          2         0          1        2         4
+--   regional_rep_a         2         3          1         0          1        2         4
+--   regional_rep_b         2         2          1         0          1        2         4
+--   member                 1         1          1         0          1        2         4
+--   anon                   0         0          0         0          0        1         0
+--
+--   Reading the surprises, each of which is a real property of 0014_rls.sql and not a
+--   fixture accident:
+--
+--   • tech_admin sees ZERO people and ZERO memberships. people_read and memberships_read
+--     name exec_admin, crrd_admin, moderator, officer, regional_rep and member — tech_admin
+--     is absent from both. That is PRD OQ-5 ("configure the system and control access" is
+--     not "read everyone's address") expressed as a missing role literal. It is also why
+--     BUILD_PLAN S6-T13 lands the CTO on /system rather than on an all-zero dashboard.
+--
+--   • regional_rep_a sees 3 MEMBERSHIPS but only 2 PEOPLE, and the asymmetry is in the
+--     policies, not here. memberships_read scopes a rep by `region_id = any(auth_region_ids())`
+--     with NO term filter, so P1's ARCHIVED NCR membership is visible. people_read scopes a
+--     rep through an EXISTS that also requires `m.term_id = current_term_id()`, so P1 the
+--     PERSON is not. Both are defensible readings of PRD US-F1 and they disagree; this
+--     fixture makes the disagreement measurable instead of latent. FLAGGED FOR THE 0014
+--     OWNER — not silently reconciled here, because narrowing a policy is not a test's call.
+--
+--   • rep_a's and rep_b's people sets are DISJOINT (P3,P4 vs P5,P6) and their membership
+--     sets are disjoint too. PRD US-F1: "two reps of different regions see disjoint member
+--     sets." 030_rr_scope_rls.sql asserts the intersection is empty, not merely that the
+--     counts differ.
+--
+--   • The one committee is CROSS-REGION on purpose (P4/NCR and P6/R07), so each rep sees
+--     exactly one of its two rows. A single-region committee would let a broken scoping
+--     predicate return both rows and still look plausible.
+--
+--   • anon sees 1 term, not 2: terms_read_anon restricts anon to status='active', while
+--     authenticated tiers read both (0014). anon sees 18 regions and 23 officer_positions —
+--     the public application form needs the region dropdown (PRD US-B1) — and nothing else.
+--
+--   • officer_assignments and departments/committees are read `using (true)` for every
+--     authenticated tier, so all seven see 4 assignments. Who holds a seat is org-public;
+--     what is on their record is not.
+--
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- THE ARCHIVED-TERM WORKAROUND, WHICH IS NOT OPTIONAL
+-- ═══════════════════════════════════════════════════════════════════════════════════
+--   trg_memberships_freeze_archived (0006) fires BEFORE INSERT and raises 42501 when the
+--   row's term is archived, so an archived-term membership CANNOT be inserted directly.
+--   The trigger is on `memberships`, not on `terms`, and reject_write_to_archived_term()
+--   is deliberately NOT attached to `terms` itself (roll_over_term() has to be able to flip
+--   the status). So the sequence is:
+--
+--       1. insert term 2025-2026 as status 'draft'
+--       2. insert the membership into it
+--       3. update terms set status = 'archived'
+--
+--   This is a fixture-construction workaround, NOT a hole: step 3 is the same statement
+--   roll_over_term() runs, and after it the freeze is fully in force — 003_terms_invariants
+--   already proves an archived term refuses writes. Do not "simplify" this by weakening the
+--   trigger.
+--
+--   The ACTIVE term is whatever 0016_seed.sql seeded (label 2026-2027) and is looked up by
+--   status, never by label: the one_active_term partial unique index forbids creating a
+--   second one, and hardcoding a label would break the day the seed's bootstrap term
+--   changes.
+-- ═══════════════════════════════════════════════════════════════════════════════════
+
+
+-- Repeated from auth.sql so this file is usable on its own if a future test includes only
+-- fixtures. Idempotent.
+do $$
+begin
+  execute format('grant usage on schema %s to public', pg_my_temp_schema()::regnamespace);
+end;
+$$;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- 1 — accounts
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- Minimal column set. Everything omitted has a usable default in auth.users; the columns
+-- listed are the ones GoTrue's own inserts always populate and that downstream joins or
+-- NOT NULL constraints could rely on. encrypted_password is empty because nothing in this
+-- suite authenticates by password — impersonation is done with claims (auth.sql), which is
+-- also why no MFA factor rows are needed: `aal` is a claim, not a table lookup.
+insert into auth.users (
+  id, instance_id, aud, role, email, encrypted_password,
+  email_confirmed_at, created_at, updated_at,
+  raw_app_meta_data, raw_user_meta_data
+)
+values
+  ('00000000-0000-4000-a000-000000000001', '00000000-0000-0000-0000-000000000000',
+   'authenticated', 'authenticated', 'exec.admin@fixture.start-sys.test', '',
+   now(), now(), now(), '{}'::jsonb, '{}'::jsonb),
+  ('00000000-0000-4000-a000-000000000002', '00000000-0000-0000-0000-000000000000',
+   'authenticated', 'authenticated', 'tech.admin@fixture.start-sys.test', '',
+   now(), now(), now(), '{}'::jsonb, '{}'::jsonb),
+  ('00000000-0000-4000-a000-000000000003', '00000000-0000-0000-0000-000000000000',
+   'authenticated', 'authenticated', 'crrd.admin@fixture.start-sys.test', '',
+   now(), now(), now(), '{}'::jsonb, '{}'::jsonb),
+  ('00000000-0000-4000-a000-000000000004', '00000000-0000-0000-0000-000000000000',
+   'authenticated', 'authenticated', 'moderator@fixture.start-sys.test', '',
+   now(), now(), now(), '{}'::jsonb, '{}'::jsonb),
+  ('00000000-0000-4000-a000-000000000005', '00000000-0000-0000-0000-000000000000',
+   'authenticated', 'authenticated', 'officer@fixture.start-sys.test', '',
+   now(), now(), now(), '{}'::jsonb, '{}'::jsonb),
+  ('00000000-0000-4000-a000-000000000006', '00000000-0000-0000-0000-000000000000',
+   'authenticated', 'authenticated', 'rep.a@fixture.start-sys.test', '',
+   now(), now(), now(), '{}'::jsonb, '{}'::jsonb),
+  ('00000000-0000-4000-a000-000000000007', '00000000-0000-0000-0000-000000000000',
+   'authenticated', 'authenticated', 'rep.b@fixture.start-sys.test', '',
+   now(), now(), now(), '{}'::jsonb, '{}'::jsonb),
+  ('00000000-0000-4000-a000-000000000008', '00000000-0000-0000-0000-000000000000',
+   'authenticated', 'authenticated', 'member@fixture.start-sys.test', '',
+   now(), now(), now(), '{}'::jsonb, '{}'::jsonb)
+on conflict (id) do nothing;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- 2 — people
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- member_id is set on all six even though nothing in S2 allocates one, because
+-- 029_role_matrix_columns.sql asserts that officers and regional reps CAN read member_id
+-- while they cannot read birthdate — an assertion that is vacuous against a NULL column.
+-- The values respect the member_id_format CHECK (^\d{4}-\d{3,}$) and the 2024-1000 row
+-- exercises the {3,} branch that stops the 1000th member of a year from colliding.
+--
+-- Every value in the sensitive block is RA 10173 personal data (CBL Art. VIII §6) and every
+-- one of these columns is registered in sensitive_column_registry (0016), which is what
+-- makes 017's masking assertion meaningful: mask_sensitive() reads that registry, so the
+-- test proves the registry DRIVES the masking rather than the marker being hardcoded.
+insert into public.people (
+  id, member_id, join_year, given_name, middle_name, family_name,
+  birthdate, contact_number, personal_email,
+  address_line, city_municipality, province, postal_code,
+  school, school_id_no
+)
+values
+  -- P1 — exec_admin's person. CEO. Archived-term membership only.
+  ('00000000-0000-4000-b000-000000000001', '2022-001', 2022,
+   'Danielle', 'Reyes', 'Quiambao',
+   date '2001-01-11', '+639180000001', 'danielle.quiambao@fixture.start-sys.test',
+   'Fixture Street 1', 'Quezon City', 'Metro Manila', '1100',
+   'University of the Philippines Diliman', 'FIXT-SCH-P1'),
+
+  -- P2 — crrd_admin's person. CCDO. No membership at all.
+  ('00000000-0000-4000-b000-000000000002', '2022-002', 2022,
+   'Ethan', 'Dreiz', 'Baltazar',
+   date '2001-02-22', '+639180000002', 'ethan.baltazar@fixture.start-sys.test',
+   'Fixture Street 2', 'Pasig', 'Metro Manila', '1600',
+   'Ateneo de Manila University', 'FIXT-SCH-P2'),
+
+  -- P3 — moderator's person. DCCDO-C. Active NCR membership. NO confidentiality ack.
+  ('00000000-0000-4000-b000-000000000003', '2023-001', 2023,
+   'Maria', 'Cruz', 'Santos',
+   date '2002-03-03', '+639180000003', 'maria.santos@fixture.start-sys.test',
+   'Fixture Street 3', 'Manila', 'Metro Manila', '1000',
+   'Polytechnic University of the Philippines', 'FIXT-SCH-P3'),
+
+  -- P4 — the member fixture's person. THE PLANTED-LITERAL ROW. Active NCR membership.
+  ('00000000-0000-4000-b000-000000000004', '2024-001', 2024,
+   'Juan', 'Ponce', 'Dela Cruz',
+   date '2003-04-15', '+639171234567', 'juan.delacruz@fixture.start-sys.test',
+   'Planted Address Line 42', 'Makati', 'Metro Manila', '1200',
+   'Mapua University', 'PLANTED-SCH-001'),
+
+  -- P5 — the CTO's person; NOT bound to the tech_admin account (see note A). Active R07.
+  ('00000000-0000-4000-b000-000000000005', '2024-1000', 2024,
+   'Andrea', 'Lim', 'Reyes',
+   date '2003-05-05', '+639180000005', 'andrea.reyes@fixture.start-sys.test',
+   'Fixture Street 5', 'Cebu City', 'Cebu', '6000',
+   'University of San Carlos', 'FIXT-SCH-P5'),
+
+  -- P6 — plain scholar, R07. Diacritics on purpose (PRD US-I2 accent tolerance).
+  ('00000000-0000-4000-b000-000000000006', '2025-007', 2025,
+   'José', 'Miguel', 'Peña',
+   date '2004-06-06', '+639180000006', 'jose.pena@fixture.start-sys.test',
+   'Fixture Street 6', 'Mandaue', 'Cebu', '6014',
+   'Cebu Institute of Technology', 'FIXT-SCH-P6')
+on conflict (id) do nothing;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- 3 — role bindings
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- THIS TABLE IS THE LIVE ACCESS-CONTROL ANSWER (0004, ARCHITECTURE.md §5). auth_role()
+-- reads it per statement, which is why 032_revocation_rls.sql can flip a role mid-transaction
+-- and see the very next SELECT change its answer with no token refresh.
+--
+-- Regions are resolved by CODE, never by a hardcoded uuid: 0016 generates region ids with
+-- gen_random_uuid(), so a literal would be wrong on every fresh database. Region A = NCR,
+-- Region B = R07 (Central Visayas) per the cross-lane contract.
+insert into public.user_roles (user_id, role, person_id, region_id)
+select v.user_id, v.role::public.org_role, v.person_id, r.id
+from (values
+  ('00000000-0000-4000-a000-000000000001'::uuid, 'exec_admin',
+   '00000000-0000-4000-b000-000000000001'::uuid, null::text),
+  ('00000000-0000-4000-a000-000000000002'::uuid, 'tech_admin',
+   null::uuid,                                    null),   -- note A: person_id NULL
+  ('00000000-0000-4000-a000-000000000003'::uuid, 'crrd_admin',
+   '00000000-0000-4000-b000-000000000002'::uuid, null),
+  ('00000000-0000-4000-a000-000000000004'::uuid, 'moderator',
+   '00000000-0000-4000-b000-000000000003'::uuid, null),
+  ('00000000-0000-4000-a000-000000000005'::uuid, 'officer',
+   null::uuid,                                    null),
+  ('00000000-0000-4000-a000-000000000006'::uuid, 'regional_rep',
+   null::uuid,                                    'NCR'),  -- rr_needs_region CHECK (0004)
+  ('00000000-0000-4000-a000-000000000007'::uuid, 'regional_rep',
+   null::uuid,                                    'R07'),
+  ('00000000-0000-4000-a000-000000000008'::uuid, 'member',
+   '00000000-0000-4000-b000-000000000004'::uuid, null)
+) as v(user_id, role, person_id, region_code)
+left join public.regions r on r.code = v.region_code
+on conflict (user_id) do nothing;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- 4 — the archived term  (see "THE ARCHIVED-TERM WORKAROUND" above)
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- Inserted as 'draft' so step 5's membership can be written, then flipped to 'archived' in
+-- step 6. Dates satisfy both CBL Art. V §1 CHECKs: ends_on falls in May, and ends_on is in
+-- the year after starts_on. It sits immediately before the seeded active term (2026-06-01),
+-- consecutive with no gap — the shape roll_over_term() produces.
+insert into public.terms (id, label, starts_on, ends_on, status)
+values ('00000000-0000-4000-d000-000000000001', '2025-2026',
+        date '2025-06-01', date '2026-05-31', 'draft')
+on conflict (id) do nothing;
+
+
+-- ── convenience lookups ────────────────────────────────────────────────────────────
+-- Plain SECURITY INVOKER, so they see exactly what the calling fixture sees. That is
+-- deliberate: fx_active_term() called after login_anon() correctly returns the active term
+-- (terms_read_anon permits it) while fx_archived_term() correctly returns NULL. A definer
+-- helper would quietly hand a test a row its role cannot actually read.
+create or replace function pg_temp.fx_region(p_code text) returns uuid
+language sql stable as $$
+  select id from public.regions where code = p_code;
+$$;
+
+create or replace function pg_temp.fx_active_term() returns uuid
+language sql stable as $$
+  select id from public.terms where status = 'active' limit 1;
+$$;
+
+create or replace function pg_temp.fx_archived_term() returns uuid
+language sql stable as $$
+  select '00000000-0000-4000-d000-000000000001'::uuid
+  where exists (select 1 from public.terms
+                where id = '00000000-0000-4000-d000-000000000001');
+$$;
+
+comment on function pg_temp.fx_region(text) is
+  'Region id by CODE. Never hardcode a region uuid — 0016 generates them.';
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- 5 — memberships
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- Four in the ACTIVE term, split 2 NCR / 2 R07, plus one in the not-yet-archived 2025-2026
+-- term. The member fixture's person (P4) is among the NCR actives, which is what makes the
+-- member tier's "sees exactly 1 membership — their own" assertion a real scoping test
+-- rather than an accident of there being only one row.
+--
+-- status is 'active' on every row including the historical one. That is forward-compatible
+-- with enforce_membership_transition() (0028, S5), whose INSERT branch permits only
+-- 'active' or 'renewal_pending' — a fixture seeded as 'graduated' would start failing the
+-- day that trigger lands, in a file nobody would think to look at.
+insert into public.memberships (
+  id, person_id, term_id, status, region_id, year_level, expected_grad_year
+)
+select v.id, v.person_id, v.term_id, v.status::public.membership_status,
+       r.id, v.year_level, v.expected_grad_year
+from (values
+  -- ── active term, NCR (region A) ──
+  ('00000000-0000-4000-c000-000000000001'::uuid, '00000000-0000-4000-b000-000000000003'::uuid,
+   pg_temp.fx_active_term(),   'active', 'NCR', 3, 2028),   -- P3, moderator's person
+  ('00000000-0000-4000-c000-000000000002'::uuid, '00000000-0000-4000-b000-000000000004'::uuid,
+   pg_temp.fx_active_term(),   'active', 'NCR', 2, 2029),   -- P4, member fixture's person
+  -- ── active term, R07 (region B) ──
+  ('00000000-0000-4000-c000-000000000003'::uuid, '00000000-0000-4000-b000-000000000005'::uuid,
+   pg_temp.fx_active_term(),   'active', 'R07', 4, 2027),   -- P5, the CTO's person
+  ('00000000-0000-4000-c000-000000000004'::uuid, '00000000-0000-4000-b000-000000000006'::uuid,
+   pg_temp.fx_active_term(),   'active', 'R07', 1, 2030),   -- P6
+  -- ── 2025-2026, still 'draft' at this instant; archived in step 6 ──
+  ('00000000-0000-4000-c000-000000000005'::uuid, '00000000-0000-4000-b000-000000000001'::uuid,
+   '00000000-0000-4000-d000-000000000001'::uuid, 'active', 'NCR', 4, 2026)   -- P1, history only
+) as v(id, person_id, term_id, status, region_code, year_level, expected_grad_year)
+join public.regions r on r.code = v.region_code
+on conflict do nothing;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- 6 — freeze the historical term
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- After this statement 2025-2026 is genuinely read-only for every role including
+-- exec_admin (DATA_MODEL.md §7.3), and P1's membership is history. Note that `terms` does
+-- carry trg_terms_audit, so this UPDATE writes an audit row — which is why 017 measures
+-- audit_log deltas from a captured baseline and never an absolute count.
+update public.terms
+   set status = 'archived', archived_at = now()
+ where id = '00000000-0000-4000-d000-000000000001'
+   and status <> 'archived';
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- 7 — one cross-region committee
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- CBL Art. III §5: committees are discretionary and per term, so none is seeded by 0016 and
+-- this one is created here. Hung off the CRRD department of the active term, which 0016 did
+-- seed (CBL Art. III §4.6).
+--
+-- CROSS-REGION ON PURPOSE: its two members are P4 (NCR) and P6 (R07), so each regional rep
+-- sees exactly one of the two committee_memberships rows. A same-region committee would let
+-- a scoping predicate that ignores the region return both rows and still look right.
+insert into public.committees (id, term_id, department_id, code, name)
+select '00000000-0000-4000-e000-000000000001',
+       pg_temp.fx_active_term(),
+       d.id,
+       'FIXT_ETHICS',
+       'Fixture Ethics Committee'
+from public.departments d
+where d.term_id = pg_temp.fx_active_term()
+  and d.code = 'CRRD'
+on conflict (id) do nothing;
+
+insert into public.committee_memberships (membership_id, committee_id)
+values
+  ('00000000-0000-4000-c000-000000000002', '00000000-0000-4000-e000-000000000001'),  -- P4, NCR
+  ('00000000-0000-4000-c000-000000000004', '00000000-0000-4000-e000-000000000001')   -- P6, R07
+on conflict do nothing;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- 8 — officer assignments
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- Four seats in the active term, all `active` and none acting, so both partial unique
+-- indexes (one_sitting_officer, one_acting_officer) are satisfied and 015_org_structure's
+-- single-occupancy assertions have a realistic baseline to collide with.
+--
+-- Three of the four CBL Art. III §2 administrators are here — CEO (P1), CTO (P5), CCDO (P2)
+-- — plus a deputy, DCCDO-C (P3), which is the moderator tier's constitutional basis
+-- (CBL Art. III §3.9, duties Art. IV §6.2). The COO seat is deliberately EMPTY: CBL Art. VI
+-- §4 defines a vacancy as the ABSENCE of a sitting assignment, so leaving one of the four
+-- administrator seats unfilled is what gives the vacancy query something true to find
+-- (PRD US-E7, DATA_MODEL.md §3.4 — there is no 'vacant' enum value and there must not be).
+--
+-- department_id is left NULL: the partial unique indexes do not involve it, and populating
+-- it would imply an assignment-to-department relationship the CBL expresses through
+-- departments.head_position instead.
+insert into public.officer_assignments (id, person_id, term_id, role, status, is_acting)
+values
+  ('00000000-0000-4000-f000-000000000001', '00000000-0000-4000-b000-000000000001',
+   pg_temp.fx_active_term(), 'CEO',     'active', false),
+  ('00000000-0000-4000-f000-000000000002', '00000000-0000-4000-b000-000000000002',
+   pg_temp.fx_active_term(), 'CCDO',    'active', false),
+  ('00000000-0000-4000-f000-000000000003', '00000000-0000-4000-b000-000000000003',
+   pg_temp.fx_active_term(), 'DCCDO_C', 'active', false),
+  ('00000000-0000-4000-f000-000000000004', '00000000-0000-4000-b000-000000000005',
+   pg_temp.fx_active_term(), 'CTO',     'active', false)
+on conflict do nothing;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- 9 — confidentiality acknowledgements  (CBL Art. VIII §7.1)
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- TWO of the three people who could hold one. P1 (exec_admin) and P2 (crrd_admin) have
+-- signed for the current term; P3 (moderator) DELIBERATELY HAS NOT.
+--
+-- That omission is a test fixture for a requirement, not an oversight. PRD US-J5: "a
+-- sensitive-column read by a user with no current-term acknowledgement is refused, and the
+-- refusal is an ERROR, not an empty result." Without an unacknowledged privileged fixture
+-- there is nothing to assert that against, and the gate would ship untested behind three
+-- roles that all happen to have a row.
+--
+-- Grain is person × term because Art. VIII §7.1 attaches the signature to ASSUMING A ROLE
+-- and roles are assumed each term (Art. V §1) — a 2024 signature does not authorize a 2026
+-- read (DATA_MODEL.md §8.4). recorded_by is the exec_admin account, matching the
+-- exec_admin-only INSERT policy in 0014.
+insert into public.confidentiality_acknowledgements (
+  person_id, term_id, agreement_version, recorded_by
+)
+values
+  ('00000000-0000-4000-b000-000000000001', pg_temp.fx_active_term(),
+   'CBL-2026-VIII-7', '00000000-0000-4000-a000-000000000001'),
+  ('00000000-0000-4000-b000-000000000002', pg_temp.fx_active_term(),
+   'CBL-2026-VIII-7', '00000000-0000-4000-a000-000000000001')
+on conflict do nothing;

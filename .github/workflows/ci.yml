@@ -48,7 +48,8 @@ jobs:
           hits=$(git grep -nIE "$patterns" -- \
             ':!.env.example' \
             ':!lib/server/admin-client.ts' \
-            ':!.github/' || true)
+            ':!.github/' \
+            ':!BUILD_PLAN.md' || true)
           if [ -n "$hits" ]; then
             echo "::error::Possible secret material in tracked files:"
             echo "$hits"

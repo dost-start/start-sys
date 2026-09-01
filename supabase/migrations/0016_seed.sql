@@ -1,0 +1,362 @@
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- 0016_seed.sql
+--
+-- WHAT:      Five idempotent seed blocks — the reference data the system cannot boot
+--            without:
+--              1. 18 Philippine regions with their island groups
+--              2. the 23 CBL officer positions, with the org_role each grants
+--              3. the RA 10173 sensitive-column classification
+--              4. the bootstrap term, 2026-2027
+--              5. the seven CBL Art. III §4 departments, on that term
+--
+-- WHY THIS IS A MIGRATION AND NOT A FIXTURE: **the Constitution is seeded, not
+--            paraphrased.** CLAUDE.md and DATA_MODEL.md §13 rule 9: anything the CBL fixes
+--            is a row or a CHECK with the article cited inline, never a string literal in
+--            TypeScript. So when the Constitution is amended under Art. XII, the diff is
+--            one migration citing the amendment — not a grep for hard-coded titles across
+--            app/. That property is the whole point of this file.
+--
+-- IDEMPOTENCY: every block is safe to re-run, and 033_seed_idempotency.sql asserts it by
+--            executing the seed a second time in-transaction and re-checking every count.
+--            The three strategies differ on purpose:
+--              regions, registry, departments  ON CONFLICT DO NOTHING — the row's content
+--                                              is settled; re-running must not churn it.
+--              officer_positions               ON CONFLICT DO UPDATE — a title, role
+--                                              mapping or sort order can legitimately be
+--                                              corrected by an amendment, and re-running
+--                                              the seed is how that correction lands.
+--              terms                           INSERT ... WHERE NOT EXISTS — see block 4;
+--                                              ON CONFLICT would fight the one_active_term
+--                                              partial unique index rather than respect it.
+--
+-- CITATION:  DATA_MODEL.md §6/0016, §8.1; ARCHITECTURE.md §5;
+--            CBL Art. III §2 (Executive Board), §3 (Deputy Board), §4 (the seven
+--            departments), §4.6 (Regional Representatives), §5 (Committees);
+--            CBL Art. V §1 (term ends in May), Art. VII §1 (membership validity defined by
+--            that same clause), Art. VIII §6 (RA 10173);
+--            RA 12000 (2024) creating the Negros Island Region;
+--            PRD §3 v1.0 items 3, 4, 11; PRD US-E2, US-J1, US-J3.
+--
+-- ROLLBACK:  Forward-only. Deleting a seeded region or position would orphan every FK
+--            pointing at it, and there is no DELETE path in this schema by design.
+-- ═══════════════════════════════════════════════════════════════════════════════════
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- BLOCK 1 — regions
+--
+-- **EIGHTEEN, not seventeen.** Republic Act 12000 (2024) created the Negros Island Region
+-- by carving Negros Occidental out of Western Visayas and Negros Oriental and Siquijor out
+-- of Central Visayas. Confirmed with the project heads, 2026-09-01. NIR sits at sort_order
+-- 10, between Western and Central Visayas, so the UI order stays geographically sensible.
+--
+-- `sort_order` is what the UI orders on, so the count "18" is not hard-coded anywhere in
+-- the application and a nineteenth region is one seed row plus one tech_admin insert —
+-- which is the Extensibility NFR demonstrated rather than asserted.
+--
+-- island_group is an enum rather than a table: three values, fixed by Philippine geography,
+-- never edited through a UI (DATA_MODEL.md §1.1). It is the axis PRD US-G2 filters
+-- campaign recipients on.
+-- ═══════════════════════════════════════════════════════════════════════════════════
+insert into public.regions (code, name, island_group, sort_order) values
+  ('NCR',      'National Capital Region',            'Luzon',     1),
+  ('CAR',      'Cordillera Administrative Region',   'Luzon',     2),
+  ('R01',      'Ilocos Region',                      'Luzon',     3),
+  ('R02',      'Cagayan Valley',                     'Luzon',     4),
+  ('R03',      'Central Luzon',                      'Luzon',     5),
+  ('R04A',     'CALABARZON',                         'Luzon',     6),
+  ('MIMAROPA', 'MIMAROPA Region',                    'Luzon',     7),
+  ('R05',      'Bicol Region',                       'Luzon',     8),
+  ('R06',      'Western Visayas',                    'Visayas',   9),
+  ('NIR',      'Negros Island Region',               'Visayas',  10),
+  ('R07',      'Central Visayas',                    'Visayas',  11),
+  ('R08',      'Eastern Visayas',                    'Visayas',  12),
+  ('R09',      'Zamboanga Peninsula',                'Mindanao', 13),
+  ('R10',      'Northern Mindanao',                  'Mindanao', 14),
+  ('R11',      'Davao Region',                       'Mindanao', 15),
+  ('R12',      'SOCCSKSARGEN',                       'Mindanao', 16),
+  ('R13',      'Caraga',                             'Mindanao', 17),
+  ('BARMM',    'Bangsamoro',                         'Mindanao', 18)
+on conflict (code) do nothing;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- BLOCK 2 — officer_positions: the START-DOST Constitution and By-Laws 2026, as data
+--
+--   CBL Art. III §2    Executive Board / C-Suite, §2.1-§2.8, plus §2.9 Special Advisor
+--   CBL Art. III §3    Deputy Board, §3.1-§3.12
+--   CBL Art. III §4.6  Regional Representatives (duties: Art. IV §6.4)
+--   CBL Art. III §5    Committees
+--
+-- `title` is VERBATIM from the Constitution — not shortened, not tidied. `sort_order`
+-- follows the CBL's own listing order IN TENS, so an amendment that inserts a position
+-- between two existing ones does not renumber the file and produce a diff nobody can read.
+--
+-- `grants_org_role` is the LOCKED role model (project heads, 2026-09-01). It is a
+-- PROVISIONING HINT, not an authorization fact: public.user_roles is still written
+-- explicitly and is the live answer to "what may this account do right now" (PRD US-A2 —
+-- revocation must take effect on the next request). A position is a TITLE; an org_role is
+-- a CAPABILITY. Confusing the two is how a system ends up granting access by job title.
+--
+-- `is_administrator` is true for CEO, COO, CTO, CCDO and nobody else. That is not a
+-- convention: the admin_is_c_suite CHECK in 0003 refuses a fifth, and
+-- 027_constitutional_invariants.sql asserts both the COUNT and the SET, so a fifth
+-- administrator fails CI rather than code review.
+--
+-- ON CONFLICT DO UPDATE rather than DO NOTHING: an Art. XII amendment that renames a
+-- position or moves it between tiers lands as a re-run of this block, and DO NOTHING would
+-- silently ignore the amendment.
+--
+-- FIVE ROWS BELOW ARE NOT OBVIOUS. Each is deliberate:
+--   CTO -> tech_admin       tech_admin is the CTO ALONE. roll_over_term() and
+--                           unfreeze_term() guard on tech_admin, so this single row is the
+--                           whole of who can end a term. DCTO-PD was moved out of it on
+--                           2026-09-01 — the deputy operates, the chief configures. The
+--                           continuity risk when this seat is vacant is PRD OQ-13, open.
+--   DCTO_PD, DCCDO_C,
+--   DCCDO_D -> moderator    The operating tier. CBL Art. IV §6.2.2 puts "membership
+--                           recruitment, application, retention, and re-engagement" in the
+--                           DCCDO-C's hands, so application review is constitutionally
+--                           theirs. Full-column reads on what they operate on, every read
+--                           audited, no structural or access-control powers.
+--   SPECIAL_ADVISOR ->
+--   officer                 Counter-intuitive and correct. Art. III §2.9 seats them with
+--                           the Executive Board "in an advisory capacity, WITHOUT VOTING
+--                           POWERS"; Art. X §3.1 makes them a DOST-SEI employee rather than
+--                           a scholar; Art. X §2.4-2.5 makes them the INDEPENDENT reviewer
+--                           of appeals against impeachment and membership termination. An
+--                           adjudicator with exec_admin would be reviewing appeals against
+--                           their own writes. Read-only is the right shape for a referee.
+--   DCOO -> officer         Also counter-intuitive, and it is a known divergence rather
+--                           than a decision: CBL Art. VI §1.6 makes the DCOO the officer
+--                           who ISSUES the AWOL notice that leads to dismissal, yet the
+--                           locked role model gives them SELECT only. Today the notice is
+--                           issued outside the system and the dismissal is recorded by an
+--                           exec_admin with the DCOO named in status_note. Granting them
+--                           write access would create a quiet fifth administrator. PRD
+--                           OQ-16 — a question for the project heads, not a seed edit.
+--   COMMITTEE_MEMBER ->
+--   member                  Committee service is a real CBL role (Art. III §5, Art. V §6)
+--                           and carries the Art. VIII §7.1 confidentiality obligation, but
+--                           it confers NO access to anyone else's record. The row exists so
+--                           the constitutional structure is complete and
+--                           officer_assignments can name a committee seat; the operational
+--                           record of who sits on which committee is
+--                           committee_memberships, which is what PRD US-E1 writes. Naming
+--                           this position grants nothing, by design.
+--
+-- CFO, CMO, CCO, CEVO and the remaining deputies are `officer`: SELECT only, non-sensitive
+-- columns only. They chief departments this system does not manage — finance, marketing,
+-- comms and events are explicit PRD §4 non-goals — so directory read access is the whole
+-- of what they need.
+-- ═══════════════════════════════════════════════════════════════════════════════════
+insert into public.officer_positions (code, title, grants_org_role, is_administrator, sort_order) values
+  -- ── Executive Board / C-Suite — CBL Art. III §2 ──────────────────────────────────
+  ('CEO',              'Chief Executive Officer',                                                'exec_admin',   true,   10),
+  ('COO',              'Chief Operations Officer',                                               'exec_admin',   true,   20),
+  ('CTO',              'Chief Technology Officer',                                               'tech_admin',   true,   30),
+  ('CFO',              'Chief Finance Officer',                                                  'officer',      false,  40),
+  ('CMO',              'Chief Marketing Officer',                                                'officer',      false,  50),
+  ('CCO',              'Chief Communications Officer',                                           'officer',      false,  60),
+  ('CCDO',             'Chief Community Development Officer',                                    'crrd_admin',   true,   70),
+  ('CEVO',             'Chief Events Officer',                                                   'officer',      false,  80),
+  ('SPECIAL_ADVISOR',  'Special Advisor',                                                        'officer',      false,  90),
+  -- ── Deputy Board — CBL Art. III §3 ───────────────────────────────────────────────
+  ('DCOO',             'Deputy Chief Operations Officer for Administrative Affairs',             'officer',      false, 100),
+  ('DCTO_PD',          'Deputy Chief Technology Officer for Product Development',                'moderator',    false, 110),
+  ('DCTO_TE',          'Deputy Chief Technology Officer for Tech Education',                     'officer',      false, 120),
+  ('DCFO_RMD',         'Deputy Chief Finance Officer for Resource Management and Development',   'officer',      false, 130),
+  ('DCMO_SP',          'Deputy Chief Marketing Officer for Strategic Promotions',                'officer',      false, 140),
+  ('DCMO_CC',          'Deputy Chief Marketing Officer for Creative Content',                    'officer',      false, 150),
+  ('DCCO_P',           'Deputy Chief Communications Officer for Partnerships',                   'officer',      false, 160),
+  ('DCCO_SMR',         'Deputy Chief Communications Officer for Sponsorships and Media Relations','officer',     false, 170),
+  ('DCCDO_C',          'Deputy Chief Community Development Officer for Community',               'moderator',    false, 180),
+  ('DCCDO_D',          'Deputy Chief Community Development Officer for Development',             'moderator',    false, 190),
+  ('DCEVO_P',          'Deputy Chief Events Officer for Programs',                               'officer',      false, 200),
+  ('DCEVO_L',          'Deputy Chief Events Officer for Logistics',                              'officer',      false, 210),
+  -- ── Regional Representatives — CBL Art. III §4.6, duties at Art. IV §6.4 ─────────
+  -- One of the two MULTI-SEAT positions: the CBL sets no headcount per region, so the
+  -- one_sitting_officer / one_acting_officer partial unique indexes in 0007 exclude it.
+  ('REGIONAL_REP',     'Regional Representative',                                                'regional_rep', false, 220),
+  -- ── Committees — CBL Art. III §5 ─────────────────────────────────────────────────
+  -- The other multi-seat position, and likewise excluded from those indexes.
+  ('COMMITTEE_MEMBER', 'Committee Member',                                                       'member',       false, 230)
+on conflict (code) do update set
+  title            = excluded.title,
+  grants_org_role  = excluded.grants_org_role,
+  is_administrator = excluded.is_administrator,
+  sort_order       = excluded.sort_order;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- BLOCK 3 — sensitive_column_registry: the RA 10173 classification, AS DATA
+--
+-- CBL Art. VIII §6 makes RA 10173 a CONSTITUTIONAL obligation of every member, not merely
+-- the applicable statute — so this table is org policy, and it is the provision to cite
+-- when someone asks why a chief cannot read a scholar's address.
+--
+-- ONE registry drives TWO mechanisms, which is the entire reason it exists as data:
+--   · mask_sensitive() (0011) redacts these keys BEFORE writing an audit row, so the audit
+--     log answers "who changed this scholar's contact number, and when" without STORING
+--     the number. That is what makes append-only compatible with the five-year purge: the
+--     log holds no PII, so the purge never needs to reach into it, so nobody ever needs a
+--     reason to grant UPDATE on it.
+--   · redact_expired_pii() (0012) NULLs these columns at the five-year mark (PRD US-J3).
+-- If the classification lived in two places the two would disagree, and the disagreement
+-- would be silent.
+--
+-- 099_security_invariants.sql asserts that every pair here names a column that ACTUALLY
+-- EXISTS. A registry row naming a renamed or dropped column silently stops masking that
+-- column in the audit log and silently stops purging it at year five — and nothing else in
+-- the system would notice.
+--
+-- CONVENTIONS.md §13 rule 4: a new sensitive column is registered in the SAME MIGRATION
+-- that creates it. Forgetting is how PII leaks into the audit log.
+--
+-- NOTE ON THE FORWARD ENTRIES: applications, renewal_submissions and email_recipients do
+-- not exist yet — applications lands in 0008 (S3) and the other two in v1.1. The registry
+-- keys on (table_name, column_name) as TEXT with no foreign key precisely so the
+-- classification can be stated before the column is built rather than remembered
+-- afterwards. Registering late is how a birthdate reaches an audit row.
+--
+-- ⚠ **COLLISION WITH 099_security_invariants.sql, FLAGGED NOT SILENTLY RESOLVED.**
+-- BUILD_PLAN S7-T26 assertion (5) requires that every pair in this registry names a column
+-- that exists in information_schema.columns. The five forward rows below — four on
+-- `applications` and one each on `renewal_submissions` and `email_recipients` — will fail
+-- that assertion until those tables ship, and the last two are v1.1 and will therefore
+-- fail it for the whole of the v1.0 window. Two ways out and they are NOT equivalent:
+--   (a) S7-T26 scopes the assertion to pairs whose table_name exists — which keeps the
+--       real protection (a RENAMED or DROPPED column silently stops being masked and
+--       silently stops being purged, and nothing else notices) while tolerating a column
+--       classified ahead of its table. This is the recommended reading.
+--   (b) Drop the forward rows and register each column in the migration that creates it,
+--       per CONVENTIONS.md §13 rule 4 — which is the stricter discipline, but means the
+--       classification for v1.1's email tables is nobody's job until v1.1.
+-- DATA_MODEL.md §8.1 lists all seventeen pairs, so they are transcribed here as specified.
+-- Raised for the S7 owner in the PR rather than decided unilaterally in a seed file.
+--
+-- DELIBERATELY NOT SENSITIVE, so historical headcounts survive the purge:
+--   member_id, join_year, given_name, family_name, region_id, island_group, term_id,
+--   status, and committee/department assignment. PRD US-J3: "non-identifying data survives
+--   so historical headcounts still work."
+-- ═══════════════════════════════════════════════════════════════════════════════════
+insert into public.sensitive_column_registry (table_name, column_name, rationale) values
+  -- public.people — directly identifying, contact, or government-scholarship-linked.
+  ('people', 'birthdate',
+   'Date of birth. Directly identifying under RA 10173 and a common identity-verification factor.'),
+  ('people', 'contact_number',
+   'Mobile number. Contact data; also the highest-risk field to leak into a bulk send.'),
+  ('people', 'personal_email',
+   'Personal email address. Contact data, and the join key an attacker would use to correlate records.'),
+  ('people', 'address_line',
+   'Street address. Directly identifying and locates the scholar physically.'),
+  ('people', 'city_municipality',
+   'Address component. Sensitive in combination with the rest of the address block.'),
+  ('people', 'province',
+   'Address component. Sensitive in combination with the rest of the address block.'),
+  ('people', 'postal_code',
+   'Address component. Sensitive in combination with the rest of the address block.'),
+  ('people', 'school',
+   'Institution of enrolment. Links the scholar to their DOST scholarship and narrows identity sharply.'),
+  ('people', 'school_id_no',
+   'School-issued student number. A government-scholarship-linked identifier printed on the Certificate of Registration.'),
+  ('people', 'middle_name',
+   'Middle name. Not needed by any tier below crrd_admin and a strong identity-resolution key in PH records.'),
+
+  -- public.applications (0008) — the raw submission plus the pointers to a Certificate of
+  -- Registration, which carries a student number, an address and a signature.
+  ('applications', 'applicant_email',
+   'Raw applicant contact address, captured before any people row exists.'),
+  ('applications', 'payload',
+   'The entire validated application body: birthdate, address, contact number, school ID. The densest PII object in the schema.'),
+  ('applications', 'proof_web_view_link',
+   'Pointer to the proof-of-enrollment document. Must never reach a browser; PRD US-J2 forbids any unauthenticated link to it.'),
+  ('applications', 'proof_drive_file_id',
+   'Provider-side identifier for the proof-of-enrollment document. Addresses a file containing a student number and address.'),
+
+  -- public.renewal_submissions (v1.1) — same shape as an application body.
+  ('renewal_submissions', 'payload',
+   'Renewal form body. Same shape and same sensitivity as an application payload.'),
+
+  -- public.email_recipients (v1.1) — a FROZEN copy of contact data at send time, which
+  -- outlives the five-year purge on people unless it is classified here.
+  ('email_recipients', 'to_email',
+   'Recipient address frozen at enqueue time. A copy of contact data that must expire with the record it came from.'),
+  ('email_recipients', 'merge',
+   'Frozen mail-merge payload. Bounded by v_email_merge_fields today, but it is a stored copy of member data and is treated as such.')
+on conflict (table_name, column_name) do nothing;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- BLOCK 4 — the bootstrap term
+--
+-- CBL Art. V §1: "All elected and appointed officers shall serve a term until MAY of the
+-- succeeding year by which they were appointed." CBL Art. VII §1 defines membership
+-- validity by pointing at that same clause — so ONE term serves both officers and members
+-- and there is no second academic term to model (PRD OQ-7, resolved).
+--
+-- 1 June - 31 May. Not the school year: the CBL never mentions the academic calendar, and
+-- academic timing rides on memberships.expected_grad_year instead. 1 June is the only
+-- boundary that puts Executive Board selection (Art. V §2.1, first week of May) inside the
+-- OUTGOING term and Deputy Board selection (§2.2, last week of June) inside the NEW one.
+-- The month is constitutional and enforced by the term_ends_in_may CHECK in 0005; the DAY
+-- is our reading and is one UPDATE to change (the residual half of OQ-7).
+--
+-- WHY `INSERT ... WHERE NOT EXISTS` RATHER THAN ON CONFLICT: the guard is "no term exists
+-- at all", not "no term with this label". `terms` carries the one_active_term PARTIAL
+-- unique index, so if a later real term is already active, an ON CONFLICT (label) clause
+-- would not protect us — the insert would fail on the partial index instead, and a seed
+-- that can fail on re-run is not idempotent. This form is a clean no-op the moment the org
+-- has any term of its own, which is exactly when the bootstrap row stops being wanted.
+-- ═══════════════════════════════════════════════════════════════════════════════════
+insert into public.terms (label, starts_on, ends_on, status)
+select '2026-2027', date '2026-06-01', date '2027-05-31', 'active'
+where not exists (select 1 from public.terms);
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- BLOCK 5 — the seven departments of CBL Art. III §4
+--
+-- SEVEN, and the number is constitutional. Art. III §4.1-§4.7 names each department and
+-- the Chief Officer that heads it. Adding an eighth requires a constitutional amendment
+-- under Art. XII — which is precisely why it costs a migration, and why that migration is
+-- the amendment's paper trail. 027_constitutional_invariants.sql asserts that every ACTIVE
+-- term has exactly these seven codes, which is also the test that catches a future rollover
+-- that forgot to carry departments forward.
+--
+-- Term-scoped rows with a STABLE cross-term `code`, so "CRRD" is the same department every
+-- year (join on code for history) while its chiefs, committees and membership are per-term.
+-- roll_over_term() (v1.2) copies these seven codes into each new term unchanged.
+--
+-- head_position stores a POSITION CODE, not a person. Two reasons: it stays true across the
+-- whole term even while the seat is vacant (CBL Art. VI §4 vacancy is an ABSENCE, not a
+-- state), and "who is the CTO this term" becomes one join instead of a hard-coded string
+-- in a dashboard. The FK to officer_positions(code) is why Block 2 must run before this one.
+--
+-- ⚠ **COMMITTEES ARE DELIBERATELY NOT SEEDED, AND THE ASYMMETRY IS THE CONSTITUTION'S.**
+-- Art. III §4 FIXES seven departments; Art. III §5 says committees "may be created,
+-- restructured, or dissolved depending on the operational needs of the organization". So
+-- departments are reference data carried forward by rollover, and committees start EMPTY
+-- every term and are created per term by the CCDO with one INSERT — no migration, no
+-- deploy, no enum, no route (ARCHITECTURE.md §4.4). Two CBL processes are recorded here as
+-- NOT ENFORCED: §5.1-5.2's approval chain (co-endorsement -> COO review -> CEO approval) is
+-- an approvals workflow the PRD does not ask for, so the system records the resulting
+-- committee and audits who created it; and §5.4's "dissolution only when it has no incumbent
+-- member" is satisfied STRUCTURALLY rather than by a check — there is no DELETE policy
+-- anywhere, so a committee is dissolved by not carrying it into the next term, and a new
+-- term has no incumbents by construction.
+-- ═══════════════════════════════════════════════════════════════════════════════════
+insert into public.departments (term_id, code, name, head_position)
+select t.id, d.code, d.name, d.head
+from public.terms t
+cross join (values
+  ('EXEC',   'Executive Leadership',                      'CEO'),   -- §4.1  COO at their right hand, supported by the DCOO
+  ('TECH',   'Technology Department',                     'CTO'),   -- §4.2  DCTO-PD, DCTO-TE
+  ('FIN',    'Finance Department',                        'CFO'),   -- §4.3  DCFO-RMD
+  ('MKTG',   'Marketing Department',                      'CMO'),   -- §4.4  DCMO-SP, DCMO-CC
+  ('COMMS',  'Communications Department',                 'CCO'),   -- §4.5  DCCO-P, DCCO-SMR
+  ('CRRD',   'Community & Regional Relations Department', 'CCDO'),  -- §4.6  DCCDO-C, DCCDO-D, Regional Representatives
+  ('EVENTS', 'Events Department',                         'CEVO')   -- §4.7  DCEvO-P, DCEvO-L
+) as d(code, name, head)
+where t.status = 'active'
+on conflict (term_id, code) do nothing;

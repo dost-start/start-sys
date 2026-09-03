@@ -23,6 +23,23 @@ export default defineConfig({
   // SUPABASE_SERVICE_ROLE_KEY is absent, so a DB-less clone still runs the smoke spec.
   globalSetup: "./e2e/global-setup.ts",
   fullyParallel: true,
+  // ONE worker in CI, deliberately, and it is not a performance oversight.
+  //
+  // These specs share mutable state that the database only lets exist once: a single
+  // open `application_windows` row per term, and one seeded member world. So
+  // `approve-and-id`'s seeder closing the window mid-test makes `apply-with-upload`'s
+  // submission return `window_closed` and create no row; `member-officer-read-only`
+  // graduating a region-A member between `rr-scope-leak` reading the expected headcount
+  // and the page rendering makes the RR dashboard show 14 where 15 was expected. Both
+  // were observed as retry-flakes on 2026-09-03, both in specs that guard a security
+  // boundary — and a flaky green on the RR scope gate is worse than a red one, because
+  // it is the kind of failure people learn to re-run instead of read.
+  //
+  // Per-resource locks would be the surgical fix; serialising is the boring one, and it
+  // removes the whole class rather than the two instances we happened to see. The suite
+  // is 46 tests and ran in 2.4 minutes on two workers — this is not the expensive part
+  // of CI. Local runs keep full parallelism, where a flake costs a re-run, not trust.
+  workers: isCI ? 1 : undefined,
   forbidOnly: isCI,
   retries: isCI ? 1 : 0,
   reporter: isCI ? [["github"], ["html", { open: "never" }]] : [["list"]],

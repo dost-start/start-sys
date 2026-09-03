@@ -30,7 +30,11 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { randomBytes } from "node:crypto";
-import { console } from "node:console";
+// Default imports, NOT named: `node:console` and `node:process` export the object
+// itself as the default and have no named `console`/`process` export — a named
+// import parses fine and then throws SyntaxError at load. These exist only so the
+// repo-wide `no-undef` rule sees a binding; the globals would work identically.
+import console from "node:console";
 import process from "node:process";
 import { writeFileSync } from "node:fs";
 
@@ -350,7 +354,12 @@ async function main() {
           submitted_at: opens,
           consented_at: opens,
         },
-        { onConflict: "id" },
+        // DO NOTHING, not DO UPDATE. `consented_at` and `privacy_notice_version` are
+        // immutable once written (RA 10173 — S7-T22's trigger refuses any UPDATE that
+        // touches them), so re-sending this row as an update fails the whole seed on
+        // the second run. These are fixtures nobody edits; leaving an existing one
+        // alone is both correct and what makes the script re-runnable.
+        { onConflict: "id", ignoreDuplicates: true },
       ),
       `application ${i}`,
     );

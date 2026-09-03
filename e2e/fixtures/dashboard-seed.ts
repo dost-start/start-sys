@@ -50,7 +50,7 @@
 // `.gitignore`. Nothing here is ever committed.
 // ═══════════════════════════════════════════════════════════════════════════════════
 
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
@@ -351,7 +351,14 @@ async function enrolTotp(
     if (verifyError) throw new Error(`TOTP verify for ${email}: ${verifyError.message}`);
     return secret;
   } finally {
-    await client.auth.signOut();
+    // `scope: 'local'` — NOT the default. supabase-js signs out GLOBALLY by default,
+    // which revokes every session that user holds anywhere, including a session a
+    // parallel Playwright worker is in the middle of using. That produced the
+    // intermittent "TOTP verify for …: Auth session missing!" above: worker A finished
+    // its enrol and signed the shared fixture account out from under worker B between
+    // B's `enroll` and its `challengeAndVerify`. This client's own session is the only
+    // one this function created and the only one it may end.
+    await client.auth.signOut({ scope: "local" });
   }
 }
 
@@ -490,9 +497,58 @@ async function ensureArchivedTerm(admin: SupabaseClient): Promise<string> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Seed the whole scope world. Idempotent; safe before every run and safe twice.
+ * Serialize seeding across Playwright workers.
+ *
+ * `playwright.config.ts` sets `fullyParallel: true`, and three spec files each call
+ * `seedDashboardWorld()` from `beforeAll` — so up to three OS processes run this
+ * seeder against the same fixture accounts at the same moment. Idempotent is not the
+ * same property as concurrency-safe: enrolling a TOTP factor, deleting a stale one
+ * through the admin API, and writing the shared state file all interleave badly, and
+ * the symptom is an "Auth session missing!" that looks like a product bug in a
+ * security spec. `mkdir` is atomic on every platform we run on, which makes it the
+ * cheapest correct mutex available without adding a dependency.
+ *
+ * A lock older than the timeout belongs to a worker that crashed; break it rather
+ * than hanging the suite, since the seeder it was running is itself idempotent.
+ */
+const SEED_LOCK_PATH = `${SCOPE_STATE_PATH}.lock`;
+const SEED_LOCK_STALE_MS = 180_000;
+
+async function withSeedLock<T>(run: () => Promise<T>): Promise<T> {
+  mkdirSync(dirname(SCOPE_STATE_PATH), { recursive: true });
+
+  for (;;) {
+    try {
+      mkdirSync(SEED_LOCK_PATH);
+      break;
+    } catch {
+      let age = 0;
+      try {
+        age = Date.now() - statSync(SEED_LOCK_PATH).mtimeMs;
+      } catch {
+        continue; // released between our mkdir and our stat — retry immediately.
+      }
+      if (age > SEED_LOCK_STALE_MS) rmSync(SEED_LOCK_PATH, { recursive: true, force: true });
+      await new Promise((done) => setTimeout(done, 250));
+    }
+  }
+
+  try {
+    return await run();
+  } finally {
+    rmSync(SEED_LOCK_PATH, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Seed the whole scope world. Idempotent; safe before every run, safe twice, and
+ * safe from parallel workers (the lock above is what buys the third property).
  */
 export async function seedDashboardWorld(): Promise<ScopeState> {
+  return withSeedLock(seedDashboardWorldUnlocked);
+}
+
+async function seedDashboardWorldUnlocked(): Promise<ScopeState> {
   const admin = scopeAdminClient();
 
   const previous: ScopeState | null = (() => {

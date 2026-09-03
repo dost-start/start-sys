@@ -9,6 +9,11 @@ out/
 .env*
 !.env.example
 
+# Output of scripts/seed-demo-accounts.mjs: plaintext demo passwords. This repo is
+# public — the file must never be tracked, and the seeder rotates the passwords on
+# every run, so there is nothing here worth keeping in history.
+demo-credentials.local.md
+
 # Secrets / keys
 *.pem
 service-account*.json

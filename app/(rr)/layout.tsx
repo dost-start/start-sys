@@ -6,6 +6,7 @@
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
+import { SignOutButton } from "@/components/auth/sign-out-button";
 import { getSessionContext } from "@/lib/auth/queries";
 import { canAccess, homeForRole } from "@/lib/auth/route-access";
 
@@ -21,6 +22,7 @@ export default async function RegionalRepLayout({ children }: { children: ReactN
         <div className="mx-auto flex max-w-4xl items-center gap-6 px-6 py-3">
           <span className="font-semibold tracking-tight">START-SYS</span>
           <span className="ml-auto text-xs text-muted-foreground">Regional Representative</span>
+          <SignOutButton />
         </div>
       </header>
       <main className="mx-auto max-w-4xl px-6 py-8">{children}</main>

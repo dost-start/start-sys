@@ -2,6 +2,8 @@ node_modules
 .next
 out
 build
+# Local tool state written by the gstack browse skill. Git-ignored, not source.
+.gstack
 coverage
 playwright-report
 test-results

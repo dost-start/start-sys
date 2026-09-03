@@ -55,6 +55,15 @@ const ALLOWLIST: ReadonlyArray<{ file: string; name: string; reason: string }> =
       "by Supabase Auth plus a single generic failure message (S2-T33).",
   },
   {
+    file: "lib/auth/actions.ts",
+    name: "signOut",
+    reason:
+      "Ends the CALLER'S OWN session and nothing else — scope 'local', no id parameter, so " +
+      "there is no target to authorize against. A role gate here could only refuse someone " +
+      "the right to log out. Ending another user's session is auth.admin.signOut on the " +
+      "service-role client, which lives behind lib/server/admin-client.ts.",
+  },
+  {
     file: "lib/auth/mfa-actions.ts",
     name: "enrollTotp",
     reason:

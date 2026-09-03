@@ -8,6 +8,7 @@
 
 import { redirect } from "next/navigation";
 
+import { SignOutButton } from "@/components/auth/sign-out-button";
 import { TotpVerify, type TotpFactorOption } from "@/components/auth/totp-verify";
 import { getSessionContext } from "@/lib/auth/queries";
 import { homeForRole, LOGIN_PATH } from "@/lib/auth/route-access";
@@ -44,6 +45,11 @@ export default async function MfaVerifyPage({
   return (
     <main className="px-4 py-10">
       <TotpVerify factors={factors} next={next} homePath={home} />
+      {/* Same dead-end reasoning as /auth/mfa/enroll: a lost authenticator must not
+          leave the session with nowhere to go but the challenge it cannot answer. */}
+      <div className="mx-auto mt-8 w-full max-w-md">
+        <SignOutButton />
+      </div>
     </main>
   );
 }

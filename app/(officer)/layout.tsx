@@ -6,6 +6,7 @@
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
+import { SignOutButton } from "@/components/auth/sign-out-button";
 import { getSessionContext } from "@/lib/auth/queries";
 import { canAccess, homeForRole } from "@/lib/auth/route-access";
 
@@ -29,6 +30,7 @@ export default async function OfficerLayout({ children }: { children: ReactNode 
             </a>
           </nav>
           <span className="ml-auto text-xs text-muted-foreground">{ctx.role}</span>
+          <SignOutButton />
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>

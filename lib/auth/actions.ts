@@ -74,3 +74,27 @@ export async function signIn(
 
   redirect(await resolveDestination(next));
 }
+
+/**
+ * End the caller's own session and return them to `/login`.
+ *
+ * Not wrapped in `withRole` for the same reason `signIn` is not: every tier may end
+ * its own session, and a role check here would only be able to refuse someone the
+ * right to log out. This scope is the caller's own session ONLY — ending someone
+ * else's is `auth.admin.signOut(user, 'global')` on the service-role client, which
+ * lives behind `lib/server/admin-client.ts` and is a different action entirely.
+ *
+ * Takes no argument on purpose. It is used directly as a `<form action>`, and a
+ * zero-parameter function is assignable to Next's `(formData: FormData) => void`
+ * action type — so declaring the FormData would only add an unused binding: there
+ * is nothing to validate here, the session cookie is the whole input.
+ */
+export async function signOut(): Promise<void> {
+  const supabase = await createServerSupabase();
+  // `scope: 'local'` clears this browser's session. A failure here is not worth
+  // surfacing: the redirect below leaves the user at `/login` either way, and
+  // middleware re-checks the session on the next request regardless.
+  await supabase.auth.signOut({ scope: "local" });
+
+  redirect("/login");
+}

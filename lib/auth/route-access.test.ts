@@ -9,7 +9,7 @@
 // (`028_role_matrix_rowcounts.sql`, `029_role_matrix_columns.sql`) and in
 // `e2e/rr-scope-leak.spec.ts`, which repeats itself with middleware disabled.
 
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 
 import {
   ADMIN_SYSTEM_PREFIX,
@@ -17,6 +17,7 @@ import {
   groupForPath,
   homeForRole,
   LOGIN_PATH,
+  mfaGateEnabled,
   requiresMfa,
   ROUTE_GROUPS,
   UNAUTHORIZED_PATH,
@@ -378,4 +379,33 @@ describe("requiresMfa — mandatory above Member tier (PRD item 2 / US-A3)", () 
   test("anonymous has no factor requirement", () => {
     expect(requiresMfa(null)).toBe(false);
   });
+});
+
+describe("mfaGateEnabled — the DEV_DISABLE_MFA escape hatch", () => {
+  const original = process.env.DEV_DISABLE_MFA;
+
+  afterEach(() => {
+    if (original === undefined) delete process.env.DEV_DISABLE_MFA;
+    else process.env.DEV_DISABLE_MFA = original;
+  });
+
+  test("is ON when the variable is absent — the only default a security gate may have", () => {
+    delete process.env.DEV_DISABLE_MFA;
+    expect(mfaGateEnabled()).toBe(true);
+  });
+
+  test("is OFF only for the exact string '1'", () => {
+    process.env.DEV_DISABLE_MFA = "1";
+    expect(mfaGateEnabled()).toBe(false);
+  });
+
+  // Fail CLOSED on anything ambiguous. A half-written variable, a shell quoting
+  // accident or a copied "true" must leave the gate standing rather than silently
+  // opening it — the failure a reader would never think to look for.
+  for (const value of ["", "0", "true", "TRUE", "yes", "on", " 1", "1 ", "11", "false"]) {
+    test(`stays ON for ${JSON.stringify(value)}`, () => {
+      process.env.DEV_DISABLE_MFA = value;
+      expect(mfaGateEnabled()).toBe(true);
+    });
+  }
 });

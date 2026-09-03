@@ -29,6 +29,7 @@ import {
   canAccess,
   homeForRole,
   LOGIN_PATH,
+  mfaGateEnabled,
   requiresMfa,
   UNAUTHORIZED_PATH,
   type OrgRole,
@@ -94,7 +95,12 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   //    tech_admin still cannot write `user_roles`.
   //
   //    `/auth/*` is excluded from the matcher, so neither redirect can loop.
-  if (requiresMfa(role)) {
+  //
+  //    `mfaGateEnabled()` is the DEV_DISABLE_MFA escape hatch — demo ergonomics only,
+  //    default on, and it reaches exactly this block. The database's `has_aal2()`
+  //    predicates are untouched by it, so switching it on does not grant an aal1
+  //    session a single privileged write.
+  if (mfaGateEnabled() && requiresMfa(role)) {
     const { data: factors } = await supabase.auth.mfa.listFactors();
     const hasVerifiedFactor = (factors?.all ?? []).some((factor) => factor.status === "verified");
 

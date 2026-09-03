@@ -66,9 +66,16 @@ jobs:
             echo "::error::.env.example is missing"
             exit 1
           fi
-          names=$(git grep -hoE 'process\.env\.[A-Z0-9_]+' -- \
-            app lib components middleware.ts 2>/dev/null \
-            | sed 's/^process\.env\.//' | sort -u || true)
+          # BOTH access forms. `process.env["NAME"]` is valid TypeScript that reads a
+          # variable exactly like the dot form, so matching only the dot form let a
+          # variable enter the code — and Vercel — without ever joining the register.
+          names=$( { git grep -hoE 'process\.env\.[A-Z0-9_]+' -- \
+              app lib components middleware.ts 2>/dev/null \
+              | sed 's/^process\.env\.//'
+            git grep -hoE 'process\.env\[["'"'"'][A-Z0-9_]+["'"'"']\]' -- \
+              app lib components middleware.ts 2>/dev/null \
+              | sed -E 's/^process\.env\[["'"'"']//; s/["'"'"']\]$//'
+          } | sort -u || true)
           missing=""
           for name in $names; do
             if ! grep -qE "^[[:space:]]*#?[[:space:]]*${name}=" .env.example; then

@@ -236,7 +236,37 @@ has actually arrived on the CTO's phone and in Discord; and the confirmation is 
 
 ---
 
-## 9. Open questions that gate real data
+## 9. `DEV_DISABLE_MFA` is set on the demo deployment ⚠️ **must be unset before real data**
+
+**Blocks:** PRD MVP item 2 / US-A3 — TOTP enrolment mandatory above Member tier.
+**Owner:** CTO. **Added 2026-09-03 at the project heads' request, for demo ergonomics.**
+
+Trying seven role tiers meant seven authenticator enrolments, which made the demo
+unusable. `DEV_DISABLE_MFA=1` switches off the middleware's mandatory-TOTP gate so an
+above-Member account signs in with a password alone. It is set in the Vercel Production
+scope of the **scratch demo project** (`krizhwugzrnlkxsixnde`), which holds no real
+scholar data.
+
+Scope of the flag, precisely:
+
+- It reaches **one** `if` in `middleware.ts`. Nothing else reads it.
+- The database is untouched. `has_aal2()` still guards `user_roles`, `terms`,
+  `application_windows`, `rr_region_grants` and `privacy_notice_versions`, so an aal1
+  session cannot write any of them. **Consequence while the flag is set: role
+  assignment and opening/closing an application window silently do nothing** — an RLS
+  refusal is zero rows affected, not an error. That is the security model holding.
+- US-A4 is untouched: `/auth/reset` still demands the second factor before a
+  privileged password change, because the reset page reads `requiresMfa` directly.
+- Default is ON, and only the exact string `"1"` disables it — `"true"`, `"yes"` and a
+  half-written value all fail closed (`route-access.test.ts` asserts each one).
+
+**Done when:** the variable is absent from every Vercel scope on the org's real project,
+and an above-Member account is confirmed to hit the enrolment screen there. Deleting the
+env var and redeploying is the whole revert; no code change.
+
+---
+
+## 10. Open questions that gate real data
 
 Restated from `PRD.md` §7 with only the launch-gating subset. Each is a fact about the
 organization, not an engineering unknown — **none can be closed by editing a document.**
@@ -261,6 +291,8 @@ organization, not an engineering unknown — **none can be closed by editing a d
 4. **Item 2** — DPO, NPC registration, DPAs. The long pole; start it in parallel with 1 and 3.
 5. **Items 6 and 7** — document store and email, both downstream of item 1.
 6. **Item 8**, then **items 4 and 5** — monitoring, then error tracking, then CSP enforcement.
+7. **Item 9** — unset `DEV_DISABLE_MFA`. Last, because it is one env var and no code, but
+   it must happen before the first real account exists, not after.
 
 Items 1–3 and 6 are the set that must be complete **before one real scholar's record enters
 this system.**

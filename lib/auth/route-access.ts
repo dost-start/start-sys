@@ -204,3 +204,34 @@ export function homeForRole(role: OrgRole | null): string {
 export function requiresMfa(role: OrgRole | null): boolean {
   return role !== null && role !== "member";
 }
+
+/**
+ * Is the middleware's MFA gate switched on?
+ *
+ * ⚠️ THE ONLY REASON THIS EXISTS IS DEMO ERGONOMICS. Setting `DEV_DISABLE_MFA=1`
+ * lets an above-Member account reach the app on a password alone, so that trying
+ * seven role tiers back to back does not mean seven authenticator enrolments.
+ *
+ * What it does NOT do, and must never be extended to do:
+ *
+ *   · It does not touch the DATABASE backstop. `has_aal2()` still guards every
+ *     privileged write policy, so with the gate off a `tech_admin` session is aal1
+ *     and its writes to `user_roles`, `terms`, `application_windows`,
+ *     `rr_region_grants` and `privacy_notice_versions` are still refused — silently,
+ *     as zero rows affected, because that is what an RLS refusal looks like. Role
+ *     assignment and opening an application window stop working. That is the
+ *     security model holding, not a bug to route around, and it is the reason this
+ *     flag can never be a substitute for enrolling on a real deployment.
+ *   · It does not weaken US-A4. `/auth/reset` still demands the second factor before
+ *     a privileged password change; the reset page reads `requiresMfa` directly.
+ *   · It is not read anywhere except the middleware gate.
+ *
+ * Default is ON. Only the exact string "1" disables it — not "true", not "yes", not
+ * any non-empty value — so a stray or half-written variable fails closed.
+ *
+ * PRD MVP item 2 / US-A3 is a hard requirement for the real deployment. This flag
+ * must not be set on the org's production project; it is registered as launch debt.
+ */
+export function mfaGateEnabled(): boolean {
+  return process.env.DEV_DISABLE_MFA !== "1";
+}

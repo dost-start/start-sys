@@ -219,6 +219,8 @@ Feature folders (`app/(admin)/members/` ↔ `lib/members/`) are the concrete imp
 
 ### 4.1 Membership application (incl. Google Drive upload)
 
+> **Amended 2026-09-05/06 — the CRRD SRS membership form (migrations `0037`–`0041`).** The application form is the SRS's: sex, Facebook account link, DOST scholarship award and year of award, **university and program chosen from two new reference tables** (`universities` by region, `programs` — the closed thirteen-item list, closing OQ-17), year level 1–5, and **two documents** — the latest registration form (the proof columns) and the **Notice of Award** (four `noa_*` columns on `applications`, mirrored contract). Address and school ID are no longer collected; the columns stay. New member IDs pad to four digits (`2026-0001`). Where the text below still describes the single-document, address-bearing form, this note wins.
+
 PRD flow: *portal → personal + academic data → **upload proof of enrollment** → saved to DB → success + pending → admin review → member ID generated → CRRD sends acceptance emails after the application period.*
 
 | # | Actor | Step | Enforcement |

@@ -297,8 +297,8 @@ select ok(
 );
 
 select ok(
-  (select not (v ? 'proof_drive_file_id') from fx_detail where k = 'a1'),
-  'proof_drive_file_id is STRIPPED, even though 0027 grants it for SELECT. That asymmetry is '
+  (select not (v ? 'proof_drive_file_id') and not (v ? 'noa_drive_file_id') from fx_detail where k = 'a1'),
+  'proof_drive_file_id AND noa_drive_file_id are STRIPPED, even though the grants allow SELECT. That asymmetry is '
   'deliberate: the grant exists for the proxy''s server-side lookup, and this output goes to '
   'a SCREEN, where a provider file id is a durable handle in the DOM'
 );

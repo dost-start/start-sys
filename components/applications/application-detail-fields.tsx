@@ -1,21 +1,30 @@
-// Renders every submitted field of one application (BUILD_PLAN S4-T19; PRD US-C1:
-// "the detail view shows every submitted field"). A Server Component, NOT `'use
-// client'` — the data it holds (`applicant_email`, the payload's birthdate, contact
-// number, address, school ID) is the densest PII in the schema and must never enter a
-// client bundle (CONVENTIONS.md §1.3).
+// ─────────────────────────────────────────────────────────────────────────────
+// Every submitted field, rendered in the same order as /apply (PRD US-C1: "the
+// detail view shows every submitted field"). A Server Component — the detail object
+// comes from the audited get_application_detail() RPC and never enters a client
+// bundle. The three uuid choices (region, university, program) are resolved to names
+// through lookup maps the page builds from the public reference tables; an id whose
+// row is gone falls back to the raw id rather than to nothing, so a reviewer always
+// sees what was submitted.
 //
-// The section order mirrors `/apply`'s four sections (personal → academic →
-// membership → consent) so a reviewer reading this page recognizes the same shape the
-// applicant filled in.
-//
-// Input is the raw jsonb `get_application_detail()` returns: `to_jsonb(applications
-// row) - proof_web_view_link - proof_drive_file_id`. Every accessor below tolerates a
-// missing or wrongly-typed key rather than throwing — the payload is a jsonb column
-// with no schema of its own at the database layer, so a field this component expects
-// is a convention (`APPLICATION_PAYLOAD_KEYS`), not a guarantee.
+// Pre-0038 payloads may still carry an address block and a school ID; they are shown
+// under "Legacy fields" only when present, so the review of an old application loses
+// nothing and a new one is not cluttered with empty rows.
+// ─────────────────────────────────────────────────────────────────────────────
+
 import type { ReactNode } from "react";
 
-import type { ApplicationPayload } from "@/lib/applications/schema";
+import {
+  SCHOLARSHIP_AWARD_LABELS,
+  SEX_LABELS,
+  type ApplicationPayload,
+} from "@/lib/applications/schema";
+
+export type DetailLookups = {
+  regions: Record<string, string>;
+  universities: Record<string, string>;
+  programs: Record<string, string>;
+};
 
 function readString(record: Record<string, unknown>, key: string): string | null {
   const value = record[key];
@@ -28,6 +37,32 @@ function readPayload(detail: Record<string, unknown>): ApplicationPayload {
     return payload as ApplicationPayload;
   }
   return {};
+}
+
+function text(payload: ApplicationPayload, key: string): string | null {
+  const value = payload[key];
+  if (typeof value === "string") return value.length > 0 ? value : null;
+  if (typeof value === "number") return String(value);
+  return null;
+}
+
+function lookup(map: Record<string, string>, id: string | null): string | null {
+  if (!id) return null;
+  return map[id] ?? id;
+}
+
+/** Age at review time, computed from the birthdate (SRS: "dynamic calculation"). */
+function ageFrom(birthdate: string | null): string | null {
+  if (!birthdate) return null;
+  const born = new Date(`${birthdate}T00:00:00Z`);
+  if (Number.isNaN(born.getTime())) return null;
+  const now = new Date();
+  let age = now.getUTCFullYear() - born.getUTCFullYear();
+  const beforeBirthday =
+    now.getUTCMonth() < born.getUTCMonth() ||
+    (now.getUTCMonth() === born.getUTCMonth() && now.getUTCDate() < born.getUTCDate());
+  if (beforeBirthday) age -= 1;
+  return age >= 0 ? String(age) : null;
 }
 
 function Field({ label, value }: { label: string; value: string | number | null }) {
@@ -48,58 +83,90 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-export function ApplicationDetailFields({ detail }: { detail: Record<string, unknown> }) {
+export function ApplicationDetailFields({
+  detail,
+  lookups,
+}: {
+  detail: Record<string, unknown>;
+  lookups: DetailLookups;
+}) {
   const payload = readPayload(detail);
   const givenName = readString(detail, "applicant_given_name");
   const familyName = readString(detail, "applicant_family_name");
   const email = readString(detail, "applicant_email");
+  const birthdate = text(payload, "birthdate");
+
+  const sex = text(payload, "sex");
+  const award = text(payload, "scholarship_award");
+  const regionId = text(payload, "region_id");
+  const regionName = lookup(lookups.regions, regionId);
+
+  const legacy: Array<[string, string | null]> = [
+    ["Street address", text(payload, "address_line")],
+    ["City / municipality", text(payload, "city_municipality")],
+    ["Province", text(payload, "province")],
+    ["Postal code", text(payload, "postal_code")],
+    ["School (free text)", text(payload, "school")],
+    ["School ID number", text(payload, "school_id_no")],
+    ["Program (free text)", text(payload, "program")],
+  ].filter((entry): entry is [string, string] => entry[1] !== null);
 
   return (
     <div className="space-y-4">
       <Section title="Personal information">
         <Field label="First name" value={givenName} />
-        <Field label="Middle name" value={(payload.middle_name as string | null) ?? null} />
+        <Field label="Middle name" value={text(payload, "middle_name")} />
         <Field label="Last name" value={familyName} />
-        <Field label="Suffix" value={(payload.suffix as string | null) ?? null} />
-        <Field label="Email address" value={email} />
-        <Field label="Date of birth" value={(payload.birthdate as string | null) ?? null} />
-        <Field label="Contact number" value={(payload.contact_number as string | null) ?? null} />
-        <Field label="Street address" value={(payload.address_line as string | null) ?? null} />
+        <Field label="Suffix" value={text(payload, "suffix")} />
         <Field
-          label="City / municipality"
-          value={(payload.city_municipality as string | null) ?? null}
+          label="Sex"
+          value={sex && sex in SEX_LABELS ? SEX_LABELS[sex as keyof typeof SEX_LABELS] : sex}
         />
-        <Field label="Province" value={(payload.province as string | null) ?? null} />
-        <Field label="Postal code" value={(payload.postal_code as string | null) ?? null} />
+        <Field label="Date of birth" value={birthdate} />
+        <Field label="Age" value={ageFrom(birthdate)} />
+        <Field label="Email address" value={email} />
+        <Field label="Contact number" value={text(payload, "contact_number")} />
+        <Field label="Facebook account" value={text(payload, "facebook_account")} />
       </Section>
 
-      <Section title="Academic information">
-        <Field label="School" value={(payload.school as string | null) ?? null} />
-        <Field label="School ID number" value={(payload.school_id_no as string | null) ?? null} />
-        <Field label="Degree program" value={(payload.program as string | null) ?? null} />
-        <Field label="Year level" value={(payload.year_level as number | null) ?? null} />
+      <Section title="Scholarship and academic information">
         <Field
-          label="Expected graduation year"
-          value={(payload.expected_grad_year as number | null) ?? null}
+          label="DOST scholarship award"
+          value={
+            award && award in SCHOLARSHIP_AWARD_LABELS
+              ? SCHOLARSHIP_AWARD_LABELS[award as keyof typeof SCHOLARSHIP_AWARD_LABELS]
+              : award
+          }
         />
+        <Field label="Year of award" value={text(payload, "award_year")} />
+        <Field
+          label="University"
+          value={lookup(lookups.universities, text(payload, "university_id"))}
+        />
+        <Field label="Program" value={lookup(lookups.programs, text(payload, "program_id"))} />
+        <Field label="Year level" value={text(payload, "year_level")} />
+        <Field label="Expected year of graduation" value={text(payload, "expected_grad_year")} />
       </Section>
 
       <Section title="Membership information">
-        {/* region_id is a uuid FK, not a name — the detail RPC returns the raw row and
-            joining `regions` is a display nicety, not a PII concern, but it is not in
-            scope for this pass. Rendered as-is rather than guessed at. */}
-        <Field label="Region" value={(payload.region_id as string | null) ?? null} />
+        <Field label="Region" value={regionName} />
       </Section>
 
-      <Section title="Consent">
+      {legacy.length > 0 ? (
+        <Section title="Legacy fields (submitted before the 2026-09-05 form)">
+          {legacy.map(([label, value]) => (
+            <Field key={label} label={label} value={value} />
+          ))}
+        </Section>
+      ) : null}
+
+      <Section title="Consent and certification">
         <Field
           label="Privacy notice version agreed to"
-          value={(payload.consent_privacy_notice_version as string | null) ?? null}
+          value={text(payload, "consent_privacy_notice_version")}
         />
-        <Field
-          label="Consent recorded at"
-          value={(payload.consent_given_at as string | null) ?? null}
-        />
+        <Field label="Consent recorded at" value={text(payload, "consent_given_at")} />
+        <Field label="Accuracy certified at" value={text(payload, "certified_accuracy_at")} />
       </Section>
     </div>
   );

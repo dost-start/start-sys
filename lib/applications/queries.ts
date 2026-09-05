@@ -284,6 +284,9 @@ export type ProofRef = {
   proof_drive_file_id: string | null;
   /** The STORED type, re-verified from provider metadata. Never the client's claim. */
   proof_mime_type: string | null;
+  /** The Notice of Award — the second document (0040). Same contract as the two above. */
+  noa_drive_file_id: string | null;
+  noa_mime_type: string | null;
 };
 
 /**
@@ -306,7 +309,7 @@ export async function getProofRef(
 ): Promise<ProofRef | null> {
   const { data, error } = await ctx.supabase
     .from("applications")
-    .select("id, proof_drive_file_id, proof_mime_type")
+    .select("id, proof_drive_file_id, proof_mime_type, noa_drive_file_id, noa_mime_type")
     .eq("id", applicationId)
     .maybeSingle();
 

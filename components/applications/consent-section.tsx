@@ -64,6 +64,24 @@ export function ConsentSection() {
         </span>
       </label>
       <FieldError message={errors.consent_privacy_notice?.message} />
+
+      {/* SRS 2026-09-05: "A tick box certifying accuracy of all information and confirmation
+          of understanding that falsification may lead to banning from future START
+          activities." Enforced server-side too — z.literal(true) in the shared schema. */}
+      <label className="flex items-start gap-3 text-sm leading-relaxed">
+        <input
+          type="checkbox"
+          className="mt-0.5 size-4 shrink-0 rounded border-input"
+          aria-invalid={errors.certify_accuracy ? "true" : "false"}
+          {...register("certify_accuracy")}
+        />
+        <span>
+          I certify that all the information I provided is accurate, and I understand that
+          falsification of any information or document may lead to my being banned from future START
+          activities.
+        </span>
+      </label>
+      <FieldError message={errors.certify_accuracy?.message} />
     </FormSection>
   );
 }

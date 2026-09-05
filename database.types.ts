@@ -76,6 +76,10 @@ export type Database = {
           consented_at: string | null
           created_at: string
           id: string
+          noa_drive_file_id: string | null
+          noa_mime_type: string | null
+          noa_size_bytes: number | null
+          noa_verified_at: string | null
           payload: Json
           person_id: string | null
           privacy_notice_version: string | null
@@ -101,6 +105,10 @@ export type Database = {
           consented_at?: string | null
           created_at?: string
           id?: string
+          noa_drive_file_id?: string | null
+          noa_mime_type?: string | null
+          noa_size_bytes?: number | null
+          noa_verified_at?: string | null
           payload?: Json
           person_id?: string | null
           privacy_notice_version?: string | null
@@ -126,6 +134,10 @@ export type Database = {
           consented_at?: string | null
           created_at?: string
           id?: string
+          noa_drive_file_id?: string | null
+          noa_mime_type?: string | null
+          noa_size_bytes?: number | null
+          noa_verified_at?: string | null
           payload?: Json
           person_id?: string | null
           privacy_notice_version?: string | null
@@ -704,10 +716,12 @@ export type Database = {
       people: {
         Row: {
           address_line: string | null
+          award_year: number | null
           birthdate: string | null
           city_municipality: string | null
           contact_number: string | null
           created_at: string
+          facebook_account: string | null
           family_name: string
           given_name: string
           id: string
@@ -716,19 +730,27 @@ export type Database = {
           middle_name: string | null
           personal_email: string | null
           postal_code: string | null
+          program_id: string | null
           province: string | null
           redacted_at: string | null
+          scholarship_award:
+            | Database["public"]["Enums"]["scholarship_award"]
+            | null
           school: string | null
           school_id_no: string | null
+          sex: Database["public"]["Enums"]["sex_option"] | null
           suffix: string | null
+          university_id: string | null
           updated_at: string
         }
         Insert: {
           address_line?: string | null
+          award_year?: number | null
           birthdate?: string | null
           city_municipality?: string | null
           contact_number?: string | null
           created_at?: string
+          facebook_account?: string | null
           family_name: string
           given_name: string
           id?: string
@@ -737,19 +759,27 @@ export type Database = {
           middle_name?: string | null
           personal_email?: string | null
           postal_code?: string | null
+          program_id?: string | null
           province?: string | null
           redacted_at?: string | null
+          scholarship_award?:
+            | Database["public"]["Enums"]["scholarship_award"]
+            | null
           school?: string | null
           school_id_no?: string | null
+          sex?: Database["public"]["Enums"]["sex_option"] | null
           suffix?: string | null
+          university_id?: string | null
           updated_at?: string
         }
         Update: {
           address_line?: string | null
+          award_year?: number | null
           birthdate?: string | null
           city_municipality?: string | null
           contact_number?: string | null
           created_at?: string
+          facebook_account?: string | null
           family_name?: string
           given_name?: string
           id?: string
@@ -758,14 +788,35 @@ export type Database = {
           middle_name?: string | null
           personal_email?: string | null
           postal_code?: string | null
+          program_id?: string | null
           province?: string | null
           redacted_at?: string | null
+          scholarship_award?:
+            | Database["public"]["Enums"]["scholarship_award"]
+            | null
           school?: string | null
           school_id_no?: string | null
+          sex?: Database["public"]["Enums"]["sex_option"] | null
           suffix?: string | null
+          university_id?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "people_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "people_university_id_fkey"
+            columns: ["university_id"]
+            isOneToOne: false
+            referencedRelation: "universities"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       privacy_notice_versions: {
         Row: {
@@ -788,6 +839,33 @@ export type Database = {
           effective_at?: string
           url?: string
           version?: string
+        }
+        Relationships: []
+      }
+      programs: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          sort_order: number
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          sort_order: number
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          sort_order?: number
         }
         Relationships: []
       }
@@ -991,6 +1069,51 @@ export type Database = {
           status?: Database["public"]["Enums"]["term_status"]
         }
         Relationships: []
+      }
+      universities: {
+        Row: {
+          city_municipality: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          kind: string
+          name: string
+          region_id: string
+        }
+        Insert: {
+          city_municipality?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          kind: string
+          name: string
+          region_id: string
+        }
+        Update: {
+          city_municipality?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          kind?: string
+          name?: string
+          region_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "universities_region_id_fkey"
+            columns: ["region_id"]
+            isOneToOne: false
+            referencedRelation: "regions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "universities_region_id_fkey"
+            columns: ["region_id"]
+            isOneToOne: false
+            referencedRelation: "v_membership_region_counts"
+            referencedColumns: ["region_id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
@@ -1266,6 +1389,9 @@ export type Database = {
           p_app_id: string
           p_file_ref: string
           p_mime: string
+          p_noa_mime: string
+          p_noa_ref: string
+          p_noa_size: number
           p_size: number
           p_token: string
         }
@@ -1401,6 +1527,13 @@ export type Database = {
         | "regional_rep"
         | "member"
       recipient_status: "queued" | "sent" | "failed" | "suppressed"
+      scholarship_award:
+        | "ra_7687"
+        | "merit"
+        | "jlss_ra_7687"
+        | "jlss_merit"
+        | "jlss_ra_10612"
+      sex_option: "male" | "female" | "prefer_not_to_say"
       term_status: "draft" | "active" | "archived"
     }
     CompositeTypes: {
@@ -1574,6 +1707,14 @@ export const Constants = {
         "member",
       ],
       recipient_status: ["queued", "sent", "failed", "suppressed"],
+      scholarship_award: [
+        "ra_7687",
+        "merit",
+        "jlss_ra_7687",
+        "jlss_merit",
+        "jlss_ra_10612",
+      ],
+      sex_option: ["male", "female", "prefer_not_to_say"],
       term_status: ["draft", "active", "archived"],
     },
   },

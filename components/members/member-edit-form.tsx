@@ -23,6 +23,12 @@ import { Label } from "@/components/ui/label";
 import { updateMemberRecord } from "@/lib/members/actions";
 import { memberUpdateSchema, type MemberUpdateInput } from "@/lib/members/schema";
 import type { MemberRecord } from "@/lib/members/types";
+import {
+  SCHOLARSHIP_AWARD_LABELS,
+  SCHOLARSHIP_AWARDS,
+  SEX_LABELS,
+  SEX_OPTIONS,
+} from "@/lib/applications/schema";
 
 function toDefault(value: string | null): string {
   return value ?? "";
@@ -74,6 +80,12 @@ export function MemberEditForm({ record }: { record: MemberRecord }) {
       postal_code: toDefault(record.postal_code),
       school: toDefault(record.school),
       school_id_no: toDefault(record.school_id_no),
+      sex: (record.sex ?? "") as MemberUpdateInput["sex"],
+      facebook_account: toDefault(record.facebook_account),
+      scholarship_award: (record.scholarship_award ?? "") as MemberUpdateInput["scholarship_award"],
+      award_year: (record.award_year === null
+        ? ""
+        : String(record.award_year)) as unknown as MemberUpdateInput["award_year"],
     },
   });
 
@@ -199,6 +211,56 @@ export function MemberEditForm({ record }: { record: MemberRecord }) {
           <Label htmlFor="school_id_no">School ID number</Label>
           <input id="school_id_no" className={inputClass} {...register("school_id_no")} />
           <FieldError message={errors.school_id_no?.message} />
+        </div>
+      </div>
+
+      {/* SRS 2026-09-05 profile fields (0038). University and program are chosen from the
+          reference tables on the application form and corrected here by id is not a
+          reviewer's job — they stay read-only in the panel above. */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label htmlFor="sex">Sex</Label>
+          <select id="sex" className={inputClass} {...register("sex")}>
+            <option value="">—</option>
+            {SEX_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {SEX_LABELS[option]}
+              </option>
+            ))}
+          </select>
+          <FieldError message={errors.sex?.message} />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="facebook_account">Facebook account link</Label>
+          <input
+            id="facebook_account"
+            type="url"
+            className={inputClass}
+            {...register("facebook_account")}
+          />
+          <FieldError message={errors.facebook_account?.message} />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="scholarship_award">DOST scholarship award</Label>
+          <select id="scholarship_award" className={inputClass} {...register("scholarship_award")}>
+            <option value="">—</option>
+            {SCHOLARSHIP_AWARDS.map((award) => (
+              <option key={award} value={award}>
+                {SCHOLARSHIP_AWARD_LABELS[award]}
+              </option>
+            ))}
+          </select>
+          <FieldError message={errors.scholarship_award?.message} />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="award_year">Year of award</Label>
+          <input
+            id="award_year"
+            inputMode="numeric"
+            className={inputClass}
+            {...register("award_year")}
+          />
+          <FieldError message={errors.award_year?.message} />
         </div>
       </div>
 

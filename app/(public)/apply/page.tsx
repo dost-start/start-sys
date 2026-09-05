@@ -14,6 +14,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 
 import { ApplicationForm } from "./application-form";
 import type { RegionOption } from "@/components/applications/membership-section";
+import type { ProgramOption, UniversityOption } from "@/components/applications/academic-section";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
@@ -42,6 +43,33 @@ async function listApplyRegions(): Promise<RegionOption[]> {
   return data;
 }
 
+/**
+ * The two SRS choice lists (0037), read as anon — both tables grant SELECT to anon so the
+ * public form can render before anyone signs in. Inactive rows are hidden from new
+ * applicants but stay readable by reviewers.
+ */
+async function listApplyUniversities(): Promise<UniversityOption[]> {
+  const supabase = await createServerSupabase();
+  const { data, error } = await supabase
+    .from("universities")
+    .select("id, name, region_id, city_municipality")
+    .eq("is_active", true)
+    .order("name", { ascending: true });
+  if (error || !data) return [];
+  return data;
+}
+
+async function listApplyPrograms(): Promise<ProgramOption[]> {
+  const supabase = await createServerSupabase();
+  const { data, error } = await supabase
+    .from("programs")
+    .select("id, name")
+    .eq("is_active", true)
+    .order("sort_order", { ascending: true });
+  if (error || !data) return [];
+  return data;
+}
+
 export default async function ApplyPage() {
   const windowState = await getPublicWindowState();
 
@@ -53,7 +81,11 @@ export default async function ApplyPage() {
     );
   }
 
-  const regions = await listApplyRegions();
+  const [regions, universities, programs] = await Promise.all([
+    listApplyRegions(),
+    listApplyUniversities(),
+    listApplyPrograms(),
+  ]);
 
   return (
     <main className="flex min-h-screen flex-col items-center bg-muted/30 px-4 py-10 sm:px-6">
@@ -63,12 +95,12 @@ export default async function ApplyPage() {
             START-DOST Membership Application
           </h1>
           <p className="text-sm text-muted-foreground">
-            Fill in your details below — this takes about ten minutes. Have your Certificate of
-            Registration or scholar ID ready to upload.
+            Fill in your details below — this takes about ten minutes. Have your latest registration
+            form and your DOST-SEI Notice of Award ready to upload.
           </p>
         </header>
 
-        <ApplicationForm regions={regions} />
+        <ApplicationForm regions={regions} universities={universities} programs={programs} />
       </div>
     </main>
   );

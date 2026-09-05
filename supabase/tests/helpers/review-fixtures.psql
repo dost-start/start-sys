@@ -216,6 +216,7 @@ insert into public.applications (
   payload,
   proof_drive_file_id, proof_mime_type, proof_size_bytes, proof_verified_at,
   proof_web_view_link,
+  noa_drive_file_id, noa_mime_type, noa_size_bytes, noa_verified_at,
   person_id, reviewed_by, reviewed_at, review_note,
   submitted_at, consented_at
 )
@@ -227,6 +228,7 @@ values
    pg_temp.fx_app_payload('NCR', 2, 2029),
    'ref-review-alpha', 'application/pdf', 524288, now(),
    'https://drive.example.invalid/file/ref-review-alpha/view',
+   'noa-review-alpha', 'application/pdf', 131072, now(),
    null, null, null, null,
    now() - interval '3 days', now()),
 
@@ -236,6 +238,7 @@ values
    pg_temp.fx_app_payload('R07', 3, 2028),
    'ref-review-bravo', 'image/jpeg', 6291456, now(),
    'https://drive.example.invalid/file/ref-review-bravo/view',
+   'noa-review-bravo', 'application/pdf', 131072, now(),
    null, null, null, null,
    now() - interval '2 days', now()),
 
@@ -245,6 +248,7 @@ values
    pg_temp.fx_app_payload('NCR', 2, 2029),
    'ref-review-charlie', 'application/pdf', 262144, now(),
    'https://drive.example.invalid/file/ref-review-charlie/view',
+   'noa-review-charlie', 'application/pdf', 131072, now(),
    '00000000-0000-4000-b000-000000000004',
    '00000000-0000-4000-a000-000000000003', now() - interval '1 day', null,
    now() - interval '5 days', now()),
@@ -255,6 +259,7 @@ values
    pg_temp.fx_app_payload('R07', 1, 2030),
    'ref-review-delta', 'application/pdf', 131072, now(),
    'https://drive.example.invalid/file/ref-review-delta/view',
+   'noa-review-delta', 'application/pdf', 131072, now(),
    null,
    '00000000-0000-4000-a000-000000000001', now() - interval '1 day',
    'Proof of enrollment did not name the applicant.',
@@ -267,6 +272,7 @@ values
    pg_temp.fx_app_payload('NCR', 4, 2027),
    'ref-review-echo', 'application/pdf', 393216, now(),
    'https://drive.example.invalid/file/ref-review-echo/view',
+   'noa-review-echo', 'application/pdf', 131072, now(),
    null, null, null, null,
    now() - interval '1 day', now())
 on conflict (id) do nothing;

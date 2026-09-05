@@ -23,12 +23,18 @@ const UNVIEWABLE_MIMES = new Set(["image/heic", "image/heif"]);
 export function ProofDocumentViewer({
   applicationId,
   mimeType,
+  doc = "registration",
 }: {
   applicationId: string;
   mimeType: string | null;
+  /** Which document the proxy serves — the registration form (default) or the NOA. */
+  doc?: "registration" | "noa";
 }) {
   const [imageFailed, setImageFailed] = useState(false);
-  const proofUrl = `/api/applications/${applicationId}/proof`;
+  const proofUrl =
+    doc === "noa"
+      ? `/api/applications/${applicationId}/proof?doc=noa`
+      : `/api/applications/${applicationId}/proof`;
 
   if (!mimeType) {
     return (

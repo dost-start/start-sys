@@ -87,7 +87,7 @@ function unauthenticated(): NextResponse {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse | Response> {
   const { id } = await params;
@@ -108,17 +108,20 @@ export async function GET(
 
   // ── 2 — the RLS-checked SELECT. THIS is the authorization. ─────────────────
   // A malformed uuid arrives here as 22P02 and takes the same 404 as a hidden row.
+  // Which of the two documents (0040). Anything but "noa" is the registration form.
+  const doc = new URL(request.url).searchParams.get("doc") === "noa" ? "noa" : "registration";
+
   const { data: row, error: selectError } = await supabase
     .from("applications")
-    .select("id, proof_drive_file_id, proof_mime_type")
+    .select("id, proof_drive_file_id, proof_mime_type, noa_drive_file_id, noa_mime_type")
     .eq("id", id)
     .maybeSingle();
 
   if (selectError !== null || row === null) return notFound();
 
   // ── 3 — no stored pointer means the upload never completed ─────────────────
-  const storageRef = row.proof_drive_file_id;
-  const storedMime = row.proof_mime_type;
+  const storageRef = doc === "noa" ? row.noa_drive_file_id : row.proof_drive_file_id;
+  const storedMime = doc === "noa" ? row.noa_mime_type : row.proof_mime_type;
   if (storageRef === null || storageRef === "") return notFound();
 
   // The stored type is validated BEFORE the audit write, so a corrupt row does not

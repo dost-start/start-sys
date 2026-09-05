@@ -67,27 +67,27 @@ insert into public.applications (
   id, term_id, status,
   applicant_email, applicant_given_name, applicant_family_name,
   payload, proof_drive_file_id, proof_mime_type, proof_size_bytes, proof_verified_at,
-  submitted_at, consented_at
+  noa_drive_file_id, submitted_at, consented_at
 )
 values
   ('00000000-0000-4000-8000-000000000211', pg_temp.fx_active_term(), 'pending',
    'foxtrot.applicant@fixture.start-sys.test', 'Foxtrot', 'Applicant',
-   pg_temp.fx_app_payload('NCR', 2, 2029), 'ref-b1', 'application/pdf', 101, now(), now(), now()),
+   pg_temp.fx_app_payload('NCR', 2, 2029), 'ref-b1', 'application/pdf', 101, now(), 'noa-b1', now(), now()),
   ('00000000-0000-4000-8000-000000000212', pg_temp.fx_active_term(), 'pending',
    'golf.applicant@fixture.start-sys.test', 'Golf', 'Applicant',
-   pg_temp.fx_app_payload('R07', 2, 2029), 'ref-b2', 'application/pdf', 102, now(), now(), now()),
+   pg_temp.fx_app_payload('R07', 2, 2029), 'ref-b2', 'application/pdf', 102, now(), 'noa-b2', now(), now()),
   ('00000000-0000-4000-8000-000000000213', pg_temp.fx_active_term(), 'pending',
    'hotel.applicant@fixture.start-sys.test', 'Hotel', 'Applicant',
-   pg_temp.fx_app_payload('NCR', 2, 2029), 'ref-b3', 'application/pdf', 103, now(), now(), now()),
+   pg_temp.fx_app_payload('NCR', 2, 2029), 'ref-b3', 'application/pdf', 103, now(), 'noa-b3', now(), now()),
   ('00000000-0000-4000-8000-000000000214', pg_temp.fx_active_term(), 'pending',
    'india.applicant@fixture.start-sys.test', 'India', 'Applicant',
-   pg_temp.fx_app_payload('R07', 2, 2029), 'ref-b4', 'application/pdf', 104, now(), now(), now()),
+   pg_temp.fx_app_payload('R07', 2, 2029), 'ref-b4', 'application/pdf', 104, now(), 'noa-b4', now(), now()),
   ('00000000-0000-4000-8000-000000000215', pg_temp.fx_active_term(), 'pending',
    'juliett.applicant@fixture.start-sys.test', 'Juliett', 'Applicant',
-   pg_temp.fx_app_payload('NCR', 2, 2029), 'ref-b5', 'application/pdf', 105, now(), now(), now()),
+   pg_temp.fx_app_payload('NCR', 2, 2029), 'ref-b5', 'application/pdf', 105, now(), 'noa-b5', now(), now()),
   ('00000000-0000-4000-8000-000000000216', pg_temp.fx_active_term(), 'draft',
    'kilo.applicant@fixture.start-sys.test', 'Kilo', 'Applicant',
-   pg_temp.fx_app_payload('NCR', 2, 2029), 'ref-b6', 'application/pdf', 106, now(), null, now());
+   pg_temp.fx_app_payload('NCR', 2, 2029), 'ref-b6', 'application/pdf', 106, now(), 'noa-b6', null, now());
 
 -- Scratchpads. CREATED by the session role and only WRITTEN while impersonating — a fixture
 -- cannot CREATE in this session's temp schema (auth.psql grants USAGE only, deliberately),
@@ -124,8 +124,8 @@ select matches(
 -- an application reviewed in July still joins the term that opened in June — never from
 -- now(). The 2026 counter is fresh, so the first approval of the term is 001.
 select is(
-  (select v from fx_ids where k = 'a2_first'), '2026-001',
-  'the first approval of the 2026-2027 term mints 2026-001 — join_year is derived from the '
+  (select v from fx_ids where k = 'a2_first'), '2026-0001',
+  'the first approval of the 2026-2027 term mints 2026-0001 (four digits since 0039) — join_year is derived from the '
   'TERM, not from the clock, and the counter starts at 1'
 );
 

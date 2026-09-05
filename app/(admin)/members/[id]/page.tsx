@@ -38,6 +38,19 @@ export default async function MemberDetailPage({ params }: { params: Promise<{ i
 
   const result = await getMemberRecord(ctx, id);
 
+  // Names for the two SRS choice columns (0037/0038). Public reference tables, read as
+  // the caller; an id whose row is gone falls back to the raw id in the panel.
+  const [universityRows, programRows] = await Promise.all([
+    ctx.supabase.from("universities").select("id, name"),
+    ctx.supabase.from("programs").select("id, name"),
+  ]);
+  const toMap = (rows: { id: string; name: string }[] | null): Record<string, string> =>
+    Object.fromEntries((rows ?? []).map((r) => [r.id, r.name]));
+  const lookups = {
+    universities: toMap(universityRows.data),
+    programs: toMap(programRows.data),
+  };
+
   if (!result.ok) {
     if (isMissingAcknowledgement(result.error)) {
       return (
@@ -146,7 +159,7 @@ export default async function MemberDetailPage({ params }: { params: Promise<{ i
         </div>
       ) : null}
 
-      <MemberSensitivePanel record={record} />
+      <MemberSensitivePanel record={record} lookups={lookups} />
       <MemberEditForm record={record} />
       <MemberTermHistory memberId={record.member_id} rows={termHistory} />
       <MemberAuditTrail entries={auditTrail} />

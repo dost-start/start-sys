@@ -157,11 +157,12 @@ select set_eq(
     'id', 'term_id', 'status',
     'applicant_given_name', 'applicant_family_name',
     'proof_drive_file_id', 'proof_mime_type', 'proof_size_bytes', 'proof_verified_at',
+    'noa_drive_file_id', 'noa_mime_type', 'noa_size_bytes', 'noa_verified_at',
     'person_id', 'reviewed_by', 'reviewed_at', 'review_note',
     'submitted_at', 'created_at'
   ]::text[],
-  'EXACT SELECT column set on applications is the FIFTEEN renderable columns and nothing '
-  'else (0027). A new column, or a widened grant, fails here'
+  'EXACT SELECT column set on applications is the NINETEEN renderable columns and nothing '
+  'else (0027 + the four noa_* columns of 0040). A new column, or a widened grant, fails here'
 );
 
 

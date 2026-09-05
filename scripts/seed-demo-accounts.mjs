@@ -166,6 +166,22 @@ async function main() {
       "No active term — did the migrations/seed apply? Run `supabase db push` first.",
     );
 
+  // SRS choice lists (0037): one university and one program for the demo applications.
+  const demoUniversityId =
+    (
+      await must(
+        admin
+          .from("universities")
+          .select("id")
+          .eq("name", "University of the Philippines Diliman")
+          .maybeSingle(),
+        "demo university",
+      )
+    )?.id ?? null;
+  const demoProgramId =
+    (await must(admin.from("programs").select("id").eq("code", "CS").maybeSingle(), "demo program"))
+      ?.id ?? null;
+
   const creds = [];
 
   // ── retire pre-0036 demo accounts ──────────────────────────────────────────
@@ -347,21 +363,24 @@ async function main() {
           payload: {
             birthdate: "2005-06-01",
             contact_number: "+639171112233",
-            address_line: `${i} Applicant Ave`,
-            city_municipality: "Pasig",
-            province: "Metro Manila",
-            postal_code: "1600",
-            school: "Demo State University",
-            school_id_no: `APP-${2000 + i}`,
+            facebook_account: `https://facebook.com/demo.applicant${i}`,
+            sex: i % 2 === 0 ? "female" : "male",
+            scholarship_award: "ra_7687",
+            award_year: 2024,
+            university_id: demoUniversityId,
+            program_id: demoProgramId,
             region_id: regionId("NCR"),
             year_level: 1,
             expected_grad_year: 2030,
-            program: "BS Computer Science",
           },
           proof_drive_file_id: `fake:demo-${i}`,
           proof_mime_type: "application/pdf",
           proof_size_bytes: 524288,
           proof_verified_at: opens,
+          noa_drive_file_id: `fake:demo-noa-${i}`,
+          noa_mime_type: "application/pdf",
+          noa_size_bytes: 262144,
+          noa_verified_at: opens,
           submitted_at: opens,
           consented_at: opens,
         },

@@ -310,6 +310,7 @@ select lives_ok(
   $$ update public.applications
         set status = 'pending',
             proof_drive_file_id = 'ref-093-ok',
+            noa_drive_file_id = 'noa-093-ok',
             submitted_at = now()
       where id = '00000000-0000-4000-8000-000000000932' $$,
   'ANTI-VACUITY CONTROL: a draft that DID carry consent at insert flips to pending cleanly '

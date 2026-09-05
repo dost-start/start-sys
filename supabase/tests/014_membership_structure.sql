@@ -120,8 +120,8 @@ select lives_ok(
   $$ insert into public.memberships (person_id, term_id, region_id, year_level)
      select '00000000-0000-4000-d000-000000000002',
             (select id from public.terms where label = '2091-2092'),
-            (select id from public.regions where code = 'ZZTESTB'), 8 $$,
-  'year_level 8 is accepted — the range is inclusive at both ends'
+            (select id from public.regions where code = 'ZZTESTB'), 5 $$,
+  'year_level 5 is accepted — the range is inclusive at both ends (1..5 since 0038, the SRS form)'
 );
 
 -- 7 — the sole input to the renewal-eligibility predicate (PRD US-G7, OQ-3).

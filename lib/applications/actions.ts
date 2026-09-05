@@ -79,10 +79,13 @@ export type StartApplicationResult = {
    * (S3-T19).
    */
   uploadToken: string;
-  /** Where the browser PUTs the bytes. Short-lived, one file, one folder. */
+  /** Where the browser PUTs the registration form. Short-lived, one file, one folder. */
   uploadUrl: string;
-  /** Provider-opaque. Echoed back to `finalizeApplication`; never interpreted here. */
+  /** Provider-opaque reference for the registration form; echoed back to finalize. */
   storageRef: string;
+  /** The Notice of Award — the second required document (SRS 2026-09-05, 0040). */
+  noaUploadUrl: string;
+  noaStorageRef: string;
 };
 
 export type FinalizeApplicationResult = {
@@ -196,18 +199,28 @@ export const startApplication = withPublic<StartApplicationInput, StartApplicati
     // any object it produced. The alternative — session first, row second — would
     // create objects with no row pointing at them, which nothing sweeps.
     try {
-      const session = await getDocumentStore().createUploadSession({
+      const store = getDocumentStore();
+      const session = await store.createUploadSession({
         applicationId,
         fileName: input.proof_file_name,
         mimeType: input.proof_mime_type,
         sizeBytes: input.proof_size_bytes,
+        documentKind: "registration",
       });
-
+      const noaSession = await store.createUploadSession({
+        applicationId,
+        fileName: input.noa_file_name,
+        mimeType: input.noa_mime_type,
+        sizeBytes: input.noa_size_bytes,
+        documentKind: "noa",
+      });
       return ok({
         applicationId,
         uploadToken,
         uploadUrl: session.uploadUrl,
         storageRef: session.storageRef,
+        noaUploadUrl: noaSession.uploadUrl,
+        noaStorageRef: noaSession.storageRef,
       });
     } catch (caught) {
       // The store's own message never reaches the applicant: a provider error body can
@@ -244,44 +257,47 @@ export const finalizeApplication = withPublic(
     const store = getDocumentStore();
 
     // ── 1. Never trust the browser about what it uploaded ───────────────────
-    let verified: VerifiedUpload;
-    try {
-      verified = await store.verifyUpload(input.storage_ref);
-    } catch (caught) {
-      if (caught instanceof DocumentRejectedError) {
-        // The file itself is unacceptable — wrong type, oversize, or its magic bytes
-        // contradict what was declared. Remove it: an object nothing will ever point
-        // at is PII with no record and no retention basis.
-        await store.deleteDocument(input.storage_ref).catch(() => undefined);
-        return err<FinalizeApplicationResult>("validation");
+    // Both documents are re-verified from PROVIDER metadata and magic bytes — never the
+    // browser's claim. On any rejection both objects are deleted: the applicant re-picks
+    // both, and the response does not say which one failed (nothing to probe).
+    async function verifyOrNull(ref: string): Promise<VerifiedUpload | "rejected" | "unavailable"> {
+      try {
+        const v = await store.verifyUpload(ref);
+        if (!isAllowedMime(v.mimeType) || v.sizeBytes > MAX_PROOF_BYTES) return "rejected";
+        return v;
+      } catch (caught) {
+        if (caught instanceof DocumentRejectedError) return "rejected";
+        if (caught instanceof DocumentUnavailableError) return "unavailable";
+        return "unavailable";
       }
-      if (caught instanceof DocumentUnavailableError) {
-        // Do NOT delete: we could not reach it, so we do not know what we would be
-        // deleting. The orphan reconciliation in the nightly sweep covers this.
-        return err<FinalizeApplicationResult>("upstream");
-      }
+    }
+
+    const [verified, noaVerified] = await Promise.all([
+      verifyOrNull(input.storage_ref),
+      verifyOrNull(input.noa_storage_ref),
+    ]);
+
+    if (verified === "rejected" || noaVerified === "rejected") {
+      await Promise.all([
+        store.deleteDocument(input.storage_ref).catch(() => undefined),
+        store.deleteDocument(input.noa_storage_ref).catch(() => undefined),
+      ]);
+      return err<FinalizeApplicationResult>("validation");
+    }
+    if (verified === "unavailable" || noaVerified === "unavailable") {
       return err<FinalizeApplicationResult>("upstream");
     }
 
-    // Belt to the store's brace. The `DocumentStore` contract promises an allowed MIME
-    // and a checked size, and this asserts it at the boundary anyway — the cost is two
-    // comparisons and the thing it protects is a Certificate of Registration.
-    if (!isAllowedMime(verified.mimeType) || verified.sizeBytes > MAX_PROOF_BYTES) {
-      await store.deleteDocument(input.storage_ref).catch(() => undefined);
-      return err<FinalizeApplicationResult>("validation");
-    }
-
-    // ── 2. The token-gated flip ─────────────────────────────────────────────
-    // Real mime and real size, from the provider. Never `input`'s claim — there is no
-    // claim in `finalizeApplicationSchema` for exactly this reason.
     const { error } = await ctx.supabase.rpc("finalize_application", {
       p_app_id: input.application_id,
       p_token: input.upload_token,
       p_file_ref: input.storage_ref,
       p_mime: verified.mimeType,
       p_size: verified.sizeBytes,
+      p_noa_ref: input.noa_storage_ref,
+      p_noa_mime: noaVerified.mimeType,
+      p_noa_size: noaVerified.sizeBytes,
     });
-
     if (error) {
       const mapped = mapDbError(error);
       // 42501 is a wrong or expired token. Returning `unauthorized` would distinguish

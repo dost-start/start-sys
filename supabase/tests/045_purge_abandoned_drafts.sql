@@ -72,21 +72,22 @@ values ('00000000-0000-4000-d000-00000000000a', '2024-2025',
 insert into public.applications
   (id, term_id, status, applicant_email, applicant_given_name, applicant_family_name,
    payload, proof_drive_file_id, proof_web_view_link,
-   submit_token_hash, submit_token_expires_at, submitted_at, redacted_at, created_at, consented_at)
+   submit_token_hash, submit_token_expires_at, submitted_at, redacted_at, created_at, consented_at,
+   noa_drive_file_id)
 values
   -- D1 — a FRESH draft. One day old. Somebody may still be mid-upload; touching this would
   -- destroy a live application in progress.
   ('00000000-0000-4000-8000-000000000201', pg_temp.fx_active_term(), 'draft',
    'fresh.draft@fixture.start-sys.test', 'Fresh', 'Draft',
    '{"marker":"fresh"}'::jsonb, 'ref-fresh', 'https://example.invalid/fresh',
-   'hash-fresh', now() + interval '1 hour', null, null, now() - interval '1 day', null),
+   'hash-fresh', now() + interval '1 hour', null, null, now() - interval '1 day', null, null),
 
   -- D2 — THE ONE ROW THAT SHOULD BE PURGED. Thirty-one days old, never submitted.
   ('00000000-0000-4000-8000-000000000202', pg_temp.fx_active_term(), 'draft',
    'abandoned.draft@fixture.start-sys.test', 'Abandoned', 'Draft',
    '{"marker":"abandoned","birthdate":"2003-04-15"}'::jsonb,
    'ref-abandoned', 'https://example.invalid/abandoned',
-   'hash-abandoned', now() + interval '1 hour', null, null, now() - interval '31 days', null),
+   'hash-abandoned', now() + interval '1 hour', null, null, now() - interval '31 days', null, null),
 
   -- D3 — old enough, but ALREADY REDACTED. Its payload is left intact on purpose: if the
   -- function selected on payload emptiness rather than on redacted_at, this row would be
@@ -94,7 +95,7 @@ values
   ('00000000-0000-4000-8000-000000000203', pg_temp.fx_active_term(), 'draft',
    'already.redacted@fixture.start-sys.test', 'Already', 'Redacted',
    '{"marker":"already"}'::jsonb, 'ref-already', null,
-   null, null, null, now() - interval '10 days', now() - interval '31 days', null),
+   null, null, null, now() - interval '10 days', now() - interval '31 days', null, null),
 
   -- D4 — old, but SUBMITTED. A pending application is a live record awaiting a decision and
   -- has a retention basis this function has nothing to say about. pending_has_proof (0008)
@@ -103,13 +104,13 @@ values
    'submitted.long.ago@fixture.start-sys.test', 'Submitted', 'LongAgo',
    '{"marker":"pending"}'::jsonb, 'ref-pending', 'https://example.invalid/pending',
    'hash-pending', now() + interval '1 hour', now() - interval '30 days', null,
-   now() - interval '31 days', now()),
+   now() - interval '31 days', now(), 'noa-pending'),
 
   -- D5 — old and abandoned, but in the term that is about to be ARCHIVED. See assertion 13.
   ('00000000-0000-4000-8000-000000000205', '00000000-0000-4000-d000-00000000000a', 'draft',
    'archived.term.draft@fixture.start-sys.test', 'ArchivedTerm', 'Draft',
    '{"marker":"archived"}'::jsonb, 'ref-archived', 'https://example.invalid/archived',
-   'hash-archived', now() + interval '1 hour', null, null, now() - interval '31 days', null);
+   'hash-archived', now() + interval '1 hour', null, null, now() - interval '31 days', null, null);
 
 -- Now freeze that term. From here on, any write touching D5 raises 42501.
 update public.terms

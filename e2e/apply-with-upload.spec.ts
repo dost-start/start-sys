@@ -229,6 +229,7 @@ type ApplicationRow = {
   proof_size_bytes: number | null;
   proof_mime_type: string | null;
   proof_drive_file_id: string | null;
+  noa_drive_file_id: string | null;
   submitted_at: string | null;
 };
 
@@ -238,7 +239,9 @@ async function applicationsFor(
 ): Promise<ApplicationRow[]> {
   const { data, error } = await admin
     .from("applications")
-    .select("id, status, proof_size_bytes, proof_mime_type, proof_drive_file_id, submitted_at")
+    .select(
+      "id, status, proof_size_bytes, proof_mime_type, proof_drive_file_id, noa_drive_file_id, submitted_at",
+    )
     .eq("applicant_email", applicantEmail);
   if (error) throw error;
   return (data ?? []) as ApplicationRow[];
@@ -268,14 +271,13 @@ const applyScreens = {
   email: (page: Page) => page.getByLabel(/e-?mail/i),
   birthdate: (page: Page) => page.getByLabel(/date of birth|birthdate/i),
   contactNumber: (page: Page) => page.getByLabel(/contact number|mobile/i),
-  addressLine: (page: Page) => page.getByLabel(/street address|address line/i),
-  city: (page: Page) => page.getByLabel(/city|municipality/i),
-  province: (page: Page) => page.getByLabel(/province/i),
-  postalCode: (page: Page) => page.getByLabel(/postal code|zip/i),
+  facebook: (page: Page) => page.getByLabel(/facebook/i),
+  sex: (page: Page) => page.getByLabel(/^sex$/i),
 
-  school: (page: Page) => page.getByLabel(/^school$|school name/i),
-  schoolIdNo: (page: Page) => page.getByLabel(/school id/i),
-  program: (page: Page) => page.getByLabel(/program|course|degree/i),
+  scholarshipAward: (page: Page) => page.getByLabel(/scholarship award/i),
+  awardYear: (page: Page) => page.getByLabel(/year of award/i),
+  university: (page: Page) => page.getByLabel(/^university$/i),
+  program: (page: Page) => page.getByLabel(/^program$/i),
   yearLevel: (page: Page) => page.getByLabel(/year level/i),
   expectedGradYear: (page: Page) => page.getByLabel(/graduat/i),
 
@@ -283,6 +285,8 @@ const applyScreens = {
 
   /** `input[type=file]` rather than a label: the widget may wrap it in a drop zone. */
   proofInput: (page: Page) => page.locator('input[type="file"]').first(),
+  /** The second document — the Notice of Award (SRS 2026-09-05, 0040). */
+  noaInput: (page: Page) => page.locator('input[type="file"]').nth(1),
 
   /** Advance a multi-section form. Absent when all sections render on one page. */
   next: (page: Page) => page.getByRole("button", { name: /next|continue/i }),
@@ -356,13 +360,7 @@ async function fillApplicationForm(page: Page, applicant: ApplicantFields): Prom
     push(applyScreens.email(page), applicant.email);
     push(applyScreens.birthdate(page), "2004-06-15");
     push(applyScreens.contactNumber(page), "09171234500");
-    push(applyScreens.addressLine(page), "12 E2E Street, Barangay Fixture");
-    push(applyScreens.city(page), "Quezon City");
-    push(applyScreens.province(page), "Metro Manila");
-    push(applyScreens.postalCode(page), "1101");
-    push(applyScreens.school(page), "University of the Philippines Diliman");
-    push(applyScreens.schoolIdNo(page), "E2E-2026-0001");
-    push(applyScreens.program(page), "BS Computer Science");
+    push(applyScreens.facebook(page), "https://facebook.com/e2e.applicant");
     push(applyScreens.yearLevel(page), "2");
     push(applyScreens.expectedGradYear(page), "2029");
 
@@ -373,6 +371,12 @@ async function fillApplicationForm(page: Page, applicant: ApplicantFields): Prom
 
     // Region is a select over the 18 seeded regions, populated by an ordinary anon read.
     await selectFirstRealOption(applyScreens.region(page)).catch(() => undefined);
+    // The SRS choice lists (0037/0038): rows, not code — pick the first real option of each.
+    await selectFirstRealOption(applyScreens.sex(page)).catch(() => undefined);
+    await selectFirstRealOption(applyScreens.scholarshipAward(page)).catch(() => undefined);
+    await selectFirstRealOption(applyScreens.awardYear(page)).catch(() => undefined);
+    await selectFirstRealOption(applyScreens.university(page)).catch(() => undefined);
+    await selectFirstRealOption(applyScreens.program(page)).catch(() => undefined);
 
     // Consent (RA 10173, captured AT COLLECTION). Every VISIBLE checkbox is ticked; the
     // honeypot input is hidden by design and is therefore left untouched, which is
@@ -410,7 +414,11 @@ async function fillApplicationForm(page: Page, applicant: ApplicantFields): Prom
  * proof that the bytes really moved is `proof_size_bytes` in the database.
  */
 async function attachProof(page: Page, file: GeneratedProofFile): Promise<void> {
+  // Both documents (0040). The same generated file stands in for the Notice of Award —
+  // each input gets its own upload session and storage reference, which is what the
+  // finalize gate checks; the bytes may match.
   await applyScreens.proofInput(page).setInputFiles(file.path);
+  await applyScreens.noaInput(page).setInputFiles(file.path);
 
   // If the widget renders a determinate bar, wait for it to finish rather than racing
   // the submit button against an in-flight PUT. If it renders none — or the upload is
@@ -433,6 +441,7 @@ async function attachProofAsBuffer(
   buffer: Buffer,
 ): Promise<void> {
   await applyScreens.proofInput(page).setInputFiles({ name: fileName, mimeType, buffer });
+  await applyScreens.noaInput(page).setInputFiles({ name: fileName, mimeType, buffer });
 }
 
 /**
@@ -554,6 +563,8 @@ test.describe("Epic B — public application intake", () => {
         expect(row.proof_size_bytes).toBe(cor.byteLength);
         expect(row.proof_mime_type).toBe("image/jpeg");
         expect(row.proof_drive_file_id).not.toBeNull();
+        expect(row.noa_drive_file_id).not.toBeNull();
+        expect(row.noa_drive_file_id).not.toBe(row.proof_drive_file_id);
         expect(row.submitted_at).not.toBeNull();
       });
     });

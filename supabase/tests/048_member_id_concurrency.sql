@@ -170,7 +170,7 @@ values ('00000000-0000-4000-b000-0000000009ff', 2098, 'Thousandth', 'Member');
 select is(
   public.allocate_member_id('00000000-0000-4000-b000-0000000009ff'),
   '2098-1000',
-  'the 1000th member of a year gets 2098-1000, not 2098-100 and not a truncation — the `{3,}` '
+  'the 1000th member of a year gets 2098-1000 under four-digit padding (0039) — the `{3,}` '
   'in member_id_format is load-bearing and lpad only pads, never trims'
 );
 

@@ -193,7 +193,9 @@ export const driveDocumentStore: DocumentStore = {
     // The stored name carries the application id and the VERIFIED-CANDIDATE extension —
     // never the client's file name, which is attacker-controlled and is, routinely, a
     // scholar's own name.
-    const name = `${input.applicationId}.${extensionForMime(mime)}`;
+    const name = input.documentKind
+      ? `${input.applicationId}-${input.documentKind}.${extensionForMime(mime)}`
+      : `${input.applicationId}.${extensionForMime(mime)}`;
 
     let response: Response;
     try {

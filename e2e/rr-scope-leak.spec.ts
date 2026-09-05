@@ -87,6 +87,15 @@ const PAGE_BUDGET_MS = 3000;
 
 const FORBIDDEN_LITERALS = [...DASHBOARD_PLANTED_VALUES, PLANTED_SCHOOL_ID];
 
+/**
+ * ADR 0011: a Regional Representative WITH a current-term confidentiality acknowledgement
+ * sees their own region's contact numbers, so the planted contact number is no longer a
+ * leak on /region for rep A. The address and the school ID still are — the widening is
+ * exactly the meeting's contact set and nothing more.
+ */
+const PLANTED_CONTACT_NUMBER = "+63917PLANTED99";
+const REGION_FORBIDDEN_LITERALS = FORBIDDEN_LITERALS.filter((l) => l !== PLANTED_CONTACT_NUMBER);
+
 /** Which scope surnames appear anywhere in the served payload. */
 function namesPresent(html: string, names: readonly string[]): string[] {
   return names.filter((name) => html.includes(name));
@@ -213,7 +222,9 @@ test.describe("regional-rep scope gate (US-F1, US-F2, US-J1)", () => {
     expect(deepLink?.status()).not.toBe(403);
     const deepHtml = await page.content();
     expect(deepHtml.includes(bravoTarget)).toBe(false);
-    for (const literal of FORBIDDEN_LITERALS) {
+    // The bounce lands on /region, which now carries rep A's OWN contact numbers (ADR
+    // 0011); the region-B leak is the absence of bravoTarget above, not the shared literal.
+    for (const literal of REGION_FORBIDDEN_LITERALS) {
       expect(deepHtml.includes(literal), `deep link leaked ${literal}`).toBe(false);
     }
   });
@@ -232,9 +243,30 @@ test.describe("regional-rep scope gate (US-F1, US-F2, US-J1)", () => {
     await page.waitForLoadState("networkidle");
     const regionHtml = await page.content();
     expect(regionHtml.includes(alpha), "the region dashboard rendered nothing").toBe(true);
-    for (const literal of FORBIDDEN_LITERALS) {
+    for (const literal of REGION_FORBIDDEN_LITERALS) {
       expect(regionHtml.includes(literal), `/region leaked ${literal}`).toBe(false);
     }
+    // ADR 0011 positive control: rep A has signed, so its own region's contact numbers
+    // render — through the audited, acknowledgement-gated RPC, not through a GRANT.
+    expect(
+      regionHtml.includes(PLANTED_CONTACT_NUMBER),
+      "rep A's own-region contact roster did not render (ADR 0011)",
+    ).toBe(true);
+
+    // ...and rep B, who has NOT signed, gets the refusal panel and no contact number at
+    // all — the CBL Art. VIII §7.1 gate, observable from the page (PRD US-J5).
+    const repBContext = await browser.newContext();
+    const repBPage = await repBContext.newPage();
+    await scopeSignIn(repBPage, "scope_rep_b");
+    await repBPage.goto(REGION_PATH);
+    await repBPage.waitForLoadState("networkidle");
+    const repBHtml = await repBPage.content();
+    expect(
+      repBHtml.includes(PLANTED_CONTACT_NUMBER),
+      "an unacknowledged rep saw a contact number",
+    ).toBe(false);
+    expect(repBHtml).toMatch(/confidentiality acknowledgement/i);
+    await repBContext.close();
 
     // …and both officer surfaces, in their own context so neither session bleeds.
     const officerContext = await browser.newContext();

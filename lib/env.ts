@@ -127,6 +127,14 @@ export const serverEnvSchema = z.object({
   GOOGLE_DRIVE_SHARED_DRIVE_ID: optional,
   GOOGLE_DRIVE_PROOF_FOLDER_ID: optional,
   SENTRY_DSN: optional,
+  // Outbound mail (ADR 0010). The transport name is required so a deployment cannot
+  // silently fall back to delivering nothing; the credentials are optional here and
+  // asserted by lib/mail/ at first use when MAIL_TRANSPORT=gmail_smtp.
+  MAIL_TRANSPORT: z.enum(["fake", "gmail_smtp"]),
+  GMAIL_SMTP_USER: optional,
+  GMAIL_SMTP_APP_PASSWORD: optional,
+  MAIL_FROM_NAME: optional,
+  MAIL_REPLY_TO: optional,
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

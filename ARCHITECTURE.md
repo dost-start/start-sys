@@ -60,6 +60,7 @@ Every version below is **locked**. Do not substitute. Deviations require an ADR 
 
 | Item | Version pin | Role | Why |
 |---|---|---|---|
+| **Outbound mail — interim (ADR 0010, 2026-09-06):** `lib/mail/` transport interface; `MAIL_TRANSPORT=gmail_smtp` sends from the org's `@gmail.com` account over SMTP with an App Password via `nodemailer` `9.1.1` until the org owns a domain (OQ-10) and Resend can be verified. ~500/day, no bounce webhooks, spam risk on bulk — all documented in the ADR. The row below is the launch target, unchanged. | — | — | — |
 | Resend | `6.x` | **All** outbound email: Supabase Auth custom SMTP **and** CRRD bulk campaigns | One vendor, one API key, one set of DNS records. Also the custom SMTP for Supabase Auth, because the built-in mailer is rate-limited to a couple of messages/hour and is unusable in production. Batch send at 100/call; delivery webhooks give CRRD a real per-recipient report. |
 | react-email + @react-email/components | `6.x` + `1.x` (devDep for the preview server) | HTML email templates | Renders to table-based HTML that survives Gmail and Outlook — the PRD's "emails with an HTML format attached". `react-email dev` gives a non-technical DCCDO a live browser preview before a 600-person send. |
 | googleapis | **pin exactly whatever is installed** (this package versions very fast — do not chase it) | Google Drive v3 client | Official client. Scoped to `drive.file` **only**. |

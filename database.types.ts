@@ -733,7 +733,9 @@ export type Database = {
           program_id: string | null
           province: string | null
           redacted_at: string | null
-          scholarship_award: Database["public"]["Enums"]["scholarship_award"] | null
+          scholarship_award:
+            | Database["public"]["Enums"]["scholarship_award"]
+            | null
           school: string | null
           school_id_no: string | null
           sex: Database["public"]["Enums"]["sex_option"] | null
@@ -760,7 +762,9 @@ export type Database = {
           program_id?: string | null
           province?: string | null
           redacted_at?: string | null
-          scholarship_award?: Database["public"]["Enums"]["scholarship_award"] | null
+          scholarship_award?:
+            | Database["public"]["Enums"]["scholarship_award"]
+            | null
           school?: string | null
           school_id_no?: string | null
           sex?: Database["public"]["Enums"]["sex_option"] | null
@@ -787,7 +791,9 @@ export type Database = {
           program_id?: string | null
           province?: string | null
           redacted_at?: string | null
-          scholarship_award?: Database["public"]["Enums"]["scholarship_award"] | null
+          scholarship_award?:
+            | Database["public"]["Enums"]["scholarship_award"]
+            | null
           school?: string | null
           school_id_no?: string | null
           sex?: Database["public"]["Enums"]["sex_option"] | null

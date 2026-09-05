@@ -443,6 +443,135 @@ export type Database = {
           },
         ]
       }
+      email_campaigns: {
+        Row: {
+          audience_filter: Json
+          body_html: string
+          body_markdown: string
+          created_at: string
+          created_by: string
+          failed_count: number
+          form_kind: Database["public"]["Enums"]["form_kind"]
+          id: string
+          queued_at: string | null
+          recipient_count: number
+          sent_at: string | null
+          sent_count: number
+          status: Database["public"]["Enums"]["campaign_status"]
+          subject: string
+          template_key: string
+          term_id: string
+        }
+        Insert: {
+          audience_filter?: Json
+          body_html: string
+          body_markdown: string
+          created_at?: string
+          created_by: string
+          failed_count?: number
+          form_kind?: Database["public"]["Enums"]["form_kind"]
+          id?: string
+          queued_at?: string | null
+          recipient_count?: number
+          sent_at?: string | null
+          sent_count?: number
+          status?: Database["public"]["Enums"]["campaign_status"]
+          subject: string
+          template_key: string
+          term_id: string
+        }
+        Update: {
+          audience_filter?: Json
+          body_html?: string
+          body_markdown?: string
+          created_at?: string
+          created_by?: string
+          failed_count?: number
+          form_kind?: Database["public"]["Enums"]["form_kind"]
+          id?: string
+          queued_at?: string | null
+          recipient_count?: number
+          sent_at?: string | null
+          sent_count?: number
+          status?: Database["public"]["Enums"]["campaign_status"]
+          subject?: string
+          template_key?: string
+          term_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_campaigns_term_id_fkey"
+            columns: ["term_id"]
+            isOneToOne: false
+            referencedRelation: "terms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_recipients: {
+        Row: {
+          campaign_id: string
+          claimed_at: string | null
+          created_at: string
+          error: string | null
+          id: string
+          merge: Json
+          person_id: string
+          provider_message_id: string | null
+          sent_at: string | null
+          status: Database["public"]["Enums"]["recipient_status"]
+          to_email: string
+        }
+        Insert: {
+          campaign_id: string
+          claimed_at?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          merge: Json
+          person_id: string
+          provider_message_id?: string | null
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["recipient_status"]
+          to_email: string
+        }
+        Update: {
+          campaign_id?: string
+          claimed_at?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          merge?: Json
+          person_id?: string
+          provider_message_id?: string | null
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["recipient_status"]
+          to_email?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_recipients_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_recipients_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_recipients_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "v_member_directory"
+            referencedColumns: ["person_id"]
+          },
+        ]
+      }
       member_affiliations: {
         Row: {
           affiliation_id: string
@@ -1209,6 +1338,61 @@ export type Database = {
         }
         Relationships: []
       }
+      v_email_merge_fields: {
+        Row: {
+          committee_name: string | null
+          department_name: string | null
+          family_name: string | null
+          given_name: string | null
+          island_group: string | null
+          join_year: number | null
+          member_id: string | null
+          person_id: string | null
+          region_id: string | null
+          region_name: string | null
+          status: Database["public"]["Enums"]["membership_status"] | null
+          term_id: string | null
+          term_label: string | null
+          year_level: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "memberships_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "memberships_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "v_member_directory"
+            referencedColumns: ["person_id"]
+          },
+          {
+            foreignKeyName: "memberships_region_id_fkey"
+            columns: ["region_id"]
+            isOneToOne: false
+            referencedRelation: "regions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "memberships_region_id_fkey"
+            columns: ["region_id"]
+            isOneToOne: false
+            referencedRelation: "v_membership_region_counts"
+            referencedColumns: ["region_id"]
+          },
+          {
+            foreignKeyName: "memberships_term_id_fkey"
+            columns: ["term_id"]
+            isOneToOne: false
+            referencedRelation: "terms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_member_directory: {
         Row: {
           committee_name: string | null
@@ -1362,6 +1546,14 @@ export type Database = {
             }
             Returns: string
           }
+      claim_campaign_batch: {
+        Args: { p_campaign_id: string; p_limit?: number }
+        Returns: {
+          merge: Json
+          recipient_id: string
+          to_email: string
+        }[]
+      }
       consume_recovery_code: { Args: { p_code: string }; Returns: boolean }
       current_term_id: { Args: never; Returns: string }
       diag:
@@ -1399,6 +1591,15 @@ export type Database = {
       }
       findfuncs: { Args: { "": string }; Returns: string[] }
       finish: { Args: { exception_on_failure?: boolean }; Returns: string[] }
+      finish_recipient: {
+        Args: {
+          p_error?: string
+          p_ok: boolean
+          p_provider_id?: string
+          p_recipient_id: string
+        }
+        Returns: undefined
+      }
       format_type_string: { Args: { "": string }; Returns: string }
       get_application_detail: { Args: { p_app_id: string }; Returns: Json }
       get_member_record: { Args: { p_person_id: string }; Returns: Json }
@@ -1439,6 +1640,14 @@ export type Database = {
       runtests:
         | { Args: never; Returns: string[] }
         | { Args: { "": string }; Returns: string[] }
+      resolve_recipients: {
+        Args: { p_filter?: Json }
+        Returns: {
+          email: string
+          merge: Json
+          person_id: string
+        }[]
+      }
       search_member_directory: {
         Args: {
           p_committee_ids?: string[]
@@ -1464,6 +1673,7 @@ export type Database = {
           year_level: number
         }[]
       }
+      send_campaign: { Args: { p_campaign_id: string }; Returns: number }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       skip:

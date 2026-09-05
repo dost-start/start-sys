@@ -87,6 +87,9 @@ committee/department management afterwards — CONFIRM.
 
 ### F. Regional Representative contact view — deliberate privacy widening (team decided)
 
+**BUILT 2026-09-06 (migration 0042, pgTAP 071, ADR 0011):** `list_region_member_contacts(p_university_id)`, the
+`/region` roster with a university filter, scope seed binds rep A + ack, demo seeder binds demo.rep + ack.
+
 RR sees for their own region: name, member ID, university, email, phone, Facebook. Officers unchanged
 (name/ID/region/status only, least privilege). Mechanism: a SECURITY DEFINER RPC
 (`list_region_member_contacts()`), region-scoped by `auth_region_ids()`, audited (one row per call),

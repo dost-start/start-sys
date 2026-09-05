@@ -37,6 +37,7 @@
 
 import "server-only";
 
+import type { Database } from "@/database.types";
 import type { ActionContext } from "@/lib/auth/with-role";
 import type {
   CallerRegion,
@@ -251,6 +252,57 @@ export async function getCallerRegions(ctx: ActionContext): Promise<CallerRegion
     .in("id", ids)
     .order("sort_order", { ascending: true });
 
+  if (error || !data) return [];
+  return data;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The Regional Representative contact roster (ADR 0011, migration 0042).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type RegionContactRow =
+  Database["public"]["Functions"]["list_region_member_contacts"]["Returns"][number];
+
+export type RegionContactsResult =
+  | { ok: true; rows: RegionContactRow[] }
+  | { ok: false; denial: "missing_acknowledgement" | "unavailable" };
+
+/**
+ * Own region(s), current term, regional_rep only, one VIEW_CONTACTS audit row per call.
+ * The RPC RAISES when the caller has no current-term confidentiality acknowledgement
+ * (PRD US-J5); that specific refusal is surfaced as a distinct result so the page can
+ * say what unblocks it, exactly as `/members/[id]` does for a CCDO. Any other failure is
+ * "unavailable" — never a raw PostgREST message.
+ */
+export async function listRegionContacts(
+  ctx: ActionContext,
+  universityId: string | null,
+): Promise<RegionContactsResult> {
+  const { data, error } = await ctx.supabase.rpc(
+    "list_region_member_contacts",
+    universityId ? { p_university_id: universityId } : {},
+  );
+  if (error) {
+    if (error.code === "42501" && /acknowledgement/i.test(error.message)) {
+      return { ok: false, denial: "missing_acknowledgement" };
+    }
+    return { ok: false, denial: "unavailable" };
+  }
+  return { ok: true, rows: data ?? [] };
+}
+
+/** The universities in the caller's region(s), for the roster filter. Public reference rows. */
+export async function listRegionUniversities(
+  ctx: ActionContext,
+  regionIds: readonly string[],
+): Promise<Array<{ id: string; name: string }>> {
+  if (regionIds.length === 0) return [];
+  const { data, error } = await ctx.supabase
+    .from("universities")
+    .select("id, name")
+    .in("region_id", [...regionIds])
+    .eq("is_active", true)
+    .order("name", { ascending: true });
   if (error || !data) return [];
   return data;
 }

@@ -916,24 +916,78 @@ export type Database = {
       }
       renewal_submissions: {
         Row: {
+          consented_at: string | null
+          created_at: string
           id: string
+          noa_drive_file_id: string | null
+          noa_mime_type: string | null
+          noa_size_bytes: number | null
+          noa_verified_at: string | null
           payload: Json
           person_id: string
-          submitted_at: string
+          privacy_notice_version: string | null
+          proof_drive_file_id: string | null
+          proof_mime_type: string | null
+          proof_size_bytes: number | null
+          proof_verified_at: string | null
+          redacted_at: string | null
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: Database["public"]["Enums"]["application_status"]
+          submit_token_expires_at: string | null
+          submit_token_hash: string | null
+          submitted_at: string | null
           term_id: string
         }
         Insert: {
+          consented_at?: string | null
+          created_at?: string
           id?: string
+          noa_drive_file_id?: string | null
+          noa_mime_type?: string | null
+          noa_size_bytes?: number | null
+          noa_verified_at?: string | null
           payload?: Json
           person_id: string
-          submitted_at?: string
+          privacy_notice_version?: string | null
+          proof_drive_file_id?: string | null
+          proof_mime_type?: string | null
+          proof_size_bytes?: number | null
+          proof_verified_at?: string | null
+          redacted_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["application_status"]
+          submit_token_expires_at?: string | null
+          submit_token_hash?: string | null
+          submitted_at?: string | null
           term_id: string
         }
         Update: {
+          consented_at?: string | null
+          created_at?: string
           id?: string
+          noa_drive_file_id?: string | null
+          noa_mime_type?: string | null
+          noa_size_bytes?: number | null
+          noa_verified_at?: string | null
           payload?: Json
           person_id?: string
-          submitted_at?: string
+          privacy_notice_version?: string | null
+          proof_drive_file_id?: string | null
+          proof_mime_type?: string | null
+          proof_size_bytes?: number | null
+          proof_verified_at?: string | null
+          redacted_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["application_status"]
+          submit_token_expires_at?: string | null
+          submit_token_hash?: string | null
+          submitted_at?: string | null
           term_id?: string
         }
         Relationships: [
@@ -1309,6 +1363,7 @@ export type Database = {
       _todo: { Args: never; Returns: string }
       allocate_member_id: { Args: { p_person_id: string }; Returns: string }
       approve_application: { Args: { p_app_id: string }; Returns: string }
+      approve_renewal: { Args: { p_id: string }; Returns: string }
       assert_confidentiality_ack: { Args: never; Returns: undefined }
       auth_person_id: { Args: never; Returns: string }
       auth_region_id: { Args: never; Returns: string }
@@ -1397,12 +1452,26 @@ export type Database = {
         }
         Returns: undefined
       }
+      finalize_renewal: {
+        Args: {
+          p_file_ref: string
+          p_id: string
+          p_mime: string
+          p_noa_mime: string
+          p_noa_ref: string
+          p_noa_size: number
+          p_size: number
+          p_token: string
+        }
+        Returns: undefined
+      }
       findfuncs: { Args: { "": string }; Returns: string[] }
       finish: { Args: { exception_on_failure?: boolean }; Returns: string[] }
       format_type_string: { Args: { "": string }; Returns: string }
       get_application_detail: { Args: { p_app_id: string }; Returns: Json }
       get_member_record: { Args: { p_person_id: string }; Returns: Json }
       get_person_sensitive: { Args: { p_person_id: string }; Returns: Json }
+      get_renewal_detail: { Args: { p_id: string }; Returns: Json }
       has_aal2: { Args: never; Returns: boolean }
       has_confidentiality_ack: { Args: never; Returns: boolean }
       has_unique: { Args: { "": string }; Returns: string }
@@ -1433,6 +1502,7 @@ export type Database = {
       }
       lives_ok: { Args: { "": string }; Returns: string }
       log_document_view: { Args: { p_app_id: string }; Returns: undefined }
+      log_renewal_document_view: { Args: { p_id: string }; Returns: undefined }
       mask_sensitive: { Args: { p_row: Json; p_table: string }; Returns: Json }
       no_plan: { Args: never; Returns: boolean[] }
       num_failed: { Args: never; Returns: number }
@@ -1450,6 +1520,14 @@ export type Database = {
           storage_ref: string
         }[]
       }
+      purge_abandoned_renewal_drafts: {
+        Args: { p_age?: unknown }
+        Returns: {
+          noa_ref: string
+          renewal_id: string
+          storage_ref: string
+        }[]
+      }
       reject_application: {
         Args: { p_app_id: string; p_reason: string }
         Returns: undefined
@@ -1457,6 +1535,7 @@ export type Database = {
       runtests:
         | { Args: never; Returns: string[] }
         | { Args: { "": string }; Returns: string[] }
+      reject_renewal: { Args: { p_id: string; p_note: string }; Returns: undefined }
       search_member_directory: {
         Args: {
           p_committee_ids?: string[]
@@ -1487,6 +1566,16 @@ export type Database = {
       skip:
         | { Args: { "": string }; Returns: string }
         | { Args: { how_many: number; why: string }; Returns: string }
+      start_renewal: {
+        Args: {
+          p_email: string
+          p_member_id: string
+          p_payload: Json
+          p_token_expires_at: string
+          p_token_hash: string
+        }
+        Returns: string
+      }
       throws_ok: { Args: { "": string }; Returns: string }
       todo:
         | { Args: { how_many: number }; Returns: boolean[] }

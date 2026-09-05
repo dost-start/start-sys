@@ -190,8 +190,8 @@ select columns_are(
 
 select columns_are(
   'public'::name, 'renewal_submissions'::name,
-  array['id', 'person_id', 'term_id', 'payload', 'submitted_at']::name[],
-  'public.renewal_submissions has exactly its 5 documented columns (DATA_MODEL.md §6/0008)'
+  array['id', 'person_id', 'term_id', 'payload', 'submitted_at', 'status', 'created_at', 'submit_token_hash', 'submit_token_expires_at', 'proof_drive_file_id', 'proof_mime_type', 'proof_size_bytes', 'proof_verified_at', 'noa_drive_file_id', 'noa_mime_type', 'noa_size_bytes', 'noa_verified_at', 'consented_at', 'privacy_notice_version', 'reviewed_by', 'reviewed_at', 'review_note', 'redacted_at']::name[],
+  'public.renewal_submissions has exactly its 23 columns — 0008''s five plus the 0044 lifecycle (status, token, two documents, consent, review, redaction)'
 );
 
 

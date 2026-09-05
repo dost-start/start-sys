@@ -74,6 +74,12 @@ Identify by `member_id` + email, both must match one `people` row; uniform respo
 by a `membership_renewal` window. Same personal block + COR + NOA. CRRD approves → new `memberships`
 row in `current_term_id()`, status active, `member_id` untouched (US-H5). Review surface needed.
 
+**BUILT 2026-09-06 (branch `feat/renewal-form`, migration 0044, pgTAP 073).** Explicit mismatch error
+(not uniform — the pair is the scholar's own; rate-limited like /apply), `start_renewal` / `finalize_renewal`
+anon definers, `approve_renewal` / `reject_renewal` / `get_renewal_detail`, `/renew` (same sections +
+member-ID field), `/renewals` queue + detail, `/api/renewals/[id]/proof`, renewal period on the window page,
+sweep extended. Eligibility enforced server-side: not terminated, not already active this term.
+
 ### E. Committee application form — accountless (new, biggest)
 
 Sent to current members; PDF form has NO member-ID field — match on email at review like

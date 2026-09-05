@@ -72,3 +72,17 @@ The `applications` table. `proof_drive_file_id` is provider-opaque by contract �
 id under one driver, an object path under the other — and nothing outside `lib/documents/`
 interprets it (DATA_MODEL.md §6/0008). If a swap looks like it needs a migration, something
 outside `lib/documents/` has started reading that column's contents, and that is the bug.
+
+## Open the renewal period and review renewals
+
+**Who:** the CCDO or the CTO opens the period (ADR 0003); the CCDO or a CRRD deputy (`crrd_admin`), or the CEO/COO (`exec_admin`), reviews. Members have no accounts — the form is public and the scholar proves who they are with their member ID and the email on file.
+
+1. `/applications/window` → **Schedule the renewal period**. Set the opening and closing times (Asia/Manila) and click **Open the period**. Closing takes effect on the next submission: the check is in the database, not a cache.
+2. Send the renewal announcement: `/campaigns` → **New campaign** → template *Membership Renewal Form*. It links to `/renew` and merges each scholar's member ID into the message.
+3. Scholars submit at `/renew`: member ID + email (both must match the record), updated details, the latest registration form and the Notice of Award. A wrong pair is told so at once; the form is rate-limited exactly like `/apply`.
+4. `/renewals` lists pending renewals for the term. Open one — that read is recorded in the audit log — check the two documents, then **Approve renewal** or **Reject** with a written reason (10+ characters).
+5. Approval creates the scholar's **active membership for the current term** and applies the updated contact and academic details to their record. **The member ID does not change** — `2024-0012` renews as `2024-0012`. A rejected scholar may submit again while the period is open.
+
+**Not eligible through the form:** a member whose latest membership is `terminated` (CBL Art. VII §3 — reinstatement is an Executive Board act on the existing record), and anyone already active this term. Both get a generic "cannot be renewed through this form" message and are told to contact CRRD.
+
+**Abandoned drafts** (identity verified, documents never uploaded) are redacted after 30 days by the same nightly job that sweeps application drafts.

@@ -180,7 +180,7 @@ select is((select count(*) from public.officer_assignments)::int,               
 select is((select count(*) from public.confidentiality_acknowledgements)::int,  2, 'exec_admin sees exactly 2 confidentiality_acknowledgements — they file them (CBL Art. VIII §7.1)');
 select is((select count(*) from public.audit_log)::int,
           (select n from fx_audit_total),                                          'exec_admin sees EVERY audit_log row — PRD US-I1');
-select is((select count(*) from public.sensitive_column_registry)::int,        20, 'exec_admin sees exactly 20 sensitive_column_registry rows — the map of where the PII is (18 + facebook_account + noa_drive_file_id)');
+select is((select count(*) from public.sensitive_column_registry)::int,        23, 'exec_admin sees exactly 23 sensitive_column_registry rows — the map of where the PII is (18 + facebook_account + noa_drive_file_id + the three renewal_submissions pointers of 0044)');
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════════
@@ -206,7 +206,7 @@ select is((select count(*) from public.officer_assignments)::int,               
 select is((select count(*) from public.confidentiality_acknowledgements)::int,  2, 'tech_admin sees exactly 2 confidentiality_acknowledgements — they audit access (PRD US-I1)');
 select is((select count(*) from public.audit_log)::int,
           (select n from fx_audit_total),                                          'tech_admin sees EVERY audit_log row — PRD US-I1');
-select is((select count(*) from public.sensitive_column_registry)::int,        20, 'tech_admin sees exactly 20 sensitive_column_registry rows');
+select is((select count(*) from public.sensitive_column_registry)::int,        23, 'tech_admin sees exactly 23 sensitive_column_registry rows');
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════════

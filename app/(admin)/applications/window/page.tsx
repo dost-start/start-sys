@@ -23,6 +23,7 @@ import { redirect } from "next/navigation";
 import { ApplicationWindowForm } from "@/components/applications/application-window-form";
 import {
   MEMBERSHIP_APPLICATION_FORM_KIND,
+  MEMBERSHIP_RENEWAL_FORM_KIND,
   windowState,
   type WindowState,
 } from "@/lib/applications/window-schema";
@@ -102,6 +103,8 @@ export default async function ApplicationWindowPage() {
   const membershipWindow =
     rows.find((row) => row.form_kind === MEMBERSHIP_APPLICATION_FORM_KIND) ?? null;
   const state = membershipWindow === null ? null : windowState(membershipWindow);
+  const renewalWindow = rows.find((row) => row.form_kind === MEMBERSHIP_RENEWAL_FORM_KIND) ?? null;
+  const renewalState = renewalWindow === null ? null : windowState(renewalWindow);
 
   // Sensible defaults for a term that has never had a window: open now, close in 30
   // days. The officer changes both; nothing is submitted for them.
@@ -111,6 +114,12 @@ export default async function ApplicationWindowPage() {
   );
   const defaultClosesAtLocal = toManilaLocalInput(
     membershipWindow?.closes_at ?? new Date(now + 30 * 86_400_000).toISOString(),
+  );
+  const renewalOpensAtLocal = toManilaLocalInput(
+    renewalWindow?.opens_at ?? new Date(now).toISOString(),
+  );
+  const renewalClosesAtLocal = toManilaLocalInput(
+    renewalWindow?.closes_at ?? new Date(now + 30 * 86_400_000).toISOString(),
   );
 
   return (
@@ -184,6 +193,27 @@ export default async function ApplicationWindowPage() {
           canWrite={canWrite}
           defaultOpensAtLocal={defaultOpensAtLocal}
           defaultClosesAtLocal={defaultClosesAtLocal}
+        />
+      </section>
+
+      {/* The renewal period (0044; PRD US-G7). Same table, same policies, same audit —
+          a second row keyed on form_kind = 'membership_renewal'. */}
+      <section className="space-y-4 rounded-lg border p-4 sm:p-6">
+        <h2 className="text-base font-semibold">
+          {renewalState === "open"
+            ? "Change or close the open renewal period"
+            : "Schedule the renewal period"}
+        </h2>
+        <p className="text-muted-foreground text-sm">
+          The membership renewal form at <code>/renew</code> — for returning scholars, identified by
+          member ID and email — accepts submissions only while this period is open.
+        </p>
+        <ApplicationWindowForm
+          formKind={MEMBERSHIP_RENEWAL_FORM_KIND}
+          isOpen={renewalState === "open"}
+          canWrite={canWrite}
+          defaultOpensAtLocal={renewalOpensAtLocal}
+          defaultClosesAtLocal={renewalClosesAtLocal}
         />
       </section>
 

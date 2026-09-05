@@ -24,17 +24,20 @@ export function ProofDocumentViewer({
   applicationId,
   mimeType,
   doc = "registration",
+  proxyBasePath = "/api/applications",
 }: {
   applicationId: string;
   mimeType: string | null;
   /** Which document the proxy serves — the registration form (default) or the NOA. */
   doc?: "registration" | "noa";
+  /** `/api/applications` (default) or `/api/renewals` (0044) — both proxies share one contract. */
+  proxyBasePath?: "/api/applications" | "/api/renewals";
 }) {
   const [imageFailed, setImageFailed] = useState(false);
   const proofUrl =
     doc === "noa"
-      ? `/api/applications/${applicationId}/proof?doc=noa`
-      : `/api/applications/${applicationId}/proof`;
+      ? `${proxyBasePath}/${applicationId}/proof?doc=noa`
+      : `${proxyBasePath}/${applicationId}/proof`;
 
   if (!mimeType) {
     return (

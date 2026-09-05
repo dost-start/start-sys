@@ -196,9 +196,11 @@ begin
       and p.redacted_at is null
   ),
   unioned as (
-    select person_id from matched
+    -- Qualified on purpose: inside plpgsql a bare `person_id` here is ambiguous with the
+    -- function's own RETURNS TABLE column of the same name (42702).
+    select mt.person_id from matched mt
     union
-    select person_id from picked
+    select pk.person_id from picked pk
   ),
   final_ids as (
     select u.person_id

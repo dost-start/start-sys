@@ -41,6 +41,10 @@ import { writeFileSync } from "node:fs";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Optional: with the anon key the script can sign in AS the demo CCDO and approve the
+// sample members' applications through approve_application() — the only path that may
+// allocate a member ID (CLAUDE.md: never generated in TypeScript, not even here).
+const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 if (!url || !serviceKey) {
   console.error(
     "Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (the demo project's), then re-run.",
@@ -285,8 +289,10 @@ async function main() {
         {
           id: SAMPLE_PERSON(i),
           join_year: 2024 + (i % 3),
+          // Shifted on the second pass through FIRST so no two sample members share a
+          // full name — two "Aquino, Alon" rows made the campaign picker look broken.
           given_name: FIRST[i % FIRST.length],
-          family_name: LAST[i % LAST.length],
+          family_name: LAST[(i + Math.floor(i / FIRST.length)) % LAST.length],
           personal_email: `sample${i}@start-sys.test`,
           birthdate: "2004-03-15",
           contact_number: `+63917000${String(1000 + i)}`,
@@ -402,6 +408,93 @@ async function main() {
       ),
       `application ${i}`,
     );
+  }
+
+  // ── member IDs for the sample members, minted the only legal way ───────────
+  // One already-submitted application per sample member (same email as their people
+  // row), approved as the demo CCDO. approve_application() reuses the existing person
+  // by email (0041), allocates the ID through allocate_member_id() and leaves the
+  // existing membership alone (on conflict do nothing) — so re-runs are no-ops.
+  const SAMPLE_APPLICATION = (n) => `00000000-0000-4000-dc00-${String(n).padStart(12, "0")}`;
+  for (let i = 1; i <= 24; i += 1) {
+    await must(
+      admin.from("applications").upsert(
+        {
+          id: SAMPLE_APPLICATION(i),
+          term_id: termId,
+          status: "pending",
+          applicant_email: `sample${i}@start-sys.test`,
+          applicant_given_name: FIRST[i % FIRST.length],
+          applicant_family_name: LAST[(i + Math.floor(i / FIRST.length)) % LAST.length],
+          payload: {
+            birthdate: "2004-03-15",
+            contact_number: `+63917000${String(1000 + i)}`,
+            facebook_account: `https://facebook.com/sample${i}`,
+            sex: i % 2 === 0 ? "female" : "male",
+            scholarship_award: "ra_7687",
+            award_year: 2022 + (i % 3),
+            university_id: demoUniversityId,
+            program_id: demoProgramId,
+            region_id: regionId(regionCodes[i % regionCodes.length]),
+            year_level: 1 + (i % 4),
+            expected_grad_year: 2027 + (i % 3),
+            address_line: `${i} Demo Street`,
+            city_municipality: "Quezon City",
+            province: "Metro Manila",
+            postal_code: "1101",
+          },
+          proof_drive_file_id: `fake:sample-cor-${i}`,
+          proof_mime_type: "application/pdf",
+          proof_size_bytes: 524288,
+          proof_verified_at: opens,
+          noa_drive_file_id: `fake:sample-noa-${i}`,
+          noa_mime_type: "application/pdf",
+          noa_size_bytes: 262144,
+          noa_verified_at: opens,
+          submitted_at: opens,
+          consented_at: opens,
+        },
+        { onConflict: "id", ignoreDuplicates: true },
+      ),
+      `sample application ${i}`,
+    );
+  }
+
+  if (!anonKey) {
+    console.warn(
+      "NEXT_PUBLIC_SUPABASE_ANON_KEY not set — sample members keep no member ID this run.",
+    );
+  } else {
+    const ccdo = creds.find((c) => c.email === "demo.ccdo@start-sys.test");
+    const { createClient: createUserClient } = await import("@supabase/supabase-js");
+    const asCcdo = createUserClient(url, anonKey, { auth: { persistSession: false } });
+    const { error: signInError } = await asCcdo.auth.signInWithPassword({
+      email: ccdo.email,
+      password: ccdo.pass,
+    });
+    if (signInError) {
+      console.warn(
+        `could not sign in as ${ccdo.email} to approve sample applications: ${signInError.message}`,
+      );
+    } else {
+      const sampleIds = Array.from({ length: 24 }, (_, n) => SAMPLE_APPLICATION(n + 1));
+      const { data: pending, error: pendingError } = await admin
+        .from("applications")
+        .select("id")
+        .eq("status", "pending")
+        .in("id", sampleIds);
+      if (pendingError) console.warn(`listing sample applications: ${pendingError.message}`);
+      let minted = 0;
+      for (const row of pending ?? []) {
+        const { error } = await asCcdo.rpc("approve_application", { p_app_id: row.id });
+        if (error) console.warn(`approve ${row.id}: ${error.message}`);
+        else minted += 1;
+      }
+      await asCcdo.auth.signOut({ scope: "local" });
+      console.log(
+        `sample members: ${minted} application(s) approved this run (member IDs minted).`,
+      );
+    }
   }
 
   // ── hand over the credentials, exactly once ────────────────────────────────

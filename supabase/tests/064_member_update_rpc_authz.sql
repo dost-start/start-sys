@@ -372,12 +372,12 @@ select throws_like(
 );
 select pg_temp.logout();
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator, ack removed
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy, ack removed
 select throws_ok(
   $$ select public.update_member_record('00000000-0000-4000-b000-000000000004'::uuid,
        '{"school":"Post-Ack University"}'::jsonb, (select v from fx_ts where k = 'p4b')) $$,
   '42501'::char(5), null::text,
-  'the MODERATOR is refused too. All three permitted tiers wrote successfully above and all '
+  'the CRRD_DEPUTY is refused too. All three permitted tiers wrote successfully above and all '
   'three are refused now, so these assertions measure the ACKNOWLEDGEMENT gate rather than a '
   'role guard that would have refused anyway. **This is the deliberate day-one failure mode: '
   'on the morning a term opens nobody has signed and no member record can be edited**'

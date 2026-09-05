@@ -73,10 +73,10 @@ select is(
 );
 select pg_temp.logout();
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy
 select is(
   (select count(*)::int from public.applications), 5,
-  'moderator reads all 5 — the operational tier. ARCHITECTURE.md §5: you cannot review an '
+  'crrd_deputy reads all 5 — the operational tier. ARCHITECTURE.md §5: you cannot review an '
   'application without reading it'
 );
 select pg_temp.logout();
@@ -365,7 +365,7 @@ select is(
       and tablename  = 'applications'
       and cmd in ('INSERT', 'UPDATE', 'ALL')
       -- \m and \M are Postgres word boundaries, so `crrd_admin` does not match `admin`
-      -- and `moderator` does not match anything here.
+      -- and `crrd_deputy` does not match anything here.
       and (coalesce(qual, '') || ' ' || coalesce(with_check, ''))
           ~ '\m(officer|regional_rep|member|tech_admin)\M'
   ), 0,

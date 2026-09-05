@@ -129,18 +129,23 @@ test.describe("Epic A — access and identity", () => {
   // ───────────────────────────────────────────────────────────────────────────
   // 5. US-A4's documented exception (ADR 0004)
   // ───────────────────────────────────────────────────────────────────────────
-  test("a member signs in with no MFA prompt and lands on the portal", async ({ page }) => {
+  test("a revoked account signs in with no MFA prompt and reaches only the refusal page", async ({
+    page,
+  }) => {
     await page.goto("/login");
     await submitLogin(page, FIXTURES.member.email);
 
-    await expect(page).toHaveURL(/\/portal(\?.*)?$/);
-    // Risk-proportionate and deliberate: a member holds no organizational data, so
-    // no second factor is demanded. The exception is documented, not implicit.
+    // `member` is the revoked tier (migration 0036): members hold no accounts under the
+    // SRS, so the only account that can carry this label is one whose role was taken
+    // away. It holds no organizational data, so no second factor is demanded (ADR 0004).
+    await expect(page).toHaveURL(/\/unauthorized(\?.*)?$/);
     await expect(page).not.toHaveURL(/\/auth\/mfa/);
 
-    // Still a member, though: the admin surface is not theirs.
+    // And it reaches nothing: every surface bounces it back to the refusal page.
     await page.goto("/members");
-    await expect(page).toHaveURL(/\/portal(\?.*)?$/);
+    await expect(page).toHaveURL(/\/unauthorized(\?.*)?$/);
+    await page.goto("/portal");
+    await expect(page).toHaveURL(/\/unauthorized(\?.*)?$/);
   });
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -221,7 +226,7 @@ test.describe("post-login landing", () => {
     "exec_admin",
     "tech_admin",
     "crrd_admin",
-    "moderator",
+    "crrd_deputy",
     "regional_rep_a",
     "member",
   ] as const) {

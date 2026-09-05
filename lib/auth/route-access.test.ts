@@ -54,8 +54,10 @@ const COLUMNS = {
   admin: ["/dashboard", "/members", "/applications", "/audit"],
   adminSystem: [ADMIN_SYSTEM_PREFIX, "/system/user-roles"],
   officer: ["/directory", "/committees"],
-  member: ["/portal"],
   rr: ["/region"],
+  // The member portal is gone (0036: members hold no accounts). Kept as a column so
+  // the assertion that NOBODY reaches it — not even the revoked tier — stays explicit.
+  portal: ["/portal"],
 } as const;
 
 type Column = keyof typeof COLUMNS;
@@ -65,11 +67,14 @@ const COLUMN_NAMES = Object.keys(COLUMNS) as Column[];
 /**
  * THE MATRIX. Hand-written, one row per actor.
  *
- *   admin        — PRD §2: the four roles that reach the admin dashboard.
- *   adminSystem  — tech_admin alone (PRD §2 Technical Admin; OQ-13's single occupancy).
- *   officer      — the read-only directory: officer plus the four admin roles.
- *   member       — strictly the member's own portal (US-E4).
+ *   admin        — SRS Roles: the three administrator groups reach the admin dashboard.
+ *   adminSystem  — tech_admin alone (SRS: "CTO & DCTO-PD … configure the system").
+ *   officer      — the read-only directory: officer plus the admin roles.
  *   rr           — the regional rep's own region (US-F1).
+ *   portal       — nobody. The route no longer exists.
+ *
+ *   `moderator` (retired) and `member` (revoked) reach nothing but the public and
+ *   auth surfaces — migration 0036.
  */
 const EXPECTED: Record<Actor, Record<Column, boolean>> = {
   exec_admin: {
@@ -78,8 +83,8 @@ const EXPECTED: Record<Actor, Record<Column, boolean>> = {
     admin: true,
     adminSystem: false,
     officer: true,
-    member: false,
     rr: false,
+    portal: false,
   },
   tech_admin: {
     public: true,
@@ -87,8 +92,8 @@ const EXPECTED: Record<Actor, Record<Column, boolean>> = {
     admin: true,
     adminSystem: true,
     officer: true,
-    member: false,
     rr: false,
+    portal: false,
   },
   crrd_admin: {
     public: true,
@@ -96,17 +101,17 @@ const EXPECTED: Record<Actor, Record<Column, boolean>> = {
     admin: true,
     adminSystem: false,
     officer: true,
-    member: false,
     rr: false,
+    portal: false,
   },
   moderator: {
     public: true,
     auth: true,
-    admin: true,
+    admin: false,
     adminSystem: false,
-    officer: true,
-    member: false,
+    officer: false,
     rr: false,
+    portal: false,
   },
   officer: {
     public: true,
@@ -114,8 +119,8 @@ const EXPECTED: Record<Actor, Record<Column, boolean>> = {
     admin: false,
     adminSystem: false,
     officer: true,
-    member: false,
     rr: false,
+    portal: false,
   },
   regional_rep: {
     public: true,
@@ -123,8 +128,8 @@ const EXPECTED: Record<Actor, Record<Column, boolean>> = {
     admin: false,
     adminSystem: false,
     officer: false,
-    member: false,
     rr: true,
+    portal: false,
   },
   member: {
     public: true,
@@ -132,8 +137,8 @@ const EXPECTED: Record<Actor, Record<Column, boolean>> = {
     admin: false,
     adminSystem: false,
     officer: false,
-    member: true,
     rr: false,
+    portal: false,
   },
   anonymous: {
     public: true,
@@ -141,8 +146,8 @@ const EXPECTED: Record<Actor, Record<Column, boolean>> = {
     admin: false,
     adminSystem: false,
     officer: false,
-    member: false,
     rr: false,
+    portal: false,
   },
 };
 
@@ -295,7 +300,7 @@ describe("groupForPath", () => {
     ["/system/user-roles", "admin"],
     ["/directory", "officer"],
     ["/committees", "officer"],
-    ["/portal", "member"],
+    ["/portal", null],
     ["/region", "rr"],
     ["/", null],
     [UNAUTHORIZED_PATH, null],
@@ -321,11 +326,13 @@ describe("homeForRole", () => {
   const cases: ReadonlyArray<[OrgRole, string]> = [
     ["exec_admin", "/dashboard"],
     ["crrd_admin", "/dashboard"],
-    ["moderator", "/dashboard"],
     ["tech_admin", "/system"],
     ["officer", "/directory"],
     ["regional_rep", "/region"],
-    ["member", "/portal"],
+    // The two dead labels (0036) land on the explicit refusal page, which any
+    // signed-in account may see — so the redirect cannot loop.
+    ["moderator", UNAUTHORIZED_PATH],
+    ["member", UNAUTHORIZED_PATH],
   ];
 
   for (const [role, expected] of cases) {

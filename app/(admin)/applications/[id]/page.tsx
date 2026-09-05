@@ -26,7 +26,7 @@ import { homeForRole } from "@/lib/auth/route-access";
 
 export const dynamic = "force-dynamic";
 
-const REVIEWER_ROLES = new Set(["exec_admin", "crrd_admin", "moderator"]);
+const REVIEWER_ROLES = new Set(["exec_admin", "crrd_admin"]);
 
 type ApplicationStatus = Database["public"]["Enums"]["application_status"];
 

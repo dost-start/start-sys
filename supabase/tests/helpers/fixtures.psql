@@ -35,7 +35,7 @@
 --   exec_admin       …a000-000000000001   person P1   —          CEO
 --   tech_admin       …a000-000000000002   person NULL —          (see note A)
 --   crrd_admin       …a000-000000000003   person P2   —          CCDO
---   moderator        …a000-000000000004   person P3   —          DCCDO-C
+--   crrd_deputy        …a000-000000000004   person P3   —          DCCDO-C
 --   officer          …a000-000000000005   person NULL —
 --   regional_rep_a   …a000-000000000006   person NULL region NCR
 --   regional_rep_b   …a000-000000000007   person NULL region R07
@@ -58,7 +58,7 @@
 --
 --   P1  …001  Danielle  Quiambao   exec_admin's person   CEO      ack YES   membership: ARCHIVED term only (NCR)
 --   P2  …002  Ethan     Baltazar   crrd_admin's person   CCDO     ack YES   membership: NONE
---   P3  …003  Maria     Santos     moderator's person    DCCDO-C  ack NO    membership: active term, NCR
+--   P3  …003  Maria     Santos     crrd_deputy's person    DCCDO-C  ack NO    membership: active term, NCR
 --   P4  …004  Juan      Dela Cruz  member's person       —        ack NO    membership: active term, NCR
 --   P5  …005  Andrea    Reyes      (no account)          CTO      ack NO    membership: active term, R07
 --   P6  …006  José      Peña       (no account)          —        ack NO    membership: active term, R07
@@ -70,9 +70,9 @@
 --
 --   P3 deliberately has NO confidentiality acknowledgement. PRD US-J5 / CBL Art. VIII §7.1:
 --   a sensitive-column read by a user with no current-term acknowledgement must be REFUSED
---   WITH AN ERROR, not returned empty. The moderator fixture is the negative case for
+--   WITH AN ERROR, not returned empty. The crrd_deputy fixture is the negative case for
 --   020_confidentiality_gate.sql, and the "day-one failure mode" ARCHITECTURE.md §5 says
---   belongs in the rollover runbook. Do not add an ack row for the moderator to make a
+--   belongs in the rollover runbook. Do not add an ack row for the crrd_deputy to make a
 --   test go green — that test is asserting the refusal.
 --
 --   P6 carries a diacritic (José Peña) so accent behaviour in pg_trgm name search is
@@ -103,7 +103,7 @@
 --   exec_admin             6         5          2         2          8        2         4
 --   tech_admin             0         0          0         2          8        2         4
 --   crrd_admin             6         5          2         1          1        2         4
---   moderator              6         5          2         0          1        2         4
+--   crrd_deputy              6         5          2         0          1        2         4
 --   officer                6         5          2         0          1        2         4
 --   regional_rep_a         2         3          1         0          1        2         4
 --   regional_rep_b         2         2          1         0          1        2         4
@@ -114,7 +114,7 @@
 --   fixture accident:
 --
 --   • tech_admin sees ZERO people and ZERO memberships. people_read and memberships_read
---     name exec_admin, crrd_admin, moderator, officer, regional_rep and member — tech_admin
+--     name exec_admin, crrd_admin, crrd_deputy, officer, regional_rep and member — tech_admin
 --     is absent from both. That is PRD OQ-5 ("configure the system and control access" is
 --     not "read everyone's address") expressed as a missing role literal. It is also why
 --     BUILD_PLAN S6-T13 lands the CTO on /system rather than on an all-zero dashboard.
@@ -202,7 +202,7 @@ values
    'authenticated', 'authenticated', 'crrd.admin@fixture.start-sys.test', '',
    now(), now(), now(), '{}'::jsonb, '{}'::jsonb),
   ('00000000-0000-4000-a000-000000000004', '00000000-0000-0000-0000-000000000000',
-   'authenticated', 'authenticated', 'moderator@fixture.start-sys.test', '',
+   'authenticated', 'authenticated', 'crrd.deputy@fixture.start-sys.test', '',
    now(), now(), now(), '{}'::jsonb, '{}'::jsonb),
   ('00000000-0000-4000-a000-000000000005', '00000000-0000-0000-0000-000000000000',
    'authenticated', 'authenticated', 'officer@fixture.start-sys.test', '',
@@ -253,7 +253,7 @@ values
    'Fixture Street 2', 'Pasig', 'Metro Manila', '1600',
    'Ateneo de Manila University', 'FIXT-SCH-P2'),
 
-  -- P3 — moderator's person. DCCDO-C. Active NCR membership. NO confidentiality ack.
+  -- P3 — crrd_deputy's person. DCCDO-C. Active NCR membership. NO confidentiality ack.
   ('00000000-0000-4000-b000-000000000003', '2023-001', 2023,
    'Maria', 'Cruz', 'Santos',
    date '2002-03-03', '+639180000003', 'maria.santos@fixture.start-sys.test',
@@ -302,7 +302,7 @@ from (values
    null::uuid,                                    null),   -- note A: person_id NULL
   ('00000000-0000-4000-a000-000000000003'::uuid, 'crrd_admin',
    '00000000-0000-4000-b000-000000000002'::uuid, null),
-  ('00000000-0000-4000-a000-000000000004'::uuid, 'moderator',
+  ('00000000-0000-4000-a000-000000000004'::uuid, 'crrd_admin',   -- the CRRD deputy: DCCDO-C is crrd_admin under the SRS
    '00000000-0000-4000-b000-000000000003'::uuid, null),
   ('00000000-0000-4000-a000-000000000005'::uuid, 'officer',
    null::uuid,                                    null),
@@ -376,7 +376,7 @@ select v.id, v.person_id, v.term_id, v.status::public.membership_status,
 from (values
   -- ── active term, NCR (region A) ──
   ('00000000-0000-4000-c000-000000000001'::uuid, '00000000-0000-4000-b000-000000000003'::uuid,
-   pg_temp.fx_active_term(),   'active', 'NCR', 3, 2028),   -- P3, moderator's person
+   pg_temp.fx_active_term(),   'active', 'NCR', 3, 2028),   -- P3, crrd_deputy's person
   ('00000000-0000-4000-c000-000000000002'::uuid, '00000000-0000-4000-b000-000000000004'::uuid,
    pg_temp.fx_active_term(),   'active', 'NCR', 2, 2029),   -- P4, member fixture's person
   -- ── active term, R07 (region B) ──
@@ -441,7 +441,7 @@ on conflict do nothing;
 -- single-occupancy assertions have a realistic baseline to collide with.
 --
 -- Three of the four CBL Art. III §2 administrators are here — CEO (P1), CTO (P5), CCDO (P2)
--- — plus a deputy, DCCDO-C (P3), which is the moderator tier's constitutional basis
+-- — plus a deputy, DCCDO-C (P3), which is the crrd_deputy tier's constitutional basis
 -- (CBL Art. III §3.9, duties Art. IV §6.2). The COO seat is deliberately EMPTY: CBL Art. VI
 -- §4 defines a vacancy as the ABSENCE of a sitting assignment, so leaving one of the four
 -- administrator seats unfilled is what gives the vacancy query something true to find
@@ -467,7 +467,7 @@ on conflict do nothing;
 -- 9 — confidentiality acknowledgements  (CBL Art. VIII §7.1)
 -- ═══════════════════════════════════════════════════════════════════════════════════
 -- TWO of the three people who could hold one. P1 (exec_admin) and P2 (crrd_admin) have
--- signed for the current term; P3 (moderator) DELIBERATELY HAS NOT.
+-- signed for the current term; P3 (crrd_deputy) DELIBERATELY HAS NOT.
 --
 -- That omission is a test fixture for a requirement, not an oversight. PRD US-J5: "a
 -- sensitive-column read by a user with no current-term acknowledgement is refused, and the

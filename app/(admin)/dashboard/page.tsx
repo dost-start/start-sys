@@ -77,7 +77,7 @@ export default async function AdminDashboardPage({
   if (!ctx) redirect("/login");
   // UX and defence in depth. `middleware.ts` and `(admin)/layout.tsx` already refused a
   // non-admin caller; the boundary is RLS beneath all three.
-  if (!["exec_admin", "crrd_admin", "moderator"].includes(ctx.role)) {
+  if (!["exec_admin", "crrd_admin"].includes(ctx.role)) {
     redirect(homeForRole(ctx.role));
   }
 

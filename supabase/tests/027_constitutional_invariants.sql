@@ -41,24 +41,25 @@ select plan(22);
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════════
--- 1-3 — FOUR ADMINISTRATORS, AND EXACTLY WHICH FOUR
+-- 1-3 — SEVEN ADMINISTRATORS, AND EXACTLY WHICH SEVEN
 --
--- Project heads, 2026-09-01: CEO, COO (exec_admin), CTO (tech_admin), CCDO (crrd_admin),
--- and nobody else. This is not a convention — the admin_is_c_suite CHECK in 0003 refuses a
--- fifth, and assertion 16 proves the CHECK is doing that work. Asserting the COUNT and the
--- SET separately matters: a seed that promoted the CFO and demoted the COO would keep the
--- count at four.
+-- CRRD SRS, 2026-09-05 (0036): CEO, COO (exec_admin); CTO, DCTO-PD (tech_admin); CCDO,
+-- DCCDO-C, DCCDO-D (crrd_admin), and nobody else. This is not a convention — the
+-- admin_is_srs_administrator CHECK refuses an eighth, and assertion 16 proves the CHECK is
+-- doing that work. Asserting the COUNT and the SET separately matters: a seed that
+-- promoted the CFO and demoted the COO would keep the count at seven.
 -- ═══════════════════════════════════════════════════════════════════════════════════
 
 select is(
   (select count(*)::int from public.officer_positions where is_administrator),
-  4,
-  'exactly FOUR positions are administrators — project heads 2026-09-01, CBL Art. III §2');
+  7,
+  'exactly SEVEN positions are administrators — CRRD SRS 2026-09-05 (0036), CBL Art. III §2-§3');
 
 select bag_eq(
   $$ select code from public.officer_positions where is_administrator $$,
-  $$ values ('CEO'), ('COO'), ('CTO'), ('CCDO') $$,
-  'the four administrators are exactly CEO, COO, CTO and CCDO — CBL Art. III §2.1, §2.2, §2.3, §2.7');
+  $$ values ('CEO'), ('COO'), ('CTO'), ('DCTO_PD'), ('CCDO'), ('DCCDO_C'), ('DCCDO_D') $$,
+  'the seven administrators are exactly CEO, COO, CTO, DCTO-PD, CCDO, DCCDO-C, DCCDO-D — SRS Roles: '
+  '"CEO & COO", "CTO & DCTO-PD", "CRRD Chiefs and Deputies"');
 
 select is(
   (select count(*)::int from public.officer_positions),
@@ -117,22 +118,22 @@ select bag_eq(
 select is(
   (select grants_org_role::text from public.officer_positions where code = 'CTO'),
   'tech_admin',
-  'CTO -> tech_admin, and the CTO ALONE — CBL Art. III §2.3 / Art. IV §2.1.4. This one row is the whole of who can end a term (PRD OQ-13)');
+  'CTO -> tech_admin — CBL Art. III §2.3 / Art. IV §2.1.4; with DCTO-PD, one of the two seats that can end a term (PRD OQ-13)');
 
 select is(
   (select grants_org_role::text from public.officer_positions where code = 'DCTO_PD'),
-  'moderator',
-  'DCTO-PD -> moderator, NOT tech_admin — CBL Art. III §3.2; the deputy operates, the chief configures (project heads, 2026-09-01)');
+  'tech_admin',
+  'DCTO-PD -> tech_admin — SRS Roles: "CTO & DCTO-PD … configure the system and control access per role". The second seat is what mitigates PRD OQ-13');
 
 select is(
   (select grants_org_role::text from public.officer_positions where code = 'DCCDO_C'),
-  'moderator',
-  'DCCDO-C -> moderator — CBL Art. IV §6.2.2 puts membership recruitment and application in their hands');
+  'crrd_admin',
+  'DCCDO-C -> crrd_admin — SRS Roles: "CRRD Chiefs and Deputies"; CBL Art. IV §6.2.2 puts membership recruitment and application in their hands');
 
 select is(
   (select grants_org_role::text from public.officer_positions where code = 'DCCDO_D'),
-  'moderator',
-  'DCCDO-D -> moderator — CBL Art. III §3.10, the other half of the CRRD operating tier');
+  'crrd_admin',
+  'DCCDO-D -> crrd_admin — SRS Roles: "CRRD Chiefs and Deputies"; CBL Art. III §3.10');
 
 select is(
   (select grants_org_role::text from public.officer_positions where code = 'SPECIAL_ADVISOR'),
@@ -167,7 +168,7 @@ select throws_ok(
   $$ update public.officer_positions set is_administrator = true where code = 'CFO' $$,
   '23514'::char(5),
   null::text,
-  'the admin_is_c_suite CHECK refuses a FIFTH administrator — CBL Art. III §2, enforced by the database not by a comment');
+  'the admin_is_srs_administrator CHECK refuses an EIGHTH administrator — SRS 2026-09-05, enforced by the database not by a comment');
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════════

@@ -87,9 +87,9 @@ select pg_temp.login_as('00000000-0000-4000-a000-000000000002');   -- tech_admin
 select is((select count(*) from public.memberships)::int, 0,
   'tech_admin sees exactly 0 memberships — OQ-5 least privilege, expressed as a missing role literal');
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy
 select is((select count(*) from public.memberships)::int, 5,
-  'moderator sees exactly 5 memberships — application review is impossible otherwise');
+  'crrd_deputy sees exactly 5 memberships — application review is impossible otherwise');
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000005');   -- officer
 select is((select count(*) from public.memberships)::int, 5,
@@ -122,13 +122,13 @@ select is((select count(*) from public.memberships)::int, 0,
 --
 -- CBL Art. VII §3.2.3: "A simple majority vote (50% + 1) of the Executive Board is
 -- required for termination to be enacted." The WITH CHECK half of memberships_update is
--- what makes that true of the database. crrd_admin and moderator own every OTHER status
+-- what makes that true of the database. crrd_admin and crrd_deputy own every OTHER status
 -- transition — `left` is legitimately theirs — so these two refusals are the whole point.
 -- ═══════════════════════════════════════════════════════════════════════════════════
 
 -- Since 0028, the enforce_membership_transition() trigger raises 42501 for a
 -- non-exec termination attempt BEFORE the WITH CHECK half of the policy is ever
--- evaluated (the USING half still shows crrd/moderator the active row, so the
+-- evaluated (the USING half still shows crrd/crrd_deputy the active row, so the
 -- BEFORE trigger fires). Two layers, same refusal — the raise is the one observed.
 select pg_temp.login_as('00000000-0000-4000-a000-000000000003');   -- crrd_admin
 select throws_ok($$
@@ -139,14 +139,14 @@ select throws_ok($$
   $$, '42501', null,
   'crrd_admin CANNOT set status=terminated — CBL Art. VII §3.2.3 reserves it to the Executive Board (PRD US-D5)');
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy
 select throws_ok($$
     update public.memberships
        set status = 'terminated',
            ended_reason = 'CBL Art. VII 3.2.3 Executive Board majority vote (fixture)'
      where id = '00000000-0000-4000-c000-000000000002'
   $$, '42501', null,
-  'moderator CANNOT set status=terminated, despite holding every other status transition — PRD US-D3, last criterion');
+  'crrd_deputy CANNOT set status=terminated, despite holding every other status transition — PRD US-D3, last criterion');
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000005');   -- officer
 select is(pg_temp.rows_affected($$
@@ -216,14 +216,14 @@ select is(pg_temp.rows_affected($$
   $$), 0,
   'crrd_admin CANNOT reverse a termination — the USING half hides an already-terminated row from them (PRD US-D6)');
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy
 select is(pg_temp.rows_affected($$
     update public.memberships
        set status = 'active',
            ended_reason = 'appeal upheld (fixture, unauthorized actor)'
      where id = '00000000-0000-4000-c000-000000000002'
   $$), 0,
-  'moderator CANNOT reverse a termination — CBL Art. VII §3.2.6, the reinstatement is the Executive Board''s to record');
+  'crrd_deputy CANNOT reverse a termination — CBL Art. VII §3.2.6, the reinstatement is the Executive Board''s to record');
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000001');   -- exec_admin
 select is(pg_temp.rows_affected($$
@@ -254,12 +254,12 @@ select is(pg_temp.rows_affected($$
   $$), 1,
   'crrd_admin CAN update an ordinary member-record field — PRD US-D1, the policy is not blanket-deny');
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy
 select is(pg_temp.rows_affected($$
     update public.memberships set status = 'graduated'
      where id = '00000000-0000-4000-c000-000000000001'
   $$), 1,
-  'moderator CAN set a NON-terminated status — PRD US-D3; `graduated` is the operating tier''s, `terminated` never is');
+  'crrd_deputy CAN set a NON-terminated status — PRD US-D3; `graduated` is the operating tier''s, `terminated` never is');
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000005');   -- officer
 select is(pg_temp.rows_affected($$
@@ -314,14 +314,14 @@ select is(pg_temp.rows_affected($$
 
 -- P2 (the CCDO's person) deliberately has NO membership in the fixture, so this insert has
 -- a clean (person_id, term_id) to land on and does not fight the US-H1 unique constraint.
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy
 select lives_ok($$
     insert into public.memberships (person_id, term_id, status, region_id, year_level, expected_grad_year)
     select '00000000-0000-4000-b000-000000000002', t.id, 'active', r.id, 1, 2030
     from public.terms t, public.regions r
     where t.status = 'active' and r.code = 'NCR'
   $$,
-  'moderator CAN insert a membership — PRD US-C2, the operating tier owns application decisions');
+  'crrd_deputy CAN insert a membership — PRD US-C2, the operating tier owns application decisions');
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000005');   -- officer
 select throws_ok($$

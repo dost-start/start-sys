@@ -27,7 +27,7 @@
 --    wrong, silently, which is strictly worse than a failure.
 --
 -- ⚠ **DOES NOT ADD A CONFIDENTIALITY ACKNOWLEDGEMENT.** helpers/fixtures.psql deliberately
---    omits the moderator's (PRD US-J5's negative case) and nothing in S6 touches a sensitive
+--    omits the crrd_deputy's (PRD US-J5's negative case) and nothing in S6 touches a sensitive
 --    column — the three aggregate views expose NO column of public.people at all, which is
 --    the property 066 asserts. If a dashboard ever needs an acknowledgement, that is a
 --    design error in the dashboard, not a missing fixture row.
@@ -98,7 +98,7 @@
 --                     status view              region view          committee view
 --   exec_admin        act 12 grad 2 res 1      NCR 9 · R07 6        ETH 3 · OPS 2 · — 11
 --   crrd_admin          "  (sum 15)              "  (sum 15)          "  (sum 16)
---   moderator           "                        "                    "
+--   crrd_deputy           "                        "                    "
 --   officer             "                        "                    "
 --   tech_admin        0 rows (sum 0)           0 rows               0 rows
 --   regional_rep_a    act 7 grad 2  (sum 9)    NCR 9  (sum 9)       ETH 2 · OPS 2 · — 6  (10)
@@ -110,14 +110,14 @@
 --   fixture accident:
 --
 --   • tech_admin sees ZERO of everything. memberships_read (0014 §4) names exec_admin,
---     crrd_admin, moderator, officer, a region-scoped regional_rep branch and a self-scoped
+--     crrd_admin, crrd_deputy, officer, a region-scoped regional_rep branch and a self-scoped
 --     member branch — and does NOT name tech_admin. That is PRD OQ-5 expressed as a missing
 --     role literal ("configure the system and control access" is not "read everyone's
 --     address"), and it is why BUILD_PLAN S6-T13 lands the CTO on /system rather than on an
 --     all-zero dashboard that would read as a broken system. Pinned as an EXPECTED value so
 --     that the day someone widens the policy, CI says what changed.
 --
---   • moderator sees EVERYTHING, because memberships_read does name it. Also pinned rather
+--   • crrd_deputy sees EVERYTHING, because memberships_read does name it. Also pinned rather
 --     than assumed — S6's brief calls for exactly this, computed from the policy rather
 --     than guessed.
 --

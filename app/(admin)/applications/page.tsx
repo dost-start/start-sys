@@ -24,7 +24,7 @@ import { parseApplicationListFilters } from "@/lib/applications/schema";
 export const dynamic = "force-dynamic";
 
 /** The three reviewer tiers. Everyone else — including tech_admin, per OQ-5 — is bounced. */
-const REVIEWER_ROLES = new Set(["exec_admin", "crrd_admin", "moderator"]);
+const REVIEWER_ROLES = new Set(["exec_admin", "crrd_admin"]);
 
 /**
  * The term selector's option list.

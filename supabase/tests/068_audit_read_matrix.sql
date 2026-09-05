@@ -29,7 +29,7 @@
 --   dashboard-fixtures §4. Assertion 1 is what converts every zero below from "nothing
 --   happened" into "the policy refused".
 --
--- ⚠ WHO IS EXCLUDED FROM THE LOG, AND WHY IT IS NOT AN OVERSIGHT. crrd_admin and moderator
+-- ⚠ WHO IS EXCLUDED FROM THE LOG, AND WHY IT IS NOT AN OVERSIGHT. crrd_admin and crrd_deputy
 --   are the operational tier whose reads and writes this log RECORDS. Granting them the log
 --   would let the watched read the watcher — and, worse, would let them see which member
 --   records another officer has been opening. exec_admin and tech_admin alone, exactly as
@@ -144,9 +144,9 @@ select is((select count(*)::int from public.audit_log), 0,
   'crrd_admin reads 0 audit rows — the operational tier this log RECORDS must not read it');
 select pg_temp.logout();
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy
 select is((select count(*)::int from public.audit_log), 0,
-  'moderator reads 0 audit rows — same reason as crrd_admin');
+  'crrd_deputy reads 0 audit rows — same reason as crrd_admin');
 select pg_temp.logout();
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000005');   -- officer

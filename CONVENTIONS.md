@@ -297,7 +297,7 @@ Any `yes` in **Security** requires a matching pgTAP test in the same PR.
 | pgTAP RLS | `supabase/tests/` | `<nnn>_<area>_rls.sql` | one plan per file, fixtures named for roles |
 | Playwright E2E | `e2e/` | `<flow>.spec.ts` | `test('regional rep cannot see another region')` |
 
-- pgTAP role fixtures use exactly these nine names: `anon`, `member`, `officer`, `regional_rep_a`, `regional_rep_b`, `moderator`, `crrd_admin`, `exec_admin`, `tech_admin`. Assert **exact row counts and exact visible column sets** — not "greater than zero".
+- pgTAP role fixtures use exactly these nine names: `anon`, `member` (the revoked tier — migration `0036`), `officer`, `regional_rep_a`, `regional_rep_b`, `crrd_deputy` (a second `crrd_admin` with no confidentiality acknowledgement), `crrd_admin`, `exec_admin`, `tech_admin`. Assert **exact row counts and exact visible column sets** — not "greater than zero".
 - The six locked Playwright flows: `login`, `apply-with-upload`, `approve-and-id`, `campaign-send`, `term-rollover`, `rr-scope-leak`.
 - **`SECURITY DEFINER` functions need a deny test per role, not just a happy path.** A function that guards on one role is one careless `or` away from granting everyone. For `roll_over_term()`: assert `tech_admin` succeeds and that all seven other fixtures raise `42501`. Same rule for `unfreeze_term()`. This is the only test standing between the term-lifecycle guard and a silent widening.
 - No coverage target. Tests exist where a wrong answer is expensive.
@@ -369,7 +369,7 @@ export async function approveApplication(id: string) {
 }
 
 // RIGHT
-export const approveApplication = withRole(['crrd_admin', 'moderator', 'exec_admin'], async (ctx, input: unknown) => {
+export const approveApplication = withRole(['crrd_admin', 'exec_admin'], async (ctx, input: unknown) => {
   const parsed = approveApplicationSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: toFieldErrors(parsed.error) };
   const { data, error } = await ctx.supabase.rpc('approve_application', { app_id: parsed.data.id });
@@ -393,11 +393,11 @@ create table public.committee_notes (
 );
 alter table public.committee_notes enable row level security;
 alter table public.committee_notes force row level security;
--- why: officers are view-only per PRD Security NFR; CRRD chief and moderators write.
+-- why: officers are view-only per PRD Security NFR; CRRD chiefs and deputies write.
 create policy committee_notes_read on public.committee_notes for select
-  using (auth_role() in ('exec_admin','crrd_admin','moderator','officer'));
+  using (auth_role() in ('exec_admin','crrd_admin','officer'));
 create policy committee_notes_write on public.committee_notes for insert
-  with check (auth_role() in ('exec_admin','crrd_admin','moderator'));
+  with check (auth_role() in ('exec_admin','crrd_admin'));
 -- no delete policy, by design
 ```
 

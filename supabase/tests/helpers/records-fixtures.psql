@@ -9,7 +9,7 @@
 --                scoping count asserted by 061 or 063
 --              · L10 — a person with NO membership, so the trigger's INSERT branch has
 --                somewhere to insert
---              · the MODERATOR's confidentiality acknowledgement
+--              · the CRRD_DEPUTY's confidentiality acknowledgement
 --
 -- USAGE:     \ir helpers/auth.psql
 --            \ir helpers/fixtures.psql
@@ -20,10 +20,10 @@
 --            and would double-count).
 --
 -- ⚠⚠ **NEVER INCLUDE THIS FILE FROM 020_confidentiality_gate.sql.** ⚠⚠
---    §5 below inserts the MODERATOR's confidentiality acknowledgement, which
---    helpers/fixtures.psql deliberately omits — the unacknowledged moderator IS 020's
+--    §5 below inserts the CRRD_DEPUTY's confidentiality acknowledgement, which
+--    helpers/fixtures.psql deliberately omits — the unacknowledged crrd_deputy IS 020's
 --    negative case for PRD US-J5. Same rule, and the same reason, as review-fixtures.psql.
---    062 and 064 need the moderator's POSITIVE case (all three permitted roles admitted),
+--    062 and 064 need the crrd_deputy's POSITIVE case (all three permitted roles admitted),
 --    and they get the negative half by DELETING all three acknowledgements part-way through
 --    the file rather than by starting without one.
 --
@@ -58,13 +58,13 @@
 --     committees ................................. 2   (FIXT_ETHICS, FIXT_OUTREACH)
 --     committee_memberships ...................... 4   (P4+P6 ethics, R1 ethics, R1 outreach)
 --     department_assignments ..................... 1   (R1 -> CRRD)
---     confidentiality acknowledgements ........... 3   (P1 exec, P2 crrd, P3 moderator)
+--     confidentiality acknowledgements ........... 3   (P1 exec, P2 crrd, P3 crrd_deputy)
 --
 --   Per fixture, and the two asymmetries are real properties of 0014 rather than accidents:
 --
 --                          people   memberships   v_member_directory (distinct membership_id)
 --     exec_admin / crrd /     17         15                     15
---       moderator / officer
+--       crrd_deputy / officer
 --     regional_rep_a (NCR)     3          4                      3
 --     regional_rep_b (R07)     2          2                      2
 --     member (P4)              1          1                      1
@@ -259,12 +259,12 @@ on conflict do nothing;
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════════
--- 5 — the moderator's confidentiality acknowledgement  (CBL Art. VIII §7.1)
+-- 5 — the crrd_deputy's confidentiality acknowledgement  (CBL Art. VIII §7.1)
 -- ═══════════════════════════════════════════════════════════════════════════════════
 -- ⚠ SEE THE BANNER AT THE TOP OF THIS FILE BEFORE INCLUDING IT ANYWHERE NEW.
 --
 -- fixtures.psql gives an acknowledgement to P1 (exec_admin) and P2 (crrd_admin) and
--- deliberately withholds one from P3 (moderator), because 020_confidentiality_gate.sql needs
+-- deliberately withholds one from P3 (crrd_deputy), because 020_confidentiality_gate.sql needs
 -- an unacknowledged PRIVILEGED fixture to assert PRD US-J5's refusal against.
 --
 -- 062 and 064 need the opposite: all THREE permitted roles admitted, so that the subsequent

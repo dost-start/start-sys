@@ -27,12 +27,7 @@ export const dynamic = "force-dynamic";
  * constant is private to the query module — kept here as UX only, since the real gate
  * is server-side inside `search_member_directory()` regardless of what this page sends.
  */
-const TERM_SELECTING_ROLES = new Set<OrgRole>([
-  "exec_admin",
-  "crrd_admin",
-  "moderator",
-  "tech_admin",
-]);
+const TERM_SELECTING_ROLES = new Set<OrgRole>(["exec_admin", "crrd_admin", "tech_admin"]);
 
 export default async function MembersPage({
   searchParams,

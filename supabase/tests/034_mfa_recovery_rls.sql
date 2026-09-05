@@ -135,7 +135,7 @@ select ok(pg_temp.probe_count($$ select count(*) from public.mfa_recovery_codes 
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000004');
 select ok(pg_temp.probe_count($$ select count(*) from public.mfa_recovery_codes $$) in ('0', 'refused'),
-  'moderator cannot read mfa_recovery_codes');
+  'crrd_deputy cannot read mfa_recovery_codes');
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000005');
 select ok(pg_temp.probe_count($$ select count(*) from public.mfa_recovery_codes $$) in ('0', 'refused'),

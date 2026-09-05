@@ -38,7 +38,7 @@
 -- ⚠ NOT ASSERTED HERE, BY DESIGN: WHO may write these tables. Every value of
 -- officer_assignment_status is a CBL Art. VI act reserved to the Executive Board, and
 -- departments/committees are crrd_admin-only while their assignment tables admit
--- moderators — all of that is policy, lands in 0014, and is asserted in 025. This file
+-- crrd_deputys — all of that is policy, lands in 0014, and is asserted in 025. This file
 -- asserts only what holds regardless of who is asking.
 --
 -- ⚠ REGIONAL_REP is inserted with `on conflict do nothing` rather than assumed, because

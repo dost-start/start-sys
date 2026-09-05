@@ -158,8 +158,8 @@ describe("terminated is exec_admin only (CBL Art. VII §3.2.3, §3.2.5-3.2.6)", 
     expect(canTransition("terminated", "active", "exec_admin")).toBe(true);
   });
 
-  it("crrd_admin and moderator own every OTHER transition but not this one", () => {
-    for (const role of ["crrd_admin", "moderator"] as const) {
+  it("crrd_admin owns every OTHER transition but not this one", () => {
+    for (const role of ["crrd_admin"] as const) {
       expect(legalNextStatuses("active", role)).toEqual(["graduated", "left", "resigned"]);
       expect(legalNextStatuses("active", role)).not.toContain("terminated");
       expect(canTransition("active", "terminated", role)).toBe(false);
@@ -200,7 +200,7 @@ describe("roles that hold no UPDATE policy on memberships", () => {
   });
 
   it("STATUS_WRITER_ROLES matches 0014's memberships_update policy exactly", () => {
-    expect([...STATUS_WRITER_ROLES].sort()).toEqual(["crrd_admin", "exec_admin", "moderator"]);
+    expect([...STATUS_WRITER_ROLES].sort()).toEqual(["crrd_admin", "exec_admin"]);
   });
 });
 

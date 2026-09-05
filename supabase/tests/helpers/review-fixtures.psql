@@ -7,7 +7,7 @@
 --              · the member_id_counters row for join year 2024
 --              · FIVE applications on the active term: two pending, one approved, one
 --                rejected, and one pending whose applicant_email IS P7's
---              · the moderator's confidentiality acknowledgement
+--              · the crrd_deputy's confidentiality acknowledgement
 --
 -- USAGE:     \ir helpers/auth.psql
 --            \ir helpers/fixtures.psql
@@ -18,18 +18,18 @@
 --            counter row).
 --
 -- ⚠⚠ **NEVER INCLUDE THIS FILE FROM 020_confidentiality_gate.sql.** ⚠⚠
---    §5 below inserts the MODERATOR's confidentiality acknowledgement. helpers/fixtures.psql
+--    §5 below inserts the CRRD_DEPUTY's confidentiality acknowledgement. helpers/fixtures.psql
 --    deliberately omits it, and 020 is the suite that asserts PRD US-J5 — "a sensitive-column
 --    read by a user with no current-term acknowledgement is REFUSED, and the refusal is an
---    ERROR, not an empty result" (CBL Art. VIII §7.1). The moderator fixture IS that negative
+--    ERROR, not an empty result" (CBL Art. VIII §7.1). The crrd_deputy fixture IS that negative
 --    case. Adding the row here makes 020's refusal assertions unprovable, so the row is added
 --    HERE, in a file 020 does not include, rather than in fixtures.psql.
 --
---    Why the review suites need it at all: EVERY S4 path a moderator can take —
+--    Why the review suites need it at all: EVERY S4 path a crrd_deputy can take —
 --    approve_application(), reject_application() (indirectly, through the same review
 --    surface), log_document_view() and get_application_detail() — sits behind
---    assert_confidentiality_ack(). Without this row the moderator's *positive* cases would
---    all raise, and 047's "moderator succeeds" assertions would be measuring the gate rather
+--    assert_confidentiality_ack(). Without this row the crrd_deputy's *positive* cases would
+--    all raise, and 047's "crrd_deputy succeeds" assertions would be measuring the gate rather
 --    than the role guard. Both properties are real; they just cannot be asserted from one
 --    fixture file, which is why there are two.
 --
@@ -53,7 +53,7 @@
 --       rejected ................................ 1   (A4, with a real ground)
 --     people (fixtures.psql 6 + P7) .............. 7
 --     member_id_counters rows .................... 1   (join_year 2024, last_seq 7)
---     confidentiality acknowledgements ........... 3   (P1 exec, P2 crrd, P3 moderator)
+--     confidentiality acknowledgements ........... 3   (P1 exec, P2 crrd, P3 crrd_deputy)
 --
 --   ⚠ THE COUNTER ROW IS INTENTIONALLY INCONSISTENT WITH fixtures.psql, AND THAT IS FINE.
 --     fixtures.psql writes member_id literals ('2024-001', '2024-1000') without counter rows,
@@ -273,12 +273,12 @@ on conflict (id) do nothing;
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════════
--- 5 — the moderator's confidentiality acknowledgement  (READ THE WARNING IN THE HEADER)
+-- 5 — the crrd_deputy's confidentiality acknowledgement  (READ THE WARNING IN THE HEADER)
 -- ═══════════════════════════════════════════════════════════════════════════════════
--- CBL Art. VIII §7.1, per term (Art. V §1). P3 is the moderator fixture's person, and
+-- CBL Art. VIII §7.1, per term (Art. V §1). P3 is the crrd_deputy fixture's person, and
 -- fixtures.psql omits this row ON PURPOSE so 020 can assert the refusal.
 --
--- It is added here because the moderator is a first-class reviewer in S4 — ARCHITECTURE.md
+-- It is added here because the crrd_deputy is a first-class reviewer in S4 — ARCHITECTURE.md
 -- §5: "you cannot review an application without reading it" — and every S4 read path asserts
 -- the acknowledgement. 047 still gets the negative case for free: it revokes this row inside
 -- a savepoint to prove the gate bites, rather than relying on its absence.

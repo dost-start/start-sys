@@ -20,7 +20,7 @@
 --   exec_admin         18   23    1    6    8    2    2    5     1    7    1    2     1    4    2   ALL     17
 --   tech_admin         18   23    1    0    8    2    2    0     0    7    1    0     0    4    2   ALL     17
 --   crrd_admin         18   23    1    6    1    2    2    5     1    7    1    2     1    4    1     0      0
---   moderator          18   23    1    6    1    2    2    5     1    7    1    2     1    4    0     0      0
+--   crrd_deputy          18   23    1    6    1    2    2    5     1    7    1    2     1    4    0     0      0
 --   officer            18   23    1    6    1    2    2    5     1    7    1    2     1    4    0     0      0
 --   regional_rep_a     18   23    1    2    1    2    2    3     1    7    1    1     1    4    0     0      0
 --   regional_rep_b     18   23    1    2    1    2    2    2     0    7    1    1     0    4    0     0      0
@@ -66,12 +66,12 @@
 --     chart looks like is org-public; what is on a person's RECORD is not, and that is 029.
 --
 --   • crrd_admin sees ONE user_roles row — their own. is_admin_reader() names exec_admin
---     and tech_admin only: a moderator or a CCDO has no business enumerating the org's
+--     and tech_admin only: a crrd_deputy or a CCDO has no business enumerating the org's
 --     accounts (PRD US-I1, US-E3).
 --
 --   • confidentiality_acknowledgements: exec 2, tech 2, crrd 1, everyone else 0. The
 --     policy is "your own row, or exec/tech". crrd_admin's person (P2) has signed so they
---     see one; the MODERATOR's person (P3) deliberately has NOT, so they see none — PRD
+--     see one; the CRRD_DEPUTY's person (P3) deliberately has NOT, so they see none — PRD
 --     US-J5's day-one state, kept as a fixture rather than smoothed away.
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════
@@ -234,28 +234,28 @@ select is((select count(*) from public.sensitive_column_registry)::int,         
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════════
--- moderator — DCCDO-C/D and DCTO-PD. Same operational reach, none of the structure.
+-- crrd_deputy — DCCDO-C/D and DCTO-PD. Same operational reach, none of the structure.
 -- The single 0 on acknowledgements is PRD US-J5's deliberate day-one state.
 -- ═══════════════════════════════════════════════════════════════════════════════════
 select pg_temp.login_as('00000000-0000-4000-a000-000000000004');
 
-select is((select count(*) from public.regions)::int,                          18, 'moderator sees exactly 18 regions');
-select is((select count(*) from public.officer_positions)::int,                23, 'moderator sees exactly 23 officer_positions');
-select is((select count(*) from public.affiliations)::int,                      1, 'moderator sees exactly 1 affiliation');
-select is((select count(*) from public.people)::int,                            6, 'moderator sees exactly 6 people — application review is impossible otherwise');
-select is((select count(*) from public.user_roles)::int,                        1, 'moderator sees exactly 1 user_role — their own');
-select is((select count(*) from public.terms)::int,                             2, 'moderator sees exactly 2 terms');
-select is((select count(*) from public.application_windows)::int,               2, 'moderator sees exactly 2 application_windows — read yes, write no');
-select is((select count(*) from public.memberships)::int,                       5, 'moderator sees exactly 5 memberships');
-select is((select count(*) from public.member_affiliations)::int,               1, 'moderator sees exactly 1 member_affiliation');
-select is((select count(*) from public.departments)::int,                       7, 'moderator sees exactly 7 departments');
-select is((select count(*) from public.committees)::int,                        1, 'moderator sees exactly 1 committee — they staff it, they do not create it');
-select is((select count(*) from public.committee_memberships)::int,             2, 'moderator sees exactly 2 committee_memberships');
-select is((select count(*) from public.department_assignments)::int,            1, 'moderator sees exactly 1 department_assignment');
-select is((select count(*) from public.officer_assignments)::int,               4, 'moderator sees exactly 4 officer_assignments');
-select is((select count(*) from public.confidentiality_acknowledgements)::int,  0, 'moderator sees exactly 0 confidentiality_acknowledgements — P3 deliberately has not signed (PRD US-J5)');
-select is((select count(*) from public.audit_log)::int,                         0, 'moderator sees exactly 0 audit_log rows');
-select is((select count(*) from public.sensitive_column_registry)::int,         0, 'moderator sees exactly 0 registry rows');
+select is((select count(*) from public.regions)::int,                          18, 'crrd_deputy sees exactly 18 regions');
+select is((select count(*) from public.officer_positions)::int,                23, 'crrd_deputy sees exactly 23 officer_positions');
+select is((select count(*) from public.affiliations)::int,                      1, 'crrd_deputy sees exactly 1 affiliation');
+select is((select count(*) from public.people)::int,                            6, 'crrd_deputy sees exactly 6 people — application review is impossible otherwise');
+select is((select count(*) from public.user_roles)::int,                        1, 'crrd_deputy sees exactly 1 user_role — their own');
+select is((select count(*) from public.terms)::int,                             2, 'crrd_deputy sees exactly 2 terms');
+select is((select count(*) from public.application_windows)::int,               2, 'crrd_deputy sees exactly 2 application_windows — read yes, write no');
+select is((select count(*) from public.memberships)::int,                       5, 'crrd_deputy sees exactly 5 memberships');
+select is((select count(*) from public.member_affiliations)::int,               1, 'crrd_deputy sees exactly 1 member_affiliation');
+select is((select count(*) from public.departments)::int,                       7, 'crrd_deputy sees exactly 7 departments');
+select is((select count(*) from public.committees)::int,                        1, 'crrd_deputy sees exactly 1 committee — they staff it, they do not create it');
+select is((select count(*) from public.committee_memberships)::int,             2, 'crrd_deputy sees exactly 2 committee_memberships');
+select is((select count(*) from public.department_assignments)::int,            1, 'crrd_deputy sees exactly 1 department_assignment');
+select is((select count(*) from public.officer_assignments)::int,               4, 'crrd_deputy sees exactly 4 officer_assignments');
+select is((select count(*) from public.confidentiality_acknowledgements)::int,  0, 'crrd_deputy sees exactly 0 confidentiality_acknowledgements — P3 deliberately has not signed (PRD US-J5)');
+select is((select count(*) from public.audit_log)::int,                         0, 'crrd_deputy sees exactly 0 audit_log rows');
+select is((select count(*) from public.sensitive_column_registry)::int,         0, 'crrd_deputy sees exactly 0 registry rows');
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════════

@@ -6,19 +6,19 @@
 --    2-4   ...and reads the real, UNMASKED sensitive block through get_person_sensitive()
 --    5-8   one call writes EXACTLY ONE audit row: VIEW_SENSITIVE, attributed, values-free
 --    9     exec_admin, the second acknowledged role, succeeds identically
---   10-13  moderator — acknowledged NOWHERE — is REFUSED WITH AN ERROR, the message names
+--   10-13  crrd_deputy — acknowledged NOWHERE — is REFUSED WITH AN ERROR, the message names
 --          the acknowledgement, and the refusal writes NO audit row
 --   14-18  tech_admin, officer, regional_rep_a, member and anon each raise 42501
 --   19     two calls write two rows — the log answers "who looked, and when", not "ever"
 --   20     a person who does not exist returns NULL, not a refusal
 --
--- WHY THE MODERATOR CASE IS THE FILE. PRD US-J5 is explicit: "a sensitive-column read by a
+-- WHY THE CRRD_DEPUTY CASE IS THE FILE. PRD US-J5 is explicit: "a sensitive-column read by a
 --   user with no current-term acknowledgement is REFUSED, AND THE REFUSAL IS AN ERROR, NOT
 --   AN EMPTY RESULT." An empty result would be indistinguishable from "this scholar has no
 --   contact number on file", and the CCDO would spend the first week of a term debugging
---   the wrong thing. fixtures.sql deliberately gives P3 (the moderator's person) NO
+--   the wrong thing. fixtures.sql deliberately gives P3 (the crrd_deputy's person) NO
 --   acknowledgement row precisely so this behaviour has something to be asserted against.
---   **DO NOT ADD AN ACK ROW FOR THE MODERATOR TO MAKE A TEST GO GREEN** — assertions 10-13
+--   **DO NOT ADD AN ACK ROW FOR THE CRRD_DEPUTY TO MAKE A TEST GO GREEN** — assertions 10-13
 --   are asserting the refusal.
 --
 --   That refusal is also the deliberate day-one failure mode ARCHITECTURE.md §5 and §9
@@ -170,9 +170,9 @@ select pg_temp.logout();
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════════
--- 10-13 — the moderator: permitted by ROLE, refused by the CONSTITUTION
+-- 10-13 — the crrd_deputy: permitted by ROLE, refused by the CONSTITUTION
 -- ═══════════════════════════════════════════════════════════════════════════════════
--- The most important block in the file. The moderator tier IS in
+-- The most important block in the file. The crrd_deputy tier IS in
 -- get_person_sensitive()'s role guard — PRD §2 and ARCHITECTURE.md §5: "you cannot review
 -- an application without reading it." What stops this call is Art. VIII §7.1 alone. So
 -- these four assertions isolate the acknowledgement gate from the role guard, which is
@@ -181,14 +181,14 @@ select pg_temp.logout();
 insert into _gate_marks (k, v)
 values ('mod_refused', (select coalesce(max(id), 0) from public.audit_log));
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator, P3, NOT acked
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy, P3, NOT acked
 
 -- 10 — the fixture precondition, asserted rather than assumed. If someone "fixes" the
 -- fixture by adding an ack row for P3, this fails FIRST and names the cause, instead of
 -- assertions 11-13 failing with the mystifying message that a refusal did not happen.
 select ok(
   not (select public.has_confidentiality_ack()),
-  'the moderator fixture has NO current-term acknowledgement — the deliberate negative '
+  'the crrd_deputy fixture has NO current-term acknowledgement — the deliberate negative '
   'case for PRD US-J5, and it must stay that way'
 );
 
@@ -196,7 +196,7 @@ select throws_ok(
   $$ select public.get_person_sensitive('00000000-0000-4000-b000-000000000004') $$,
   '42501'::char(5),
   null::text,
-  'an unacknowledged moderator is REFUSED WITH AN ERROR (42501), never handed an empty '
+  'an unacknowledged crrd_deputy is REFUSED WITH AN ERROR (42501), never handed an empty '
   'result — PRD US-J5, CBL Art. VIII §7.1'
 );
 
@@ -220,7 +220,7 @@ select pg_temp.logout();
 -- refusals appear as VIEW_SENSITIVE rows cannot answer "who read this scholar's address".
 --
 -- ⚠ ASSERTED AFTER logout(), AND THAT ORDERING IS LOAD-BEARING. audit_log_read (0014)
--- admits only exec_admin and tech_admin, so a moderator session reads ZERO audit rows no
+-- admits only exec_admin and tech_admin, so a crrd_deputy session reads ZERO audit rows no
 -- matter what is in the table — this assertion would pass vacuously if it ran one line
 -- earlier. Every audit_log read in this file happens as the session role for that reason.
 select is(

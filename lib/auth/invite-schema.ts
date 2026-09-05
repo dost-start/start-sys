@@ -13,12 +13,14 @@ import { z } from "zod";
 import type { OrgRole } from "@/lib/auth/route-access";
 
 /**
- * The seven access tiers, as a literal tuple zod can build an enum from.
+ * Every label of `org_role`, as a literal tuple. Kept total over the generated
+ * enum so a display map can be checked against it; NOT what the role pickers
+ * offer — see `ASSIGNABLE_ROLES`.
  *
  * `satisfies readonly OrgRole[]` checks every element is a real `OrgRole` at
  * compile time; it does not (and cannot) prove the tuple is total over the
- * generated enum. If an eighth tier is ever added to `org_role`, this list needs
- * a matching edit — there is no automated total-over-the-enum check here, unlike
+ * generated enum. If a tier is ever added to `org_role`, this list needs a
+ * matching edit — there is no automated total-over-the-enum check here, unlike
  * `route-access.ts`'s `Record<OrgRole, string>` maps.
  */
 export const ORG_ROLES = [
@@ -29,6 +31,21 @@ export const ORG_ROLES = [
   "officer",
   "regional_rep",
   "member",
+] as const satisfies readonly OrgRole[];
+
+/**
+ * The five tiers a tech_admin may grant — the CRRD SRS (2026-09-05, migration
+ * 0036). `moderator` is retired and refused by the `user_roles_no_retired_tier`
+ * CHECK; `member` is the REVOKED state, written only by `revokeRole`, never
+ * chosen, because members hold no accounts at all ("Members cannot access the
+ * system. They can only submit via forms").
+ */
+export const ASSIGNABLE_ROLES = [
+  "exec_admin",
+  "tech_admin",
+  "crrd_admin",
+  "officer",
+  "regional_rep",
 ] as const satisfies readonly OrgRole[];
 
 const uuid = z.string().uuid();
@@ -50,7 +67,7 @@ const optionalUuid = z
  * so the form can show a field-level error before the database would raise one.
  */
 function requireRegionForRegionalRep(
-  data: { role: (typeof ORG_ROLES)[number]; region_id?: string },
+  data: { role: (typeof ASSIGNABLE_ROLES)[number]; region_id?: string },
   ctx: z.RefinementCtx,
 ): void {
   if (data.role === "regional_rep" && !data.region_id) {
@@ -70,7 +87,7 @@ function requireRegionForRegionalRep(
 export const inviteUserSchema = z
   .object({
     email: z.string().trim().toLowerCase().email("Enter a valid email address."),
-    role: z.enum(ORG_ROLES),
+    role: z.enum(ASSIGNABLE_ROLES),
     region_id: optionalUuid,
     person_id: optionalUuid,
   })
@@ -82,7 +99,7 @@ export type InviteUserInput = z.infer<typeof inviteUserSchema>;
 export const roleAssignmentSchema = z
   .object({
     user_id: uuid,
-    role: z.enum(ORG_ROLES),
+    role: z.enum(ASSIGNABLE_ROLES),
     region_id: optionalUuid,
     person_id: optionalUuid,
   })
@@ -91,8 +108,9 @@ export const roleAssignmentSchema = z
 export type RoleAssignmentInput = z.infer<typeof roleAssignmentSchema>;
 
 /**
- * `revokeRole` input. Revocation is a demotion to `member`, never a delete — no
- * hard deletes exist system-wide (CLAUDE.md "Banned patterns").
+ * `revokeRole` input. Revocation writes `member` — the no-surface tier, which
+ * reaches no route (route-access.ts) — never a delete: no hard deletes exist
+ * system-wide (CLAUDE.md "Banned patterns").
  */
 export const revokeRoleSchema = z.object({
   user_id: uuid,

@@ -21,7 +21,7 @@
 --   THE PII IS — useful to an auditor and useful to an attacker — so it is read-restricted
 --   to exec_admin and tech_admin. audit_log is restricted to the same two by PRD US-I1
 --   ("the log is readable only by Executive and Technical Admins"), and note who is
---   excluded and that it is deliberate: crrd_admin and moderator are the tier whose reads
+--   excluded and that it is deliberate: crrd_admin and crrd_deputy are the tier whose reads
 --   and writes this log records, so giving them the log would let the watched read the
 --   watcher.
 --
@@ -139,7 +139,7 @@ select pg_temp.logout();
 -- 9-20 — the six other tiers see neither table
 -- ═══════════════════════════════════════════════════════════════════════════════════
 -- Six roles x two tables, asserted individually so a failure names the role that gained
--- access rather than reporting that a total moved. crrd_admin and moderator are the two
+-- access rather than reporting that a total moved. crrd_admin and crrd_deputy are the two
 -- that matter most: they are the operational heart of the system and the tier whose every
 -- sensitive read this log records.
 
@@ -150,11 +150,11 @@ select is((select count(*)::int from public.audit_log), 0,
   'crrd_admin reads 0 audit_log rows — the watched does not read the watcher (PRD US-I1)');
 select pg_temp.logout();
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy
 select is((select count(*)::int from public.sensitive_column_registry), 0,
-  'moderator reads 0 sensitive_column_registry rows');
+  'crrd_deputy reads 0 sensitive_column_registry rows');
 select is((select count(*)::int from public.audit_log), 0,
-  'moderator reads 0 audit_log rows');
+  'crrd_deputy reads 0 audit_log rows');
 select pg_temp.logout();
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000005');   -- officer

@@ -353,16 +353,16 @@ delete from public.sensitive_column_registry
 
 select is(
   (select count(*)::int from public.officer_positions where is_administrator),
-  4,
-  '(f) EXACTLY four positions are administrators — CBL Art. III §2 read with the '
-  'project-head decision of 2026-09-01. A fifth fails CI, not code review'
+  7,
+  '(f) EXACTLY seven positions are administrators — CBL Art. III §2-§3 read with the '
+  'CRRD SRS of 2026-09-05 (0036). An eighth fails CI, not code review'
 );
 
 select set_eq(
   $$ select code from public.officer_positions where is_administrator $$,
-  ARRAY['CEO', 'COO', 'CTO', 'CCDO']::text[],
-  '(f) and they are CEO, COO, CTO and CCDO — the four the CBL''s own department heads make '
-  'them, asserted as a SET so a swap is caught as well as a count'
+  ARRAY['CEO', 'COO', 'CTO', 'DCTO_PD', 'CCDO', 'DCCDO_C', 'DCCDO_D']::text[],
+  '(f) and they are CEO, COO, CTO, DCTO-PD, CCDO, DCCDO-C and DCCDO-D — the SRS''s three '
+  'administrator groups, asserted as a SET so a swap is caught as well as a count'
 );
 
 

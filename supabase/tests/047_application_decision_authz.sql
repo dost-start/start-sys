@@ -210,8 +210,8 @@ select is(
 -- ═══════════════════════════════════════════════════════════════════════════════════
 -- 10-11 — the other two reviewer roles
 -- ═══════════════════════════════════════════════════════════════════════════════════
--- PRD US-C1/US-C2 name CRRD and Executive Admins; ARCHITECTURE.md §5 adds moderators, who
--- own the day-to-day operational surface. The moderator case only reaches the role guard
+-- PRD US-C1/US-C2 name CRRD and Executive Admins; ARCHITECTURE.md §5 adds crrd_deputys, who
+-- own the day-to-day operational surface. The crrd_deputy case only reaches the role guard
 -- because helpers/review-fixtures.psql gave P3 a confidentiality acknowledgement — see that
 -- file's header for why it is not in helpers/fixtures.psql.
 
@@ -225,14 +225,14 @@ select matches(
   'exec_admin approves — PRD US-C2 names CRRD and Executive Admins together'
 );
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy
 insert into fx_ids (k, v)
 values ('b2', public.approve_application('00000000-0000-4000-8000-000000000212'));
 select pg_temp.logout();
 
 select matches(
   (select v from fx_ids where k = 'b2'), '^\d{4}-\d{3,}$',
-  'moderator approves — the operational tier (CBL Art. III §3.9, duties Art. IV §6.2.2: the '
+  'crrd_deputy approves — the operational tier (CBL Art. III §3.9, duties Art. IV §6.2.2: the '
   'DCCDO-C runs "membership recruitment, application, retention")'
 );
 
@@ -392,11 +392,11 @@ select lives_ok(
 );
 select pg_temp.logout();
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy
 select lives_ok(
   $$ select public.reject_application('00000000-0000-4000-8000-000000000215',
                                       'Duplicate submission; superseded by a later form.') $$,
-  'moderator rejects — the operational tier decides both ways, not just the pleasant one'
+  'crrd_deputy rejects — the operational tier decides both ways, not just the pleasant one'
 );
 select pg_temp.logout();
 
@@ -577,7 +577,7 @@ select pg_temp.logout();
 select pg_temp.login_as('00000000-0000-4000-a000-000000000004');
 select throws_ok(
   $$ select public.allocate_member_id('00000000-0000-4000-b000-000000000002') $$,
-  '42501'::char(5), null::text, 'moderator CANNOT call allocate_member_id() directly');
+  '42501'::char(5), null::text, 'crrd_deputy CANNOT call allocate_member_id() directly');
 select pg_temp.logout();
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000005');

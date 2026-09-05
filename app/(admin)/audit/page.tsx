@@ -85,7 +85,7 @@ export default async function AuditPage({
   // UX only. The policy refuses the SELECT independently — remove this line and the page
   // renders an empty log, which the `readable` flag below turns into the same 404.
   if (!canReadAuditLog(ctx.role)) {
-    if (ctx.role === "crrd_admin" || ctx.role === "moderator") notFound();
+    if (ctx.role === "crrd_admin") notFound();
     redirect(homeForRole(ctx.role));
   }
 

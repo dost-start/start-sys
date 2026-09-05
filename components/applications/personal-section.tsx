@@ -4,9 +4,10 @@
 // Personal information — the SRS membership form (2026-09-05), section one.
 //
 // Field `name`s are the zod keys, which are the payload / column names — CONVENTIONS
-// §6, no mapping layer. The SRS dropped the address block and the school ID; they are
-// not collected here any more (0038). Age is computed from the birthdate at review time
-// and never stored.
+// §6, no mapping layer. The SRS dropped the school ID; it is not collected here any
+// more (0038) and stays removed (ADR 0013 — Ethan, 2026-09-06). Home address RETURNS
+// here (ADR 0013 §Consequences, Ethan 2026-09-06 "include home address") as four
+// required fields. Age is computed from the birthdate at review time and never stored.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useFormContext } from "react-hook-form";
@@ -157,6 +158,56 @@ export function PersonalSection() {
             {...register("facebook_account")}
           />
           <FieldError message={errors.facebook_account?.message} />
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <FieldLabel htmlFor="address_line">Street address</FieldLabel>
+        <input
+          id="address_line"
+          autoComplete="street-address"
+          className={fieldClassName(Boolean(errors.address_line))}
+          aria-invalid={errors.address_line ? "true" : "false"}
+          {...register("address_line")}
+        />
+        <FieldError message={errors.address_line?.message} />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div className="space-y-1.5">
+          <FieldLabel htmlFor="city_municipality">City / municipality</FieldLabel>
+          <input
+            id="city_municipality"
+            autoComplete="address-level2"
+            className={fieldClassName(Boolean(errors.city_municipality))}
+            aria-invalid={errors.city_municipality ? "true" : "false"}
+            {...register("city_municipality")}
+          />
+          <FieldError message={errors.city_municipality?.message} />
+        </div>
+        <div className="space-y-1.5">
+          <FieldLabel htmlFor="province">Province</FieldLabel>
+          <input
+            id="province"
+            autoComplete="address-level1"
+            className={fieldClassName(Boolean(errors.province))}
+            aria-invalid={errors.province ? "true" : "false"}
+            {...register("province")}
+          />
+          <FieldError message={errors.province?.message} />
+        </div>
+        <div className="space-y-1.5">
+          <FieldLabel htmlFor="postal_code">Postal code</FieldLabel>
+          <input
+            id="postal_code"
+            inputMode="numeric"
+            placeholder="1100"
+            autoComplete="postal-code"
+            className={fieldClassName(Boolean(errors.postal_code))}
+            aria-invalid={errors.postal_code ? "true" : "false"}
+            {...register("postal_code")}
+          />
+          <FieldError message={errors.postal_code?.message} />
         </div>
       </div>
     </FormSection>

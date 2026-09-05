@@ -54,9 +54,12 @@ export const LOGIN_PATH = "/login";
  * leading segment — `/system` matches `/system` and `/system/user-roles`, and does
  * NOT match `/systematic`.
  *
- * `/committees-admin` and `/officers` are deliberately absent: those admin surfaces
- * are v1.1 (BUILD_PLAN "Scope honesty") and adding a prefix for a page that does not
- * exist would let a URL through to a 404 instead of home.
+ * `/committees-admin` is deliberately absent: that admin surface is v1.1 (BUILD_PLAN
+ * "Scope honesty") and adding a prefix for a page that does not exist would let a URL
+ * through to a 404 instead of home. `/officers` is no longer in that category — it is
+ * the CRRD records desk (ADR 0012): who holds each CBL position and their standing
+ * under CBL Art. VI, for `exec_admin` and `crrd_admin` only (the page itself narrows
+ * further, the same way `/system` narrows `canAccess` below).
  */
 export const ROUTE_GROUPS = {
   public: ["/apply", "/renew", "/privacy"],
@@ -67,6 +70,7 @@ export const ROUTE_GROUPS = {
     "/applications",
     "/renewals",
     "/campaigns",
+    "/officers",
     "/audit",
     ADMIN_SYSTEM_PREFIX,
   ],

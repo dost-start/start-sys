@@ -51,6 +51,8 @@ import {
   finalizeApplicationSchema,
   startApplicationSchema,
   buildApplicationPayload,
+  submissionStandardsFieldErrors,
+  SUBMISSION_STANDARDS_GENERIC_MESSAGE,
   type StartApplicationInput,
 } from "@/lib/applications/schema";
 import { withPublic } from "@/lib/auth/with-public";
@@ -155,6 +157,31 @@ export const startApplication = withPublic<StartApplicationInput, StartApplicati
     // and naming them here would invite someone to "fix" a failure by setting one.
     const consentGivenAt = new Date().toISOString();
     const payload = buildApplicationPayload(input, consentGivenAt);
+
+    // ── 2.5. Submission-time standards (ADR 0013 §1) ────────────────────────
+    // Refused HERE, before any row is written: "a submission failing any check is
+    // refused at submission", not discovered later in the review queue. The RPC reads
+    // the SAME payload the insert below is about to write and the applicant's own
+    // email — never logged, never echoed back beyond the field messages themselves.
+    const { data: standardsFailures, error: standardsError } = await ctx.supabase.rpc(
+      "check_submission_standards",
+      { p_email: input.applicant_email, p_payload: payload },
+    );
+    if (standardsError) {
+      return { ok: false, error: mapDbError(standardsError) };
+    }
+    if (standardsFailures && standardsFailures.length > 0) {
+      // A missing active term is public information — the same code a closed window
+      // already returns (lib/action-result.ts header) — never a field-level message.
+      if (standardsFailures.includes("term")) {
+        return err<StartApplicationResult>("window_closed");
+      }
+      return err<StartApplicationResult>(
+        "validation",
+        SUBMISSION_STANDARDS_GENERIC_MESSAGE,
+        submissionStandardsFieldErrors(standardsFailures),
+      );
+    }
 
     // The id is minted HERE, not returned by the database. An `.insert().select()`
     // becomes INSERT … RETURNING, and Postgres applies SELECT policies to the

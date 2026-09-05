@@ -273,6 +273,10 @@ const applyScreens = {
   contactNumber: (page: Page) => page.getByLabel(/contact number|mobile/i),
   facebook: (page: Page) => page.getByLabel(/facebook/i),
   sex: (page: Page) => page.getByLabel(/^sex$/i),
+  addressLine: (page: Page) => page.getByLabel(/street address/i),
+  cityMunicipality: (page: Page) => page.getByLabel(/city.*municipality/i),
+  province: (page: Page) => page.getByLabel(/^province$/i),
+  postalCode: (page: Page) => page.getByLabel(/postal code/i),
 
   scholarshipAward: (page: Page) => page.getByLabel(/scholarship award/i),
   awardYear: (page: Page) => page.getByLabel(/year of award/i),
@@ -366,6 +370,10 @@ async function fillApplicationForm(page: Page, applicant: ApplicantFields): Prom
     push(applyScreens.birthdate(page), "2004-06-15");
     push(applyScreens.contactNumber(page), "09171234500");
     push(applyScreens.facebook(page), "https://facebook.com/e2e.applicant");
+    push(applyScreens.addressLine(page), "159 Fixture St.");
+    push(applyScreens.cityMunicipality(page), "Quezon City");
+    push(applyScreens.province(page), "Metro Manila");
+    push(applyScreens.postalCode(page), "1100");
     push(applyScreens.yearLevel(page), "2");
     push(applyScreens.expectedGradYear(page), "2029");
 

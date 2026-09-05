@@ -1,7 +1,8 @@
 "use server";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// THE TWO DECISIONS (BUILD_PLAN S4-T15; PRD §3 v1.0 item 8, US-C2, US-C3).
+// THE TWO DECISIONS, PLUS THE BATCH THAT RUNS THEM AFTER THE PERIOD CLOSES
+// (BUILD_PLAN S4-T15; PRD §3 v1.0 item 8, US-C2, US-C3; ADR 0013 §2).
 //
 // ═══════════════════════════════════════════════════════════════════════════════
 // WHY THIS IS A SEPARATE FILE FROM `actions.ts`
@@ -20,14 +21,18 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // `withRole` IS NOT THE BOUNDARY HERE
 // ═══════════════════════════════════════════════════════════════════════════════
-// Both RPCs carry their OWN role guard in SQL: `approve_application()` (0023) and
+// All three RPCs carry their OWN role guard in SQL: `approve_application()` (0023) and
 // `reject_application()` (0024) each raise 42501 for anything outside
 // exec_admin / crrd_admin / moderator, and `047_application_decision_authz.sql`
 // asserts that for all nine fixtures independently of this file. Delete this wrapper
 // and nothing leaks; the caller just gets an opaque error instead of a clean
 // `unauthorized`. If the two ever disagree, THE SQL GUARD IS THE ANSWER.
 //
-// tech_admin is refused in both places (PRD OQ-5): "configure the system and control
+// `approve_all_pending()` is narrower still — `exec_admin`/`crrd_admin` only, no
+// `moderator` (ADR 0013 §2) — and carries its own window-open guard besides, which
+// this wrapper does not and must not try to duplicate.
+//
+// tech_admin is refused everywhere (PRD OQ-5): "configure the system and control
 // access" is not "read every applicant's birthdate and mint them a member ID".
 //
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -65,6 +70,12 @@ import { withRole } from "@/lib/auth/with-role";
 
 /** The three tiers the SQL guards name. Spelled once so the two actions cannot drift. */
 const REVIEWER_ROLES = ["crrd_admin", "exec_admin"] as const;
+
+/**
+ * The renewal queue's own path, revalidated alongside the applications queue below
+ * (ADR 0013 §2 — one batch decides both applications and renewals).
+ */
+const RENEWALS_PATH = "/renewals";
 
 /**
  * The routes a decision invalidates.
@@ -230,5 +241,131 @@ export const rejectApplication = withRole<ApplicationRejectInput, null>(
     revalidatePath(`${QUEUE_PATH}/${parsed.data.id}`);
 
     return ok(null);
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// approveAllPending — the post-period batch (ADR 0013 §2; PRD US-C1, US-C2, US-C3,
+// US-G7, US-H5)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Same "withRole is not the boundary" note as the two decisions above:
+// `approve_all_pending()` (0044-family) carries its own `exec_admin`/`crrd_admin` guard
+// and its own window-open guard, both independent of this wrapper. This function takes
+// NO INPUT — there is nothing to validate, nothing per-row to name — it is a trigger
+// for a server-side batch scoped entirely to `current_term_id()`.
+//
+// One database transaction per underlying `approve_application()` / `approve_renewal()`
+// call, not one for the whole batch: a single bad row (a stale reference, a race with a
+// manual reject) is caught, reported in `failed`, and does not roll back every other
+// row's approval. That per-row isolation is why the batch can be re-run safely — see
+// the idempotency note on `parseApproveAllPendingResult` below.
+
+export type ApproveAllPendingResult = {
+  applicationsApproved: number;
+  renewalsApproved: number;
+  /** Still-pending rows that failed a submission standard (application or renewal id). */
+  skipped: { id: string; failures: string[] }[];
+  /** Rows `approve_application()`/`approve_renewal()` itself raised on, mid-batch. */
+  failed: { id: string; error: string }[];
+};
+
+/**
+ * Refuses while the application period is still open (55000 from the RPC). Distinct
+ * from `DECISION_CODES`'s `55000` above, which means "this ONE application is no longer
+ * pending" — the same SQLSTATE, two different meanings depending on which function
+ * raised it, so it is mapped here rather than folded into `decisionError`.
+ */
+const WINDOW_STILL_OPEN_MESSAGE =
+  "The application period is still open. Close it on the application-period page first.";
+
+function approveAllError(raw: unknown): ActionError {
+  if (raw !== null && typeof raw === "object" && (raw as { code?: unknown }).code === "55000") {
+    return { code: "conflict", message: WINDOW_STILL_OPEN_MESSAGE };
+  }
+  return mapDbError(raw);
+}
+
+function isJsonRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function toFiniteCount(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+/** `[{id, failures: string[]}]`, dropping any entry that does not have at least an id. */
+function toSkippedList(value: unknown): { id: string; failures: string[] }[] {
+  if (!Array.isArray(value)) return [];
+  const out: { id: string; failures: string[] }[] = [];
+  for (const entry of value) {
+    if (!isJsonRecord(entry) || typeof entry.id !== "string") continue;
+    const failures = Array.isArray(entry.failures)
+      ? entry.failures.filter((f): f is string => typeof f === "string")
+      : [];
+    out.push({ id: entry.id, failures });
+  }
+  return out;
+}
+
+/** `[{id, error: string}]`, same defensive shape as `toSkippedList`. */
+function toFailedList(value: unknown): { id: string; error: string }[] {
+  if (!Array.isArray(value)) return [];
+  const out: { id: string; error: string }[] = [];
+  for (const entry of value) {
+    if (!isJsonRecord(entry) || typeof entry.id !== "string") continue;
+    out.push({ id: entry.id, error: typeof entry.error === "string" ? entry.error : "" });
+  }
+  return out;
+}
+
+/**
+ * Parse `approve_all_pending()`'s jsonb return DEFENSIVELY.
+ *
+ * The RPC's success is already established by the caller (no `error` from the client)
+ * before this runs — an unexpected jsonb shape here (a schema drift mid-deploy, a
+ * `NULL`) degrades to all-zero counts and empty lists rather than throwing. The batch
+ * really did run; a shape this layer cannot parse is not evidence that it failed.
+ *
+ * Idempotency (US-C2, US-C3) lives entirely in the SQL: a second click finds nothing
+ * still `pending` in the current term and returns zero counts and empty lists — this
+ * function has no idempotency logic of its own to get wrong.
+ */
+function parseApproveAllPendingResult(data: unknown): ApproveAllPendingResult {
+  if (!isJsonRecord(data)) {
+    return { applicationsApproved: 0, renewalsApproved: 0, skipped: [], failed: [] };
+  }
+  return {
+    applicationsApproved: toFiniteCount(data.applications_approved),
+    renewalsApproved: toFiniteCount(data.renewals_approved),
+    skipped: toSkippedList(data.skipped),
+    failed: toFailedList(data.failed),
+  };
+}
+
+/**
+ * Approve every still-`pending` application and renewal in the current term that
+ * meets the submission standards, in one batch (ADR 0013 §2).
+ *
+ * Refuses (`conflict`) while a `membership_application` window for the current term is
+ * still open — decisions happen once, after the period closes, never mid-window. A row
+ * that fails `check_submission_standards()` is skipped, not approved: it cannot
+ * normally reach `pending` in the first place (the same checks gate submission), so a
+ * skip here means reference data (a program, a university) or the applicant's
+ * membership standing changed after they submitted. A row `approve_application()` /
+ * `approve_renewal()` itself raises on is reported in `failed` for individual review —
+ * it is not retried automatically, and it is not silently dropped.
+ */
+export const approveAllPending = withRole<void, ApproveAllPendingResult>(
+  REVIEWER_ROLES,
+  async (ctx) => {
+    const { data, error } = await ctx.supabase.rpc("approve_all_pending");
+
+    if (error) return { ok: false, error: approveAllError(error) };
+
+    revalidatePath(QUEUE_PATH);
+    revalidatePath(RENEWALS_PATH);
+
+    return ok(parseApproveAllPendingResult(data));
   },
 );

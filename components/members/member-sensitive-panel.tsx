@@ -54,7 +54,9 @@ export function MemberSensitivePanel({
         <Field label="Province" value={record.province} />
         <Field label="Postal code" value={record.postal_code} />
         <Field label="School" value={record.school} />
-        <Field label="School ID number" value={record.school_id_no} />
+        {/* School ID number removed from this panel (Ethan, 2026-09-06) — UI-only; the
+            column still exists on `record` and is still masked by audit_row() and
+            cleared by the five-year purge. Do not re-add without checking first. */}
         <Field label="Sex" value={record.sex ? SEX_LABELS[record.sex] : null} />
         <Field label="Facebook account" value={record.facebook_account} />
         <Field

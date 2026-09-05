@@ -15,10 +15,15 @@ import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { ApplicationsTable } from "@/components/applications/applications-table";
+import { ApproveAllDialog } from "@/components/applications/approve-all-dialog";
 import type { Database } from "@/database.types";
 import { getSessionContext } from "@/lib/auth/queries";
 import { homeForRole } from "@/lib/auth/route-access";
-import { countPendingApplications, listApplications } from "@/lib/applications/queries";
+import {
+  countPendingApplications,
+  listApplications,
+  listPendingStandards,
+} from "@/lib/applications/queries";
 import { parseApplicationListFilters } from "@/lib/applications/schema";
 
 export const dynamic = "force-dynamic";
@@ -53,10 +58,13 @@ export default async function ApplicationsPage({
   const rawParams = await searchParams;
   const filters = parseApplicationListFilters(rawParams);
 
-  const [listResult, pendingCount, terms] = await Promise.all([
+  const [listResult, pendingCount, terms, standardsFailures] = await Promise.all([
     listApplications(ctx, filters),
     countPendingApplications(ctx),
     listTermOptions(ctx.supabase),
+    // ADR 0013 §2 — the queue's "meets standards" flag, exec_admin/crrd_admin only,
+    // same two tiers `REVIEWER_ROLES` above already gates this whole page to.
+    listPendingStandards(ctx),
   ]);
 
   // `listApplications` only fails when `current_term_id()` cannot resolve a fallback
@@ -82,6 +90,10 @@ export default async function ApplicationsPage({
             {pendingCount} pending decision{pendingCount === 1 ? "" : "s"} this term.
           </p>
         </div>
+        {/* Both roles able to reach this render are already exec_admin/crrd_admin —
+            REVIEWER_ROLES above already redirected everyone else — so no second role
+            check is needed here (ADR 0013 §2's guard is the SQL function's own). */}
+        {pendingCount > 0 ? <ApproveAllDialog /> : null}
       </div>
 
       {!listResult.ok ? (
@@ -89,7 +101,12 @@ export default async function ApplicationsPage({
           No active term is open, so there is nothing to review yet.
         </p>
       ) : (
-        <ApplicationsTable page={page} filters={filters} terms={terms} />
+        <ApplicationsTable
+          page={page}
+          filters={filters}
+          terms={terms}
+          standardsFailures={standardsFailures}
+        />
       )}
     </div>
   );

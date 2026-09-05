@@ -39,12 +39,16 @@ create temp table fx_tok on commit drop as
          encode(sha256(convert_to('renewaltoken-0000000000000000000000000000000000000000000000000000', 'UTF8')), 'hex') as digest;
 grant select on fx_tok to public;
 
+-- program_id + university_id: since 0045 finalize_renewal() runs the membership standards
+-- (ADR 0013), so the renewal payload names REAL seeded reference rows.
 create temp table fx_payload on commit drop as
   select jsonb_build_object(
     'region_id', pg_temp.fx_region('R07')::text,
     'year_level', '4', 'expected_grad_year', '2028',
     'contact_number', '+639170000099', 'facebook_account', 'https://facebook.com/renewed',
-    'sex', 'female', 'scholarship_award', 'merit', 'award_year', '2022'
+    'sex', 'female', 'scholarship_award', 'merit', 'award_year', '2022',
+    'program_id', (select id from public.programs where code = 'CS')::text,
+    'university_id', (select id from public.universities where is_active order by name limit 1)::text
   ) as body;
 grant select on fx_payload to public;
 

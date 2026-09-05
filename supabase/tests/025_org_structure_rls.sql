@@ -12,16 +12,22 @@
 --   STAFFING    assigning a member to an EXISTING committee or department  ->  crrd_deputy
 --               as well. The locked role model gives the DCCDO-C/D and DCTO-PD exactly
 --               this and no more.
---   DISCIPLINE  any officer standing  ->  exec_admin ALONE. Every value of
---               officer_assignment_status is a CBL Art. VI act reserved to the CEO or the
---               Executive Board.
+--   DISCIPLINE  any officer standing  ->  exec_admin AND crrd_admin (ADR 0012, 2026-09-06:
+--               widened for the SAME reason STAFFING is a crrd_deputy power — CRRD asked to
+--               be the org's HR-records desk for any position). Every value of
+--               officer_assignment_status remains a CBL Art. VI act DECIDED by the CEO or
+--               the Executive Board; only who may RECORD that decision widened. See
+--               075_officer_assignments_crrd.sql for the full matrix this migration adds
+--               (officer/regional_rep/tech_admin still refused, one_sitting_officer still
+--               enforced, memberships.status='terminated' — CBL Art. VII — still untouched).
 --
 --    1     positive control
 --    2-10  committee_memberships row counts per fixture — incl. "member sees exactly 1"
 --   11     crrd_deputy has NO confidentiality acknowledgement (PRD US-J5's day-one state)
 --   12-20  STRUCTURE: committees and departments are the CCDO's alone
 --   21-26  STAFFING: assignment to an existing committee/department is a crrd_deputy power
---   27-36  DISCIPLINE: CBL Art. VI standing is exec_admin's alone; the org chart is public
+--   27-36  DISCIPLINE: CBL Art. VI standing is exec_admin's AND crrd_admin's (ADR 0012);
+--          the org chart is public
 --   37-40  confidentiality_acknowledgements: exec_admin files them, nobody amends them
 --   41-42  structural: no DELETE policy, no officer/regional_rep write policy
 --
@@ -31,10 +37,11 @@
 --   "insert committees as crrd_deputy 0 rows"; the true behaviour is a 42501 and that is
 --   what is asserted. Flagged rather than smoothed over.
 --
--- CITATION:  BUILD_PLAN S2-T19; ARCHITECTURE.md §4.4, §5; DATA_MODEL.md §3.4, §8.4, §9;
+-- CITATION:  BUILD_PLAN S2-T19; ADR 0012 (crrd_admin as a second officer_assignments
+--            recorder, 2026-09-06); ARCHITECTURE.md §4.4, §5; DATA_MODEL.md §3.4, §8.4, §9;
 --            PRD §3 v1.0 items 3, 10, 15, 16; PRD US-E1, US-E2, US-E4, US-E5, US-E6,
---            US-E7, US-D2, US-F2, US-J5; CBL Art. III §4, §5.1-5.2, §5.4, Art. VI §1.2,
---            §1.7, §2.2, §3.2.3, §3.2.7, §3.2.8, §4, Art. VIII §7.1.
+--            US-E7, US-D2, US-F2, US-J5, OQ-16; CBL Art. III §4, §5.1-5.2, §5.4, Art. VI
+--            §1.2, §1.6-1.7, §2.2, §3.2.3, §3.2.7, §3.2.8, §4, Art. VIII §7.1.
 -- ═══════════════════════════════════════════════════════════════════════════════════
 
 begin;
@@ -247,12 +254,19 @@ select throws_ok($$
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════════
--- 27-36 — DISCIPLINE: CBL Art. VI standing is exec_admin's alone
+-- 27-36 — DISCIPLINE: CBL Art. VI standing is exec_admin's AND crrd_admin's (ADR 0012)
 --
--- Every value of officer_assignment_status is an Art. VI act reserved to the CEO or the
--- Executive Board: on_leave §1.2, suspended §3.2.3, impeached §3.2.7 (and §3.2.8 makes the
--- ruling "final and irrevocable"), resigned §2.2, dismissed §1.7. crrd_admin and crrd_deputy
--- are refused AT THE DATA LAYER, not merely hidden from (PRD US-E5, US-E6, US-E7).
+-- Every value of officer_assignment_status remains an Art. VI act DECIDED by the CEO or
+-- the Executive Board: on_leave §1.2, suspended §3.2.3, impeached §3.2.7 (and §3.2.8 makes
+-- the ruling "final and irrevocable"), resigned §2.2, dismissed §1.7. ADR 0012 (2026-09-06)
+-- widens who may RECORD one of these decisions to crrd_admin as well — CRRD asked to be
+-- the org's HR-records desk for any position, and the CBL decider does not move; the write
+-- is a record of a decision made outside the system, the same shape already in use for the
+-- DCOO/AWOL divergence below. officer and regional_rep remain refused AT THE DATA LAYER,
+-- not merely hidden from (PRD US-E5, US-E6, US-E7). The full matrix this migration adds —
+-- tech_admin's refusal, one_sitting_officer's survival, memberships (Art. VII) staying
+-- untouched — is 075_officer_assignments_crrd.sql; this file only updates the two
+-- assertions that this migration flips.
 --
 -- And note what this does NOT do: separation from OFFICE never touches memberships.status.
 -- An impeached CTO is still a member — Art. VI §3.3 disqualifies them from holding a
@@ -262,17 +276,19 @@ select throws_ok($$
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000003');   -- crrd_admin
 select is(pg_temp.rows_affected($$
-    update public.officer_assignments set status = 'impeached'
+    update public.officer_assignments
+       set status = 'impeached',
+           status_note = 'CBL Art. VI 3.2.7 majority vote of the Executive Board (fixture, recorded by CRRD per ADR 0012)'
      where id = '00000000-0000-4000-f000-000000000003'
-  $$), 0,
-  'crrd_admin CANNOT change an officer''s standing — CBL Art. VI is the Executive Board''s (PRD US-E6)');
+  $$), 1,
+  'crrd_admin CAN NOW record an officer''s standing — ADR 0012 widens the write to crrd_admin; the Executive Board still DECIDES (PRD US-E6)');
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy
 select is(pg_temp.rows_affected($$
     update public.officer_assignments set status = 'impeached'
      where id = '00000000-0000-4000-f000-000000000003'
-  $$), 0,
-  'crrd_deputy CANNOT change an officer''s standing — not even their own department''s deputy');
+  $$), 1,
+  'crrd_deputy CAN ALSO record an officer''s standing — the tier is crrd_admin (ADR 0012), not one seat within it; row was already impeached, so this re-asserts the same value rather than changing it');
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000005');   -- officer
 select is(pg_temp.rows_affected($$
@@ -306,36 +322,38 @@ select pg_temp.login_anon();
 select is((select count(*) from public.officer_assignments)::int, 0,
   'anon sees 0 officer assignments — org-public means public to the ORGANIZATION (PRD US-A1)');
 
+-- COO, CFO and CMO are all deliberately EMPTY in the fixture (CBL Art. VI §4: a vacancy is
+-- the ABSENCE of a sitting assignment, not a status value), so each of the next three
+-- inserts lands on its OWN free seat rather than fighting the one_sitting_officer partial
+-- unique index or each other — three different roles, so ADR 0012's three recorders
+-- (crrd_admin, crrd_deputy, exec_admin) can each be shown seating an officer in the same
+-- test run. one_sitting_officer's survival against the WIDENED tier is asserted separately
+-- in 075_officer_assignments_crrd.sql assertion 12.
 select pg_temp.login_as('00000000-0000-4000-a000-000000000003');   -- crrd_admin
-select throws_ok($$
-    insert into public.officer_assignments (person_id, term_id, role, status)
-    select '00000000-0000-4000-b000-000000000006', id, 'COO', 'active'
+select lives_ok($$
+    insert into public.officer_assignments (person_id, term_id, role, status, status_note)
+    select '00000000-0000-4000-b000-000000000006', id, 'COO', 'active',
+           'CBL Art. VI 4.2 vacancy filled (fixture, recorded by CRRD per ADR 0012)'
     from public.terms where status = 'active'
   $$,
-  '42501'::char(5),
-  null::text,
-  'crrd_admin CANNOT seat an officer — Art. V §2 appointment and Art. VI §4 vacancy-filling are the Executive Board''s');
+  'crrd_admin CAN NOW seat an officer — ADR 0012 widens officer_assignments_insert to crrd_admin (PRD US-E7)');
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy
-select throws_ok($$
-    insert into public.officer_assignments (person_id, term_id, role, status)
-    select '00000000-0000-4000-b000-000000000006', id, 'COO', 'active'
+select lives_ok($$
+    insert into public.officer_assignments (person_id, term_id, role, status, status_note)
+    select '00000000-0000-4000-b000-000000000006', id, 'CFO', 'active',
+           'CBL Art. VI 4.2 vacancy filled (fixture, recorded by CRRD deputy per ADR 0012)'
     from public.terms where status = 'active'
   $$,
-  '42501'::char(5),
-  null::text,
-  'crrd_deputy CANNOT seat an officer');
+  'crrd_deputy CAN ALSO seat an officer — the widened tier is crrd_admin, not one seat within it');
 
--- The COO seat is deliberately EMPTY in the fixture (CBL Art. VI §4: a vacancy is the
--- ABSENCE of a sitting assignment, not a status value), so this insert has a free seat to
--- land on without fighting the one_sitting_officer partial unique index.
 select pg_temp.login_as('00000000-0000-4000-a000-000000000001');   -- exec_admin
 select lives_ok($$
     insert into public.officer_assignments (person_id, term_id, role, status)
-    select '00000000-0000-4000-b000-000000000006', id, 'COO', 'active'
+    select '00000000-0000-4000-b000-000000000006', id, 'CMO', 'active'
     from public.terms where status = 'active'
   $$,
-  'exec_admin CAN seat an officer — CBL Art. V §2 / Art. VI §4.2 (PRD US-E7)');
+  'exec_admin CAN STILL seat an officer — ADR 0012 only ADDS crrd_admin, it does not narrow exec_admin (CBL Art. V §2 / Art. VI §4.2, PRD US-E7)');
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════════

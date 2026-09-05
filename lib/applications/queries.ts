@@ -280,6 +280,41 @@ export async function countPendingApplications(ctx: ActionContext): Promise<numb
   return count ?? 0;
 }
 
+/**
+ * The queue's "meets standards" flag for every `pending` application in the current
+ * term (ADR 0013 §2). Wraps `list_pending_standards()` — SECURITY DEFINER, raising
+ * 42501 for anyone outside `exec_admin`/`crrd_admin`, the same two tiers the queue
+ * page itself already gates on.
+ *
+ * A row cannot normally reach `pending` and fail a standard at all — the identical
+ * check runs at submission on both forms (ADR 0013 §1) — so a non-empty failure list
+ * here means the world moved after the fact: a program or university row was
+ * deactivated, the active term changed, or the applicant's membership was terminated
+ * between submission and review. This read is informational, "a second look before the
+ * batch commits" (ADR 0013 §2), never itself a gate on anything.
+ *
+ * Returns an EMPTY MAP on any error — a caller who cannot read the queue at all (or a
+ * transient RPC failure) never learns anything from this, and the table renders every
+ * pending row's standards column as unknown rather than the whole page failing over
+ * one advisory read.
+ */
+export async function listPendingStandards(ctx: ActionContext): Promise<Map<string, string[]>> {
+  const { data, error } = await ctx.supabase.rpc("list_pending_standards");
+  if (error || !Array.isArray(data)) return new Map();
+
+  const result = new Map<string, string[]>();
+  for (const row of data) {
+    if (row === null || typeof row !== "object") continue;
+    const record = row as { application_id?: unknown; failures?: unknown };
+    if (typeof record.application_id !== "string") continue;
+    const failures = Array.isArray(record.failures)
+      ? record.failures.filter((f): f is string => typeof f === "string")
+      : [];
+    result.set(record.application_id, failures);
+  }
+  return result;
+}
+
 export type ProofRef = {
   id: string;
   /** Provider-opaque. Only `lib/documents/` may interpret it; never rendered, ever. */

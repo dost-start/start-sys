@@ -1,0 +1,142 @@
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- 0046_crrd_records_officer_assignments.sql  —  crrd_admin becomes a second RECORDER of
+-- officer_assignments, alongside exec_admin (ADR 0012)
+--
+-- WHAT:      Widens officer_assignments_insert and officer_assignments_update (0014) from
+--            `auth_role() = 'exec_admin'` to `auth_role() in ('exec_admin', 'crrd_admin')`.
+--
+--            NOTHING ELSE ON THIS TABLE CHANGES:
+--              · officer_assignments_read stays `using (true)` for every authenticated
+--                tier (0014) — the org chart remains org-public (PRD US-E4).
+--              · the one_sitting_officer / one_acting_officer partial unique indexes
+--                (0007) still apply, unmodified — at most one SITTING and one ACTING
+--                holder per (term, role), REGIONAL_REP and COMMITTEE_MEMBER excluded.
+--              · reject_write_to_archived_term() (0005/0007) still fires BEFORE INSERT
+--                OR UPDATE on this table — an archived term stays read-only for BOTH
+--                recorder tiers, not just exec_admin.
+--              · trg_officer_assignments_audit (0012_functions.sql) still fires AFTER
+--                INSERT OR UPDATE — every appointment or separation is attributable to
+--                the acting user regardless of which tier recorded it.
+--              · no DELETE policy exists on this table and none is added here. None
+--                exists anywhere in the schema (CLAUDE.md).
+--              · memberships.status = 'terminated' (CBL Art. VII §3.2.3) is UNTOUCHED —
+--                enforce_membership_transition() (0028) still raises 42501 for anyone but
+--                exec_admin, on that table, regardless of this migration. Different
+--                Article, different table, different deciding body.
+--
+-- WHY:       ADR 0012 (docs/decisions/0012-crrd-records-officer-appointments.md). At the
+--            2026-09-05 team meeting CRRD asked for a "special appointment" capability;
+--            Ethan clarified (2026-09-06) that it is for recording who fills a post an
+--            officer has LEFT — AWOL, retirement, any Art. VI separation — through CRRD,
+--            because "it's an HRM system that will be used by CRRD... it'll be the
+--            centralized system for everyone to base upon." The ask is CRRD as the org's
+--            HR-records desk for ANY position, not only its own department's.
+--
+--            THE CBL DECIDER DOES NOT MOVE. Art. VI reserves the underlying decision to
+--            the CEO (LOA §1.2, resignation §2.2) or a majority of the Executive Board
+--            (impeachment §3.2.7); this migration only widens who may RECORD that a
+--            decision — made outside the system — happened. That split already exists
+--            once, narrower: CBL Art. VI §1.6 makes the DCOO the officer who issues the
+--            AWOL notice, yet the DCOO holds `officer` (read-only), and 0014's own comment
+--            already reads "the notice is issued outside the system and the resulting
+--            dismissed flip is recorded by an exec_admin, with the DCOO named in
+--            status_note" (PRD OQ-16). This migration generalizes that recorder/decider
+--            split to a second holder — crrd_admin — rather than inventing a new pattern.
+--            `status_note` stays mandatory at the APPLICATION layer (lib/officers/schema.ts,
+--            not a database CHECK — matching how 0007 originally left it) and must keep
+--            naming the constitutional basis and, when the recorder is not the decider,
+--            who the decider was.
+--
+--            NOT WIDENED, ON PURPOSE (ADR 0012's own list):
+--              (a) user_roles — who holds a system ACCOUNT and an org_role — stays
+--                  tech_admin ONLY (0014). Recording that someone holds a CBL position
+--                  through officer_assignments does not, by itself, grant that person any
+--                  system capability.
+--              (b) memberships.status = 'terminated' (CBL Art. VII §3.2.3) stays
+--                  exec_admin ONLY. Conflating officer STANDING (Art. VI) with membership
+--                  TERMINATION (Art. VII) is, per DATA_MODEL.md §3.1/§3.4, "the single
+--                  most likely future mistake in this schema" — this migration is careful
+--                  not to make it.
+--              (c) the constitutional invariants (the seven SRS administrators per 0036's
+--                  admin_is_srs_administrator CHECK; exactly seven departments) are
+--                  untouched — recording an appointment is not the same act as granting
+--                  the tier that appointment might imply.
+--
+-- PRD:       OQ-16 (the DCOO/AWOL divergence, whose operational half this resolves
+--            without granting the DCOO write access); US-E5, US-E6, US-E7.
+-- CBL:       Art. VI §1 (LOA), §1.6-1.7 (AWOL notice, automatic dismissal), §2
+--            (resignation), §3 (impeachment), §4 (vacancy, acting officers).
+--
+-- ROLLBACK:  Forward-only. Narrowing back to exec_admin-only is the exact mirror of this
+--            file: `drop policy` + recreate naming `auth_role() = 'exec_admin'` alone.
+--
+-- CITATION:  ADR 0012; DATA_MODEL.md §3.4, §13 rule 10; ARCHITECTURE.md §5;
+--            0007_org_structure.sql; 0014_rls.sql.
+-- ═══════════════════════════════════════════════════════════════════════════════════
+
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- 0 — INSPECTION TRAIL: what 0014 shipped, verified before anything is changed
+-- ═══════════════════════════════════════════════════════════════════════════════════
+--     select policyname, cmd, roles, qual, with_check
+--       from pg_policies where schemaname = 'public' and tablename = 'officer_assignments';
+--
+--   officer_assignments_read    SELECT  {authenticated}  true
+--   officer_assignments_insert  INSERT  {authenticated}  WITH CHECK auth_role() = 'exec_admin'
+--   officer_assignments_update  UPDATE  {authenticated}  USING + WITH CHECK
+--                                                        auth_role() = 'exec_admin'
+--
+-- No aal2 predicate on either write policy (unlike user_roles_write, terms_write,
+-- application_windows_write) — ADR 0012 does not ask for one, so none is added here.
+-- PERMISSIVE POLICIES OR TOGETHER, so the fix for "too narrow" is `drop` + recreate,
+-- never a second additive policy that would only ever widen further.
+-- ═══════════════════════════════════════════════════════════════════════════════════
+
+drop policy officer_assignments_insert on public.officer_assignments;
+drop policy officer_assignments_update on public.officer_assignments;
+
+-- ┌──────────────────────────────────────────────────────────────────────────────────┐
+-- │ exec_admin AND crrd_admin, for every command (ADR 0012). Every value of           │
+-- │ officer_assignment_status remains a CBL Art. VI act DECIDED by the CEO or the      │
+-- │ Executive Board — only who may RECORD the decision has widened:                    │
+-- │   on_leave   §1.2  "The CEO shall acknowledge, approve, and issue a notice of LOA"│
+-- │   suspended  §3.2.3 automatic on receipt of an impeachment complaint              │
+-- │   impeached  §3.2.7 majority vote of the Executive Board; §3.2.8 "final and       │
+-- │                     irrevocable" — the one state the Constitution declares         │
+-- │                     terminal, so it has no outbound edge anywhere                  │
+-- │   resigned   §2.2  approval rests with the CEO                                    │
+-- │   dismissed  §1.7  automatic after an unanswered AWOL notice                      │
+-- │ crrd_admin's write is a RECORD of a decision made outside the system — the exact   │
+-- │ shape already in use for the DCOO/AWOL case below — never a second DECIDER. The    │
+-- │ mandatory status_note (app layer, lib/officers/schema.ts — no DB CHECK) is what    │
+-- │ makes every entry attributable: it names the CBL basis and, when the recorder is   │
+-- │ not the decider, who the decider was.                                             │
+-- │                                                                                  │
+-- │ officer, regional_rep and tech_admin remain refused AT THE DATA LAYER, not merely  │
+-- │ hidden from (PRD US-E5, US-E6, US-E7). tech_admin's refusal is unchanged: the CTO   │
+-- │ configures the system (PRD OQ-5's reasoning) and does not record who holds a       │
+-- │ position, the CCDO's job under this ADR.                                          │
+-- │                                                                                  │
+-- │ And note what this STILL does NOT do: separation from OFFICE never touches       │
+-- │ memberships.status. An impeached CTO is still a member — Art. VI §3.3            │
+-- │ disqualifies them from holding A POSITION, not from the organization. Merging     │
+-- │ the two remains the single most likely future mistake in this schema, and CBL     │
+-- │ Art. VII §3 termination of membership stays exec_admin ONLY (0028) — UNCHANGED    │
+-- │ by this migration.                                                                │
+-- │                                                                                  │
+-- │ KNOWN DIVERGENCE, STILL FLAGGED NOT FIXED: CBL Art. VI §1.6 makes the DCOO the     │
+-- │ officer who issues the AWOL notice, and the locked role model gives the DCOO       │
+-- │ `officer` — SELECT only. The notice is still issued outside the system; the        │
+-- │ resulting dismissal can now be recorded by crrd_admin as readily as by exec_admin,  │
+-- │ with the DCOO named in status_note either way. Widening WRITE access to the DCOO   │
+-- │ itself would create a quiet fifth-and-sixth administrator, which the 2026-09-01    │
+-- │ decision forecloses. PRD OQ-16 stays open — a question for the project heads, not  │
+-- │ a policy edit (ADR 0012).                                                          │
+-- └──────────────────────────────────────────────────────────────────────────────────┘
+create policy officer_assignments_insert on public.officer_assignments
+  for insert to authenticated
+  with check (public.auth_role() in ('exec_admin', 'crrd_admin'));
+
+create policy officer_assignments_update on public.officer_assignments
+  for update to authenticated
+  using (public.auth_role() in ('exec_admin', 'crrd_admin'))
+  with check (public.auth_role() in ('exec_admin', 'crrd_admin'));

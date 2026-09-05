@@ -32,7 +32,11 @@ import {
   type VerifiedUpload,
 } from "@/lib/documents/types";
 
-import { buildApplicationPayload } from "./schema";
+import {
+  buildApplicationPayload,
+  submissionStandardsFieldErrors,
+  SUBMISSION_STANDARDS_GENERIC_MESSAGE,
+} from "./schema";
 import {
   finalizeRenewalSchema,
   startRenewalSchema,
@@ -87,6 +91,27 @@ export const startRenewal = withPublic<StartRenewalInput, StartRenewalResult>(
     // approve_renewal()'s payload ->> reads line up with approve_application()'s.
     const { member_id, ...applicationFields } = input;
     const payload = buildApplicationPayload(applicationFields, consentGivenAt);
+
+    // ── Submission-time standards (ADR 0013 §1/§4) ──────────────────────────
+    // Same five standards as /apply, checked BEFORE start_renewal() so a renewal that
+    // fails one is refused here rather than reaching a `pending` row.
+    const { data: standardsFailures, error: standardsError } = await ctx.supabase.rpc(
+      "check_submission_standards",
+      { p_email: input.applicant_email, p_payload: payload },
+    );
+    if (standardsError) {
+      return { ok: false, error: mapDbError(standardsError) };
+    }
+    if (standardsFailures && standardsFailures.length > 0) {
+      if (standardsFailures.includes("term")) {
+        return err<StartRenewalResult>("window_closed");
+      }
+      return err<StartRenewalResult>(
+        "validation",
+        SUBMISSION_STANDARDS_GENERIC_MESSAGE,
+        submissionStandardsFieldErrors(standardsFailures),
+      );
+    }
 
     const { data: renewalId, error } = await ctx.supabase.rpc("start_renewal", {
       p_member_id: member_id,

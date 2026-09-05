@@ -13,9 +13,15 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // ⚠ THE CONTRACT THAT MUST NOT DRIFT — APPLICATION_PAYLOAD_KEYS
 // ═══════════════════════════════════════════════════════════════════════════════
-// `approve_application()` (DATA_MODEL.md §6/0012) reads ELEVEN keys out of
-// `applications.payload` with `payload->>'…'` and writes them onto the new `people`
-// and `memberships` rows. Those eleven strings are spelled HERE and nowhere else.
+// `approve_application()` (0041) reads FIFTEEN keys out of `applications.payload` with
+// `payload->>'…'` and writes them onto the new `people` and `memberships` rows. Those
+// fifteen strings are spelled HERE and nowhere else.
+//
+// ADR 0013 (2026-09-06, "Consequences"): home address returns to the form —
+// `address_line`, `city_municipality`, `province`, `postal_code` — as four REQUIRED
+// keys, joining the eleven the SRS form already collected. `school_id_no` is NOT one
+// of them: it is removed from every screen and stays only as a legacy, optional
+// payload key on pre-existing rows (0041 copies it "when present").
 //
 // A rename here does not fail typecheck, does not fail eslint, does not fail pgTAP,
 // and does not fail at all — until the first approval on Day 4 writes a `people` row
@@ -54,8 +60,10 @@ const PH_MOBILE_RE = /^(?:\+63|0)9\d{9}$/;
 /** Everything a human puts between the digits of a phone number. */
 const PHONE_SEPARATORS_RE = /[\s()\-.]/g;
 
-/** Philippine ZIP code: exactly four digits. */
 const FACEBOOK_URL_RE = /^https?:\/\/(www\.|m\.|web\.)?(facebook\.com|fb\.com|fb\.me)\/.+/i;
+
+/** Philippine ZIP code: exactly four digits (ADR 0013 — home address returns to the form). */
+const POSTAL_CODE_RE = /^\d{4}$/;
 const YEAR_MIN = 2000;
 const YEAR_MAX = 2100;
 const AWARD_YEAR_MIN = 2000;
@@ -188,6 +196,14 @@ const personalShape = {
     .refine((value) => FACEBOOK_URL_RE.test(value), {
       message: "Enter the full link to your Facebook profile, e.g. https://facebook.com/yourname",
     }),
+  // ADR 0013 (2026-09-06, "Consequences"): home address returns to the form. Required,
+  // not legacy-optional this time — `approve_application()` (0041) already reads all
+  // four `payload->>'…'` keys onto `people`, and they were simply null for every
+  // SRS-era submission until now.
+  address_line: requiredText("Street address", 200),
+  city_municipality: requiredText("City or municipality", 120),
+  province: requiredText("Province", 120),
+  postal_code: z.string().trim().regex(POSTAL_CODE_RE, "Enter a 4-digit postal code"),
 };
 
 const academicShape = {
@@ -321,12 +337,12 @@ export type FinalizeApplicationInput = z.infer<typeof finalizeApplicationSchema>
 // ── The payload contract ─────────────────────────────────────────────────────
 
 /**
- * THE ELEVEN KEYS `approve_application()` READS OUT OF `applications.payload`.
+ * THE FIFTEEN KEYS `approve_application()` READS OUT OF `applications.payload`.
  *
- * Source of truth: DATA_MODEL.md §6/0012. Asserted against this schema's shape in
- * `schema.test.ts` by a test named for exactly this. Changing a string here without
- * changing the SQL, or the SQL without changing this, is the silent cross-slice
- * failure described in the header.
+ * Source of truth: `supabase/migrations/0041_approve_and_record_v2.sql`. Asserted
+ * against this schema's shape in `schema.test.ts` by a test named for exactly this.
+ * Changing a string here without changing the SQL, or the SQL without changing this,
+ * is the silent cross-slice failure described in the header.
  */
 export const APPLICATION_PAYLOAD_KEYS = [
   "birthdate",
@@ -340,6 +356,10 @@ export const APPLICATION_PAYLOAD_KEYS = [
   "award_year",
   "university_id",
   "program_id",
+  "address_line",
+  "city_municipality",
+  "province",
+  "postal_code",
 ] as const;
 export type ApplicationPayloadKey = (typeof APPLICATION_PAYLOAD_KEYS)[number];
 
@@ -355,9 +375,10 @@ export type ApplicationPayload = Record<string, string | number | null>;
 /**
  * Build the `applications.payload` jsonb from a validated body.
  *
- * Contains the eleven keys above VERBATIM, plus the fields the form collects that
- * `approve_application()` does not yet read (`middle_name`, `suffix`, `program`) so
- * that nothing an applicant typed is thrown away, plus the consent record.
+ * Contains the fifteen keys above VERBATIM, plus `middle_name` and `suffix` (0041
+ * copies both onto `people` too, though they are not part of the payload contract
+ * this module asserts) so that nothing an applicant typed is thrown away, plus the
+ * consent record.
  *
  * DELIBERATELY ABSENT: `applicant_email`, `applicant_given_name`,
  * `applicant_family_name`. Those have their own columns on `applications`, and
@@ -383,12 +404,67 @@ export function buildApplicationPayload(
     award_year: data.award_year,
     university_id: data.university_id,
     program_id: data.program_id,
+    address_line: data.address_line,
+    city_municipality: data.city_municipality,
+    province: data.province,
+    postal_code: data.postal_code,
     middle_name: data.middle_name ?? null,
     suffix: data.suffix ?? null,
     consent_privacy_notice_version: data.consent_privacy_notice_version,
     consent_given_at: consentGivenAt,
     certified_accuracy_at: consentGivenAt,
   };
+}
+
+// ── Submission-time standards (ADR 0013 §1) ──────────────────────────────────
+// `check_submission_standards(p_email, p_payload)` is a SECURITY DEFINER RPC — the SQL
+// contract is owned elsewhere — returning the failing field keys out of: `term`,
+// `expected_grad_year`, `program_id`, `university_id`, `scholarship_award`,
+// `award_year`, `applicant_email`. An empty array means the submission passes.
+//
+// Both `startApplication` and `startRenewal` call it AFTER building the payload and
+// BEFORE the write that would create a pending row, so a submission that fails a
+// checkable standard is refused before anything is stored (ADR 0013 §1: "a submission
+// failing any check is refused at submission").
+//
+// `term` is not a field on either form — a missing active term means the application
+// (or renewal) period cannot be open, so the CALLER maps it to `window_closed`, the
+// same code a closed window already returns, rather than to a field error here.
+
+/** Shown above the highlighted fields; never the only message a rejection carries. */
+export const SUBMISSION_STANDARDS_GENERIC_MESSAGE = "Please fix the highlighted fields.";
+
+/** One message per checkable field. `term` is deliberately absent — see the note above. */
+export const SUBMISSION_STANDARDS_FIELD_MESSAGES: Record<string, string> = {
+  expected_grad_year:
+    "Only current students may apply: your expected graduation year must be after the current term ends.",
+  program_id: "Select your program from the list.",
+  university_id: "Select your university from the list.",
+  scholarship_award: "Select your DOST scholarship award.",
+  award_year: "Enter the year of your award.",
+  applicant_email: "This email address cannot be used to apply. Please contact CRRD.",
+};
+
+/**
+ * Turn the failing-key array `check_submission_standards()` returns into the same
+ * `{ fields }` shape a failed zod parse produces (CONVENTIONS §6: server field errors
+ * attach to their input, never a generic toast).
+ *
+ * `term` is excluded on purpose — the caller returns `window_closed` for it instead of
+ * a field error, per the module note above. An unrecognized key (a future standard
+ * this client has not been taught about) is silently dropped rather than crashing the
+ * whole refusal into an unlabelled one.
+ */
+export function submissionStandardsFieldErrors(
+  failures: readonly string[],
+): Record<string, string[]> {
+  const fields: Record<string, string[]> = {};
+  for (const key of failures) {
+    if (key === "term") continue;
+    const message = SUBMISSION_STANDARDS_FIELD_MESSAGES[key];
+    if (message !== undefined) fields[key] = [message];
+  }
+  return fields;
 }
 
 export const REJECT_REASON_MIN_LENGTH = 10;

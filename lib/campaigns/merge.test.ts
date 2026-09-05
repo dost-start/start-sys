@@ -51,7 +51,9 @@ describe("merge tokens", () => {
   });
 
   it("substitutes plain text verbatim and HTML with every value escaped", () => {
-    expect(mergeText("Hi {{given_name}} ({{member_id}})", PAYLOAD)).toBe("Hi María <Ana> (2026-0007)");
+    expect(mergeText("Hi {{given_name}} ({{member_id}})", PAYLOAD)).toBe(
+      "Hi María <Ana> (2026-0007)",
+    );
     expect(mergeHtml("<p>Hi {{given_name}}</p>", PAYLOAD)).toBe("<p>Hi María &lt;Ana&gt;</p>");
   });
 

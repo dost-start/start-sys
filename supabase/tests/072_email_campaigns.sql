@@ -129,13 +129,17 @@ select is(
 
 select is(public.send_campaign('00000000-0000-4000-e300-000000000001'), 4,
   'a SECOND send_campaign() — a double-clicked Send — adds nothing and returns the same count (PRD US-G4)');
+select pg_temp.logout();
 
+-- Counted OUTSIDE the sender's session: audit_log_read (0014) is exec_admin/tech_admin
+-- only, so a count taken as crrd_admin reads 0 rows and the difference goes negative.
 select is(
   (select count(*)::int from public.audit_log) - (select n from fx_audit_before),
   1,
   'exactly ONE CAMPAIGN_QUEUED audit row across both calls — attributed, value-free (PRD US-I1)');
 
 -- ── 17-19 — the queue as rows ──────────────────────────────────────────────────────
+select pg_temp.login_as('00000000-0000-4000-a000-000000000003');   -- crrd_admin
 create temp table fx_batch1 on commit drop as
   select * from public.claim_campaign_batch('00000000-0000-4000-e300-000000000001', 2);
 grant select on fx_batch1 to public;

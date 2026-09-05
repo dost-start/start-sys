@@ -26,7 +26,8 @@ import { getMailTransport } from "@/lib/mail";
 
 import { markdownToHtml, markdownToText, wrapEmailHtml } from "./markdown";
 import { assertMergeTokensKnown, mergeHtml, mergeText, type MergePayload } from "./merge";
-import { previewAudience, type AudiencePreview } from "./queries";
+import { previewAudience } from "./queries";
+import { CAMPAIGN_ROLES } from "./roles";
 import {
   audienceFilterSchema,
   campaignComposeSchema,
@@ -34,8 +35,8 @@ import {
   DRAIN_BATCH_SIZE,
 } from "./schema";
 import { TEMPLATES } from "./templates";
+import type { AudiencePreview } from "./types";
 
-const CAMPAIGN_ROLES = ["crrd_admin", "exec_admin"] as const;
 const CAMPAIGNS_PATH = "/campaigns";
 
 export const previewAudienceAction = withRole<unknown, AudiencePreview>(
@@ -101,7 +102,9 @@ export const sendCampaign = withRole<unknown, SendCampaignResult>(
   async (ctx, input) => {
     const parsed = campaignIdSchema.safeParse(input);
     if (!parsed.success) return validationFailure<SendCampaignResult>(parsed.error);
-    const { data, error } = await ctx.supabase.rpc("send_campaign", { p_campaign_id: parsed.data.id });
+    const { data, error } = await ctx.supabase.rpc("send_campaign", {
+      p_campaign_id: parsed.data.id,
+    });
     if (error) return { ok: false, error: mapDbError(error) };
     revalidatePath(`${CAMPAIGNS_PATH}/${parsed.data.id}`);
     return ok({ queued: data ?? 0 });
@@ -149,7 +152,9 @@ export const drainCampaign = withRole<unknown, DrainCampaignResult>(
     for (const row of batch ?? []) {
       if (halted) break;
       const merge = (row.merge ?? {}) as MergePayload;
-      let outcome: { ok: true; providerMessageId: string | null } | { ok: false; reason: string; message: string };
+      let outcome:
+        | { ok: true; providerMessageId: string | null }
+        | { ok: false; reason: string; message: string };
       try {
         outcome = await transport.send({
           to: row.to_email,
@@ -161,7 +166,11 @@ export const drainCampaign = withRole<unknown, DrainCampaignResult>(
       } catch (caught) {
         // A merge failure is a programmer error on a template that passed validation;
         // record it on the row rather than crashing the chunk.
-        outcome = { ok: false, reason: "rejected", message: (caught as Error).message.slice(0, 200) };
+        outcome = {
+          ok: false,
+          reason: "rejected",
+          message: (caught as Error).message.slice(0, 200),
+        };
       }
 
       const { error: finishError } = await ctx.supabase.rpc("finish_recipient", {

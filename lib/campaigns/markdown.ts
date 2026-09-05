@@ -39,9 +39,14 @@ function inline(escaped: string): string {
   // Links first, so their labels can still carry bold/italic.
   out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, label: string, url: string) => {
     const href = safeUrl(url);
-    return href ? `<a href="${href}" style="color:#1d4ed8;text-decoration:underline">${label}</a>` : label;
+    return href
+      ? `<a href="${href}" style="color:#1d4ed8;text-decoration:underline">${label}</a>`
+      : label;
   });
-  out = out.replace(/`([^`\n]+)`/g, '<code style="font-family:ui-monospace,monospace;background:#f3f4f6;padding:0 3px;border-radius:3px">$1</code>');
+  out = out.replace(
+    /`([^`\n]+)`/g,
+    '<code style="font-family:ui-monospace,monospace;background:#f3f4f6;padding:0 3px;border-radius:3px">$1</code>',
+  );
   out = out.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
   out = out.replace(/__([^_\n]+)__/g, "<u>$1</u>");
   out = out.replace(/~~([^~\n]+)~~/g, "<s>$1</s>");
@@ -52,7 +57,10 @@ function inline(escaped: string): string {
 
 /** The body only — no <html>, no layout. `wrapEmailHtml` adds the frame. */
 export function markdownToHtml(markdown: string): string {
-  const blocks = markdown.replace(/\r\n?/g, "\n").trim().split(/\n{2,}/);
+  const blocks = markdown
+    .replace(/\r\n?/g, "\n")
+    .trim()
+    .split(/\n{2,}/);
   const html: string[] = [];
   for (const block of blocks) {
     const lines = block.split("\n");
@@ -71,7 +79,10 @@ export function markdownToHtml(markdown: string): string {
 export function markdownToText(markdown: string): string {
   return markdown
     .replace(/\r\n?/g, "\n")
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, label: string, url: string) => `${label} (${url.trim()})`)
+    .replace(
+      /\[([^\]]+)\]\(([^)]+)\)/g,
+      (_m, label: string, url: string) => `${label} (${url.trim()})`,
+    )
     .replace(/\*\*([^*\n]+)\*\*/g, "$1")
     .replace(/__([^_\n]+)__/g, "$1")
     .replace(/~~([^~\n]+)~~/g, "$1")

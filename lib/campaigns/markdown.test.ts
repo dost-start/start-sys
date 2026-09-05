@@ -45,7 +45,9 @@ describe("markdownToHtml — the Telegram-style subset", () => {
 
 describe("markdownToText", () => {
   it("strips marks and expands links", () => {
-    expect(markdownToText("**Hi** _there_ [Apply](https://x.y/z)")).toBe("Hi there Apply (https://x.y/z)");
+    expect(markdownToText("**Hi** _there_ [Apply](https://x.y/z)")).toBe(
+      "Hi there Apply (https://x.y/z)",
+    );
   });
 });
 

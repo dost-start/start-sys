@@ -47,7 +47,9 @@ export const TEMPLATES: Record<TemplateKey, CampaignTemplate> = {
         "",
         "START-DOST is now accepting membership applications from DOST scholars. If you are a current scholar and would like to be part of the organization, fill in the form below while the application period is open.",
         "",
-        url ? `[Open the Membership Application Form](${url})` : "(the application link will appear here)",
+        url
+          ? `[Open the Membership Application Form](${url})`
+          : "(the application link will appear here)",
         "",
         "Have your **latest registration form** and your **Notice of Award** ready — both are uploaded as part of the application.",
         "",
@@ -68,7 +70,9 @@ export const TEMPLATES: Record<TemplateKey, CampaignTemplate> = {
         "",
         "START-DOST is opening committee applications for {{term_label}}. Committee members work under a department's Chief and Deputies; you may apply to up to three departments.",
         "",
-        url ? `[Open the Committee Application Form](${url})` : "(the committee form link will appear here)",
+        url
+          ? `[Open the Committee Application Form](${url})`
+          : "(the committee form link will appear here)",
         "",
         "Prepare your latest registration form, your latest grades and your Notice of Award for each department you apply to.",
         "",

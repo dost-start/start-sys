@@ -143,6 +143,6 @@ export const config = {
   // `/` IS matched: an anonymous visitor is sent to /login, and a signed-in one is
   // sent home by the `canAccess` deny-by-default on an ungrouped path.
   matcher: [
-    "/((?!apply|privacy|login|auth|api|_next/static|_next/image|favicon\\.ico|.*\\.[^/]*$).*)",
+    "/((?!apply|renew(?:/|$)|privacy|login|auth|api|_next/static|_next/image|favicon\\.ico|.*\\.[^/]*$).*)",
   ],
 };

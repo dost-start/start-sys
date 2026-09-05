@@ -91,3 +91,16 @@ outside `lib/documents/` has started reading that column's contents, and that is
 **What "Sent" means:** the mail server accepted the message. Gmail SMTP has no bounce reporting; a bounced address shows up as a bounce email in the sending inbox, not in the report.
 
 **Audit:** freezing a campaign writes one `CAMPAIGN_QUEUED` row to the audit log naming the officer. The frozen filter is stored on the campaign so the recipient list can be reproduced.
+## Open the renewal period and review renewals
+
+**Who:** the CCDO or the CTO opens the period (ADR 0003); the CCDO or a CRRD deputy (`crrd_admin`), or the CEO/COO (`exec_admin`), reviews. Members have no accounts — the form is public and the scholar proves who they are with their member ID and the email on file.
+
+1. `/applications/window` → **Schedule the renewal period**. Set the opening and closing times (Asia/Manila) and click **Open the period**. Closing takes effect on the next submission: the check is in the database, not a cache.
+2. Send the renewal announcement: `/campaigns` → **New campaign** → template *Membership Renewal Form*. It links to `/renew` and merges each scholar's member ID into the message.
+3. Scholars submit at `/renew`: member ID + email (both must match the record), updated details, the latest registration form and the Notice of Award. A wrong pair is told so at once; the form is rate-limited exactly like `/apply`.
+4. `/renewals` lists pending renewals for the term. Open one — that read is recorded in the audit log — check the two documents, then **Approve renewal** or **Reject** with a written reason (10+ characters).
+5. Approval creates the scholar's **active membership for the current term** and applies the updated contact and academic details to their record. **The member ID does not change** — `2024-0012` renews as `2024-0012`. A rejected scholar may submit again while the period is open.
+
+**Not eligible through the form:** a member whose latest membership is `terminated` (CBL Art. VII §3 — reinstatement is an Executive Board act on the existing record), and anyone already active this term. Both get a generic "cannot be renewed through this form" message and are told to contact CRRD.
+
+**Abandoned drafts** (identity verified, documents never uploaded) are redacted after 30 days by the same nightly job that sweeps application drafts.

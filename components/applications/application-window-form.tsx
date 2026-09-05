@@ -20,10 +20,15 @@
 import { useState, useTransition } from "react";
 
 import { closeApplicationWindow, openApplicationWindow } from "@/lib/applications/window-actions";
-import { MEMBERSHIP_APPLICATION_FORM_KIND } from "@/lib/applications/window-schema";
+import {
+  MEMBERSHIP_APPLICATION_FORM_KIND,
+  type WindowFormKind,
+} from "@/lib/applications/window-schema";
 import { Button } from "@/components/ui/button";
 
 export type ApplicationWindowFormProps = {
+  /** Which public form's period this instance controls. Defaults to the application form. */
+  formKind?: WindowFormKind;
   /** Whether a period is open right now — decides which control is primary. */
   isOpen: boolean;
   /** False for a reviewer who may read the schedule but not change it (see the page). */
@@ -49,6 +54,7 @@ function toAbsoluteInstant(localValue: string): string | null {
 }
 
 export function ApplicationWindowForm({
+  formKind = MEMBERSHIP_APPLICATION_FORM_KIND,
   isOpen,
   canWrite,
   defaultOpensAtLocal,
@@ -62,7 +68,7 @@ export function ApplicationWindowForm({
 
   if (!canWrite) {
     return (
-      <p className="text-muted-foreground text-sm" data-testid="window-read-only">
+      <p className="text-muted-foreground text-sm" data-testid={`window-read-only-${formKind}`}>
         You can see the schedule but not change it. Opening and closing the application period is
         the CCDO&apos;s or the CTO&apos;s to do (ADR 0003) — and the database refuses the write
         independently of what this page renders.
@@ -86,7 +92,7 @@ export function ApplicationWindowForm({
 
     startTransition(async () => {
       const result = await openApplicationWindow({
-        form_kind: MEMBERSHIP_APPLICATION_FORM_KIND,
+        form_kind: formKind,
         opens_at: opens,
         closes_at: closes,
       });
@@ -108,7 +114,7 @@ export function ApplicationWindowForm({
 
     startTransition(async () => {
       const result = await closeApplicationWindow({
-        form_kind: MEMBERSHIP_APPLICATION_FORM_KIND,
+        form_kind: formKind,
       });
 
       setMessage(
@@ -158,11 +164,22 @@ export function ApplicationWindowForm({
       </p>
 
       <div className="flex flex-wrap gap-3">
-        <Button type="button" onClick={submitOpen} disabled={pending}>
-          {isOpen ? "Update the open period" : "Open applications"}
+        <Button
+          type="button"
+          onClick={submitOpen}
+          disabled={pending}
+          data-testid={`window-open-${formKind}`}
+        >
+          {isOpen ? "Update the open period" : "Open the period"}
         </Button>
-        <Button type="button" variant="outline" onClick={submitClose} disabled={pending || !isOpen}>
-          Close applications now
+        <Button
+          type="button"
+          variant="outline"
+          onClick={submitClose}
+          disabled={pending || !isOpen}
+          data-testid={`window-close-${formKind}`}
+        >
+          Close the period now
         </Button>
       </div>
 

@@ -124,6 +124,26 @@ export async function POST(request: Request): Promise<NextResponse> {
   //
   // `knownRefs` is every ref the database still references. `listOrphans` returns what
   // the store holds that this list does not mention.
+  // The renewal form's drafts hold the same PII on the same 30-day basis (0044).
+  let renewalsRedacted = 0;
+  const { data: purgedRenewals } = await admin.rpc("purge_abandoned_renewal_drafts", {});
+  for (const row of (purgedRenewals ?? []) as Array<{
+    renewal_id: string;
+    storage_ref: string | null;
+    noa_ref: string | null;
+  }>) {
+    renewalsRedacted += 1;
+    for (const ref of [row.storage_ref, row.noa_ref]) {
+      if (!ref) continue;
+      try {
+        await store.deleteDocument(ref);
+        documentsDeleted += 1;
+      } catch {
+        // already gone, or the store is unreachable — the next run retries via orphans
+      }
+    }
+  }
+
   let orphansDeleted = 0;
   const { data: known, error: knownError } = await admin
     .from("applications")
@@ -162,7 +182,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     row_id: null,
     operation: "PURGE",
     note:
-      `purge_abandoned_drafts: redacted=${rows.length} ` +
+      `purge_abandoned_drafts: redacted=${rows.length} renewals_redacted=${renewalsRedacted} ` +
       `documents_deleted=${documentsDeleted} orphans_deleted=${orphansDeleted}`,
   });
 

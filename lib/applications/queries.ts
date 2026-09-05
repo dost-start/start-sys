@@ -54,7 +54,9 @@ const CLOSED: PublicWindowState = { open: false, opensAt: null, closesAt: null }
  * page renders; the policy is what refuses the write (ARCHITECTURE.md §5 — the hidden
  * link is never the enforcement).
  */
-export async function getPublicWindowState(): Promise<PublicWindowState> {
+export async function getPublicWindowState(
+  formKind: "membership_application" | "membership_renewal" = "membership_application",
+): Promise<PublicWindowState> {
   const supabase = await createServerSupabase();
 
   const { data: termId, error: termError } = await supabase.rpc("current_term_id");
@@ -64,7 +66,7 @@ export async function getPublicWindowState(): Promise<PublicWindowState> {
     .from("application_windows")
     .select("opens_at, closes_at")
     .eq("term_id", termId)
-    .eq("form_kind", "membership_application")
+    .eq("form_kind", formKind)
     .maybeSingle();
 
   // An RLS-filtered empty result is an ordinary outcome here, not an error: it is

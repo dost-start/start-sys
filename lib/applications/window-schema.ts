@@ -46,8 +46,15 @@ import { z } from "zod";
  * dropdown that silently grew when 0002's enum did.
  */
 export const MEMBERSHIP_APPLICATION_FORM_KIND = "membership_application" as const;
+/** The accountless renewal form (0044) — SRS "Membership Renewal Form"; PRD US-G7. */
+export const MEMBERSHIP_RENEWAL_FORM_KIND = "membership_renewal" as const;
 
-export type WindowFormKind = typeof MEMBERSHIP_APPLICATION_FORM_KIND;
+export const WINDOW_FORM_KINDS = [
+  MEMBERSHIP_APPLICATION_FORM_KIND,
+  MEMBERSHIP_RENEWAL_FORM_KIND,
+] as const;
+
+export type WindowFormKind = (typeof WINDOW_FORM_KINDS)[number];
 
 /**
  * ISO-8601 with a mandatory timezone designator — `Z` or `±HH:MM`.
@@ -83,7 +90,7 @@ const instant = (label: string) =>
  */
 export const openApplicationWindowSchema = z
   .object({
-    form_kind: z.literal(MEMBERSHIP_APPLICATION_FORM_KIND),
+    form_kind: z.enum(WINDOW_FORM_KINDS),
     opens_at: instant("Opening date and time"),
     closes_at: instant("Closing date and time"),
   })
@@ -105,7 +112,7 @@ export type OpenApplicationWindowInput = z.infer<typeof openApplicationWindowSch
  */
 export const closeApplicationWindowSchema = z
   .object({
-    form_kind: z.literal(MEMBERSHIP_APPLICATION_FORM_KIND),
+    form_kind: z.enum(WINDOW_FORM_KINDS),
   })
   .strict();
 

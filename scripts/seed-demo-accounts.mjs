@@ -87,11 +87,12 @@ const ACCOUNTS = [
   },
   { email: "demo.officer@start-sys.test", role: "officer", region: null, person: null, name: null },
   {
+    // ADR 0011: the contact roster needs a person row to hang the acknowledgement on.
     email: "demo.rep@start-sys.test",
     role: "regional_rep",
     region: "NCR",
-    person: null,
-    name: null,
+    person: 5,
+    name: ["Rina", "Villanueva"],
   },
 ];
 
@@ -247,7 +248,7 @@ async function main() {
 
     // CBL Art. VIII §7.1 — without a current-term acknowledgement every sensitive
     // read (correctly) fails, which would make the demo look broken.
-    if (personId && ["exec_admin", "crrd_admin"].includes(a.role)) {
+    if (personId && ["exec_admin", "crrd_admin", "regional_rep"].includes(a.role)) {
       await must(
         admin.from("confidentiality_acknowledgements").upsert(
           {

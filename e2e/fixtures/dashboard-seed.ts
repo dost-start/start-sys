@@ -643,13 +643,31 @@ async function seedDashboardWorldUnlocked(): Promise<ScopeState> {
       return {
         user_id: userIds[account.email],
         role: account.role,
-        // Bound to no person: neither a scoped rep nor a read-only officer needs one,
-        // and a null keeps them out of every "own record" policy branch by construction.
-        person_id: null,
+        // ADR 0011: the contact roster is gated on a confidentiality acknowledgement,
+        // which hangs off a people row — so rep A is bound to a region-A scholar and can
+        // sign; rep B and the officer stay unbound, which keeps them out of every "own
+        // record" policy branch by construction and makes rep B the refusal case.
+        person_id: key === "scope_rep_a" ? ALPHA_PERSON(1) : null,
         region_id: account.regionCode ? regionIds[account.regionCode] : null,
       };
     }),
     "user_id",
+  );
+
+  // ADR 0011 / CBL Art. VIII §7.1: rep A has signed for the current term; rep B has NOT,
+  // so rr-scope-leak can assert the gate from both sides.
+  await insertIfAbsent(
+    admin,
+    "confidentiality_acknowledgements",
+    [
+      {
+        person_id: ALPHA_PERSON(1),
+        term_id: currentTermId,
+        agreement_version: "CBL-2026-VIII-7",
+        recorded_by: userIds[SCOPE_ACCOUNTS.scope_rep_a.email],
+      },
+    ],
+    "person_id,term_id",
   );
 
   const totpSecrets: Record<string, string> = {};

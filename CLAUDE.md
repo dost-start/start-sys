@@ -68,7 +68,7 @@ Feature folders, not layer folders: `app/(admin)/members/` + `lib/members/`. Typ
 - Never store a role in `user_metadata` or stamp roles into the JWT. Roles live in `public.user_roles` and are read per statement, so revocation is instant.
 - Never write a `SECURITY DEFINER` function without `SET search_path = ''`.
 - Never rely on a hidden link, a disabled button, or a route guard as the enforcement of a permission. The policy is the permission.
-- Never widen `v_member_directory` or a column-level `GRANT` to make an officer screen work. Officers and regional reps see name, member ID, region, status, committee — nothing else.
+- Never widen `v_member_directory` or a column-level `GRANT` to make an officer screen work. Officers see name, member ID, region, status, committee — nothing else. Regional reps additionally see their **own region's** email, contact number, Facebook link and university, **only** through `list_region_member_contacts()` — acknowledgement-gated and audited per call (ADR 0011, 2026-09-05 team decision). Never through a GRANT or the view.
 
 **Records and lifecycle**
 - Never hard-delete anything. No `DELETE` policy exists anywhere in the schema and none may be added. Membership end is a status change; term end is a flag on `terms`.

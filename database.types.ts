@@ -168,13 +168,6 @@ export type Database = {
             foreignKeyName: "applications_person_id_fkey"
             columns: ["person_id"]
             isOneToOne: false
-            referencedRelation: "v_email_merge_fields"
-            referencedColumns: ["person_id"]
-          },
-          {
-            foreignKeyName: "applications_person_id_fkey"
-            columns: ["person_id"]
-            isOneToOne: false
             referencedRelation: "v_member_directory"
             referencedColumns: ["person_id"]
           },
@@ -351,13 +344,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "people"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "confidentiality_acknowledgements_person_id_fkey"
-            columns: ["person_id"]
-            isOneToOne: false
-            referencedRelation: "v_email_merge_fields"
-            referencedColumns: ["person_id"]
           },
           {
             foreignKeyName: "confidentiality_acknowledgements_person_id_fkey"
@@ -581,13 +567,6 @@ export type Database = {
             foreignKeyName: "email_recipients_person_id_fkey"
             columns: ["person_id"]
             isOneToOne: false
-            referencedRelation: "v_email_merge_fields"
-            referencedColumns: ["person_id"]
-          },
-          {
-            foreignKeyName: "email_recipients_person_id_fkey"
-            columns: ["person_id"]
-            isOneToOne: false
             referencedRelation: "v_member_directory"
             referencedColumns: ["person_id"]
           },
@@ -692,13 +671,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "people"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "memberships_person_id_fkey"
-            columns: ["person_id"]
-            isOneToOne: false
-            referencedRelation: "v_email_merge_fields"
-            referencedColumns: ["person_id"]
           },
           {
             foreignKeyName: "memberships_person_id_fkey"
@@ -822,13 +794,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "people"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "officer_assignments_person_id_fkey"
-            columns: ["person_id"]
-            isOneToOne: false
-            referencedRelation: "v_email_merge_fields"
-            referencedColumns: ["person_id"]
           },
           {
             foreignKeyName: "officer_assignments_person_id_fkey"
@@ -1080,24 +1045,78 @@ export type Database = {
       }
       renewal_submissions: {
         Row: {
+          consented_at: string | null
+          created_at: string
           id: string
+          noa_drive_file_id: string | null
+          noa_mime_type: string | null
+          noa_size_bytes: number | null
+          noa_verified_at: string | null
           payload: Json
           person_id: string
-          submitted_at: string
+          privacy_notice_version: string | null
+          proof_drive_file_id: string | null
+          proof_mime_type: string | null
+          proof_size_bytes: number | null
+          proof_verified_at: string | null
+          redacted_at: string | null
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: Database["public"]["Enums"]["application_status"]
+          submit_token_expires_at: string | null
+          submit_token_hash: string | null
+          submitted_at: string | null
           term_id: string
         }
         Insert: {
+          consented_at?: string | null
+          created_at?: string
           id?: string
+          noa_drive_file_id?: string | null
+          noa_mime_type?: string | null
+          noa_size_bytes?: number | null
+          noa_verified_at?: string | null
           payload?: Json
           person_id: string
-          submitted_at?: string
+          privacy_notice_version?: string | null
+          proof_drive_file_id?: string | null
+          proof_mime_type?: string | null
+          proof_size_bytes?: number | null
+          proof_verified_at?: string | null
+          redacted_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["application_status"]
+          submit_token_expires_at?: string | null
+          submit_token_hash?: string | null
+          submitted_at?: string | null
           term_id: string
         }
         Update: {
+          consented_at?: string | null
+          created_at?: string
           id?: string
+          noa_drive_file_id?: string | null
+          noa_mime_type?: string | null
+          noa_size_bytes?: number | null
+          noa_verified_at?: string | null
           payload?: Json
           person_id?: string
-          submitted_at?: string
+          privacy_notice_version?: string | null
+          proof_drive_file_id?: string | null
+          proof_mime_type?: string | null
+          proof_size_bytes?: number | null
+          proof_verified_at?: string | null
+          redacted_at?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["application_status"]
+          submit_token_expires_at?: string | null
+          submit_token_hash?: string | null
+          submitted_at?: string | null
           term_id?: string
         }
         Relationships: [
@@ -1107,13 +1126,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "people"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "renewal_submissions_person_id_fkey"
-            columns: ["person_id"]
-            isOneToOne: false
-            referencedRelation: "v_email_merge_fields"
-            referencedColumns: ["person_id"]
           },
           {
             foreignKeyName: "renewal_submissions_person_id_fkey"
@@ -1320,13 +1332,6 @@ export type Database = {
             foreignKeyName: "user_roles_person_id_fkey"
             columns: ["person_id"]
             isOneToOne: true
-            referencedRelation: "v_email_merge_fields"
-            referencedColumns: ["person_id"]
-          },
-          {
-            foreignKeyName: "user_roles_person_id_fkey"
-            columns: ["person_id"]
-            isOneToOne: true
             referencedRelation: "v_member_directory"
             referencedColumns: ["person_id"]
           },
@@ -1405,6 +1410,20 @@ export type Database = {
           year_level: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "memberships_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "memberships_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "v_member_directory"
+            referencedColumns: ["person_id"]
+          },
           {
             foreignKeyName: "memberships_region_id_fkey"
             columns: ["region_id"]
@@ -1528,6 +1547,7 @@ export type Database = {
       _todo: { Args: never; Returns: string }
       allocate_member_id: { Args: { p_person_id: string }; Returns: string }
       approve_application: { Args: { p_app_id: string }; Returns: string }
+      approve_renewal: { Args: { p_id: string }; Returns: string }
       assert_confidentiality_ack: { Args: never; Returns: undefined }
       auth_person_id: { Args: never; Returns: string }
       auth_region_id: { Args: never; Returns: string }
@@ -1544,14 +1564,6 @@ export type Database = {
           p_window: string
         }
         Returns: boolean
-      }
-      claim_campaign_batch: {
-        Args: { p_campaign_id: string; p_limit?: number }
-        Returns: {
-          merge: Json
-          recipient_id: string
-          to_email: string
-        }[]
       }
       col_is_null:
         | {
@@ -1589,6 +1601,14 @@ export type Database = {
             }
             Returns: string
           }
+      claim_campaign_batch: {
+        Args: { p_campaign_id: string; p_limit?: number }
+        Returns: {
+          merge: Json
+          recipient_id: string
+          to_email: string
+        }[]
+      }
       consume_recovery_code: { Args: { p_code: string }; Returns: boolean }
       current_term_id: { Args: never; Returns: string }
       diag:
@@ -1624,6 +1644,19 @@ export type Database = {
         }
         Returns: undefined
       }
+      finalize_renewal: {
+        Args: {
+          p_file_ref: string
+          p_id: string
+          p_mime: string
+          p_noa_mime: string
+          p_noa_ref: string
+          p_noa_size: number
+          p_size: number
+          p_token: string
+        }
+        Returns: undefined
+      }
       findfuncs: { Args: { "": string }; Returns: string[] }
       finish: { Args: { exception_on_failure?: boolean }; Returns: string[] }
       finish_recipient: {
@@ -1639,6 +1672,7 @@ export type Database = {
       get_application_detail: { Args: { p_app_id: string }; Returns: Json }
       get_member_record: { Args: { p_person_id: string }; Returns: Json }
       get_person_sensitive: { Args: { p_person_id: string }; Returns: Json }
+      get_renewal_detail: { Args: { p_id: string }; Returns: Json }
       has_aal2: { Args: never; Returns: boolean }
       has_confidentiality_ack: { Args: never; Returns: boolean }
       has_unique: { Args: { "": string }; Returns: string }
@@ -1649,8 +1683,27 @@ export type Database = {
       is_user_roles_writer: { Args: never; Returns: boolean }
       isnt_empty: { Args: { "": string }; Returns: string }
       issue_recovery_codes: { Args: never; Returns: string[] }
+      list_region_member_contacts: {
+        Args: { p_university_id?: string }
+        Returns: {
+          contact_number: string
+          facebook_account: string
+          family_name: string
+          given_name: string
+          member_id: string
+          membership_id: string
+          person_id: string
+          personal_email: string
+          region_id: string
+          region_name: string
+          status: Database["public"]["Enums"]["membership_status"]
+          university_id: string
+          university_name: string
+        }[]
+      }
       lives_ok: { Args: { "": string }; Returns: string }
       log_document_view: { Args: { p_app_id: string }; Returns: undefined }
+      log_renewal_document_view: { Args: { p_id: string }; Returns: undefined }
       mask_sensitive: { Args: { p_row: Json; p_table: string }; Returns: Json }
       no_plan: { Args: never; Returns: boolean[] }
       num_failed: { Args: never; Returns: number }
@@ -1668,10 +1721,25 @@ export type Database = {
           storage_ref: string
         }[]
       }
+      purge_abandoned_renewal_drafts: {
+        Args: { p_age?: string }
+        Returns: {
+          noa_ref: string
+          renewal_id: string
+          storage_ref: string
+        }[]
+      }
       reject_application: {
         Args: { p_app_id: string; p_reason: string }
         Returns: undefined
       }
+      reject_renewal: {
+        Args: { p_id: string; p_note: string }
+        Returns: undefined
+      }
+      runtests:
+        | { Args: never; Returns: string[] }
+        | { Args: { "": string }; Returns: string[] }
       resolve_recipients: {
         Args: { p_filter?: Json }
         Returns: {
@@ -1680,9 +1748,6 @@ export type Database = {
           person_id: string
         }[]
       }
-      runtests:
-        | { Args: never; Returns: string[] }
-        | { Args: { "": string }; Returns: string[] }
       search_member_directory: {
         Args: {
           p_committee_ids?: string[]
@@ -1714,6 +1779,16 @@ export type Database = {
       skip:
         | { Args: { "": string }; Returns: string }
         | { Args: { how_many: number; why: string }; Returns: string }
+      start_renewal: {
+        Args: {
+          p_email: string
+          p_member_id: string
+          p_payload: Json
+          p_token_expires_at: string
+          p_token_hash: string
+        }
+        Returns: string
+      }
       throws_ok: { Args: { "": string }; Returns: string }
       todo:
         | { Args: { how_many: number }; Returns: boolean[] }

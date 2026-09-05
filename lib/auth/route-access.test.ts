@@ -49,9 +49,9 @@ function roleOf(actor: Actor): OrgRole | null {
  * one prefix inside a group with a narrower rule than the group.
  */
 const COLUMNS = {
-  public: ["/apply", "/privacy"],
+  public: ["/apply", "/renew", "/privacy"],
   auth: [LOGIN_PATH, "/auth/reset", "/auth/mfa/enroll", "/auth/mfa/verify", "/auth/callback"],
-  admin: ["/dashboard", "/members", "/applications", "/campaigns", "/audit"],
+  admin: ["/dashboard", "/members", "/applications", "/renewals", "/campaigns", "/audit"],
   adminSystem: [ADMIN_SYSTEM_PREFIX, "/system/user-roles"],
   officer: ["/directory", "/committees"],
   rr: ["/region"],

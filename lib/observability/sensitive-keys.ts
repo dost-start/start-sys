@@ -42,11 +42,13 @@ export const SENSITIVE_KEYS = [
   "school",
   "school_id_no",
   "middle_name",
+  "facebook_account", // 0038 — a contact channel, registered sensitive
   // applications / renewal_submissions
   "applicant_email",
   "payload",
   "proof_web_view_link",
   "proof_drive_file_id",
+  "noa_drive_file_id", // 0040 — the Notice of Award pointer, same terms as the proof pointer
   "submit_token_hash",
   // email_recipients (0043): a frozen copy of contact data at send time
   "to_email",

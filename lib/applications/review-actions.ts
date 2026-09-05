@@ -64,7 +64,7 @@ import {
 import { withRole } from "@/lib/auth/with-role";
 
 /** The three tiers the SQL guards name. Spelled once so the two actions cannot drift. */
-const REVIEWER_ROLES = ["crrd_admin", "moderator", "exec_admin"] as const;
+const REVIEWER_ROLES = ["crrd_admin", "exec_admin"] as const;
 
 /**
  * The routes a decision invalidates.

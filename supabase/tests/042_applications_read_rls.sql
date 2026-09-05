@@ -12,7 +12,7 @@
 --   20-24  the renewal_submissions read matrix, including "a person reads their own"
 --
 -- WHY THREE ROLES AND NOT FOUR. PRD US-C1 gives application review to CRRD and Executive
---   Admins; ARCHITECTURE.md §5 gives moderators the day-to-day operational surface, because
+--   Admins; ARCHITECTURE.md §5 gives crrd_deputys the day-to-day operational surface, because
 --   **you cannot review an application without reading it**. Everyone else is out, and two
 --   of the exclusions are the interesting ones:
 --     · tech_admin — PRD OQ-5, default answer NO. "Configure the system and control access"
@@ -108,10 +108,10 @@ select is(
 );
 select pg_temp.logout();
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy
 select is(
   (select count(*)::int from public.applications), 3,
-  'moderator reads all 3 — the operational tier; you cannot review an application without '
+  'crrd_deputy reads all 3 — the operational tier; you cannot review an application without '
   'reading it (ARCHITECTURE.md §5)'
 );
 select pg_temp.logout();

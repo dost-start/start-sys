@@ -22,7 +22,7 @@ import type { z } from "zod";
 import { Button } from "@/components/ui/button";
 import type { RegionOption } from "@/components/auth/user-roles-table";
 import { inviteUser } from "@/lib/auth/invite-actions";
-import { ORG_ROLES, inviteUserSchema, type InviteUserInput } from "@/lib/auth/invite-schema";
+import { ASSIGNABLE_ROLES, inviteUserSchema, type InviteUserInput } from "@/lib/auth/invite-schema";
 
 export function InviteUserDialog({ regions }: { regions: readonly RegionOption[] }) {
   const [open, setOpen] = useState(false);
@@ -107,7 +107,7 @@ export function InviteUserDialog({ regions }: { regions: readonly RegionOption[]
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm"
                 {...form.register("role")}
               >
-                {ORG_ROLES.map((r) => (
+                {ASSIGNABLE_ROLES.map((r) => (
                   <option key={r} value={r}>
                     {r}
                   </option>

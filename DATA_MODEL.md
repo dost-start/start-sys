@@ -14,7 +14,7 @@ Triggered by the framework rule: *"`DATA_MODEL.md` — schema has >5 entities OR
 - **Archival is a status flip, never a data migration.** No `_archive` tables, no annual ETL. `terms.status` goes `active → archived`; `current_term_id()` is what every dashboard filters on. "Dashboards are wiped clean" is free because the new term genuinely has zero memberships on day one.
 - **No `DELETE` policy exists anywhere.** Membership end is a status change. Term end is a flag. Accidental mass deletion is structurally impossible.
 - **RA 10173 5-year purge is anonymization-in-place**, driven by a `sensitive_column_registry` table so the classification is data, not prose in a doc nobody re-reads in 2031.
-- **The Constitution is seeded, not paraphrased.** The 23 CBL positions, the seven departments and the four administrators are rows in `0016_seed.sql` with articles cited inline; the May term boundary is a CHECK. **Separation from office (CBL Art. VI) and termination of membership (CBL Art. VII) are two different enums** on two different tables, because they are two different Articles with two different deciding bodies — §3.1 and §3.4.
+- **The Constitution is seeded, not paraphrased.** The 23 CBL positions and the seven departments are rows in `0016_seed.sql` with articles cited inline; the **seven** administrators (CRRD SRS 2026-09-05, migration `0036`, ADR 0009 — CEO, COO, CTO, DCTO-PD, CCDO, DCCDO-C, DCCDO-D) are a CHECK; the May term boundary is a CHECK. **Separation from office (CBL Art. VI) and termination of membership (CBL Art. VII) are two different enums** on two different tables, because they are two different Articles with two different deciding bodies — §3.1 and §3.4.
 - **RLS is the enforcement boundary.** Policy text lives in `supabase/migrations/0014_rls.sql` and is explained in `ARCHITECTURE.md`; this file shows only the policies that are part of the *modelling* (e.g. the application-window gate).
 
 > **If your query returns nothing, read `ARCHITECTURE.md` § "If your query returns nothing, read this first."** RLS's failure mode is a silent empty result set, not an error. This surprises everyone exactly once.
@@ -126,12 +126,16 @@ It fails on the PRD's own words: overwriting loses history ("records across term
 
 ```sql
 create type public.org_role          as enum ('exec_admin','tech_admin','crrd_admin','moderator','officer','regional_rep','member');
--- 'crrd_admin' is the CCDO (Chief Community Development Officer, head of the
--- Community & Regional Relations Department) only. The DCCDO-C, DCCDO-D and DCTO-PD hold
--- 'moderator': the day-to-day operating tier (review applications, update member
--- records, send campaigns) with no structural or access-control powers.
--- Administrators, per the project heads (2026-09-01): CEO, COO (exec_admin),
--- CTO (tech_admin), CCDO (crrd_admin). Nobody else.
+-- AS AMENDED 2026-09-05 (CRRD SRS, migration 0036, ADR 0009):
+--   exec_admin   CEO, COO
+--   tech_admin   CTO, DCTO-PD
+--   crrd_admin   CCDO, DCCDO-C, DCCDO-D
+--   officer      every other Chief and Deputy, read-only
+--   regional_rep Regional Representatives
+--   member       the REVOKED state only — members hold no accounts ("Members cannot access
+--                the system. They can only submit via forms"); written by revoke_role
+--   moderator    RETIRED — the label cannot be dropped, so user_roles_no_retired_tier refuses it
+-- Administrators are the seven above (admin_is_srs_administrator CHECK). Nobody else.
 create type public.island_group      as enum ('Luzon','Visayas','Mindanao');
 create type public.term_status       as enum ('draft','active','archived');
 
@@ -511,9 +515,10 @@ create table public.officer_positions (
   sort_order       int not null                   -- CBL listing order, in tens, so an amendment inserts
 );
 
--- The four administrators are a DATABASE constraint, not a comment nobody re-reads.
--- Project heads, 2026-09-01: CEO, COO, CTO, CCDO and nobody else. A fifth administrator
--- now requires a migration with a named author, which is the point.
+-- The administrators are a DATABASE constraint, not a comment nobody re-reads.
+-- 0003 named four (project heads, 2026-09-01: CEO, COO, CTO, CCDO); 0036 replaced the CHECK
+-- with admin_is_srs_administrator naming SEVEN (CRRD SRS, 2026-09-05: + DCTO_PD, DCCDO_C,
+-- DCCDO_D). An eighth requires a migration with a named author, which is the point.
 alter table public.officer_positions add constraint admin_is_c_suite
   check (not is_administrator or code in ('CEO','COO','CTO','CCDO'));
 
@@ -1232,15 +1237,15 @@ insert into public.officer_positions (code, title, grants_org_role, is_administr
   ('SPECIAL_ADVISOR', 'Special Advisor',                                                  'officer',      false,  90),
   -- Deputy Board — CBL Art. III §3
   ('DCOO',            'Deputy Chief Operations Officer for Administrative Affairs',       'officer',      false, 100),
-  ('DCTO_PD',         'Deputy Chief Technology Officer for Product Development',          'moderator',    false, 110),
+  ('DCTO_PD',         'Deputy Chief Technology Officer for Product Development',          'tech_admin',   true,  110),   -- 0036: SRS "CTO & DCTO-PD"
   ('DCTO_TE',         'Deputy Chief Technology Officer for Tech Education',               'officer',      false, 120),
   ('DCFO_RMD',        'Deputy Chief Finance Officer for Resource Management and Development', 'officer',  false, 130),
   ('DCMO_SP',         'Deputy Chief Marketing Officer for Strategic Promotions',          'officer',      false, 140),
   ('DCMO_CC',         'Deputy Chief Marketing Officer for Creative Content',              'officer',      false, 150),
   ('DCCO_P',          'Deputy Chief Communications Officer for Partnerships',             'officer',      false, 160),
   ('DCCO_SMR',        'Deputy Chief Communications Officer for Sponsorships and Media Relations', 'officer', false, 170),
-  ('DCCDO_C',         'Deputy Chief Community Development Officer for Community',         'moderator',    false, 180),
-  ('DCCDO_D',         'Deputy Chief Community Development Officer for Development',       'moderator',    false, 190),
+  ('DCCDO_C',         'Deputy Chief Community Development Officer for Community',         'crrd_admin',   true,  180),   -- 0036: SRS "CRRD Chiefs and Deputies"
+  ('DCCDO_D',         'Deputy Chief Community Development Officer for Development',       'crrd_admin',   true,  190),   -- 0036
   ('DCEVO_P',         'Deputy Chief Events Officer for Programs',                         'officer',      false, 200),
   ('DCEVO_L',         'Deputy Chief Events Officer for Logistics',                        'officer',      false, 210),
   -- Regional Representatives — CBL Art. III §4.6, duties at Art. IV §6.4
@@ -1256,8 +1261,8 @@ on conflict (code) do update
 
 | Row | Role | Why |
 |---|---|---|
-| `CTO` | `tech_admin` | `tech_admin` is the CTO **only**. `DCTO_PD` was moved out of it by the project heads on 2026-09-01 — the deputy operates, the chief configures. `roll_over_term()` and `unfreeze_term()` guard on `tech_admin`, so this row is the whole of who can end a term. |
-| `DCTO_PD`, `DCCDO_C`, `DCCDO_D` | `moderator` | The operating tier: review and decide applications, update member records and status, assign members to **existing** committees and departments, send campaigns. Full-column read on what they operate on, every read audited. No structural, role-granting or `rr_send_grants` powers. |
+| `CTO`, `DCTO_PD` | `tech_admin` | SRS 2026-09-05: "CTO & DCTO-PD … configure the system and control access per role". `roll_over_term()` and `unfreeze_term()` guard on `tech_admin`, so these two rows are the whole of who can end a term — and two seats is what mitigates PRD OQ-13. (2026-09-01 had the CTO alone; superseded by migration `0036`.) |
+| `DCCDO_C`, `DCCDO_D` | `crrd_admin` | SRS 2026-09-05: "CRRD Chiefs and Deputies" — one tier, no deputy sub-tier. The former `moderator` mapping is retired and unassignable (`user_roles_no_retired_tier`). |
 | `SPECIAL_ADVISOR` | `officer` | CBL Art. III §2.9 seats the Special Advisor with the Executive Board *"in an advisory capacity, without voting powers"*, and Art. X §2.4-2.5 makes them the **independent** reviewer of appeals against disciplinary action, including the terminations in §3.1 above. An advisor with `exec_admin` would be reviewing appeals against their own writes. Read-only is the correct shape for an adjudicator, and it is also the only C-Suite row that is not a DOST scholar (Art. X §3.1: an employee of DOST-SEI). |
 | `COMMITTEE_MEMBER` | `member` | Committee membership grants no elevated access; `officer` is reserved for chiefs and deputies. The row exists so the CBL structure is complete and `officer_assignments` can name a committee seat — but the operational record of who sits on which committee stays in `committee_memberships`, which is what the PRD's "assign members to committees" writes. Naming this position grants nothing, by design. |
 
@@ -1463,10 +1468,10 @@ Invariants the pgTAP suite asserts (CI-blocking):
 - Every table in `public` has both `ENABLE` and `FORCE ROW LEVEL SECURITY` — a meta-test over `pg_tables`, so a table shipped unprotected in 2029 cannot merge.
 - **No `DELETE` policy exists on any table.**
 - No `UPDATE` policy names `officer` or `regional_rep`.
-- **`officer_positions` has exactly four rows with `is_administrator = true`, and they are `CEO`, `COO`, `CTO`, `CCDO`.** A fifth administrator fails CI, not code review.
+- **`officer_positions` has exactly seven rows with `is_administrator = true`, and they are `CEO`, `COO`, `CTO`, `DCTO_PD`, `CCDO`, `DCCDO_C`, `DCCDO_D`** (SRS 2026-09-05). An eighth administrator fails CI, not code review.
 - **Every `active` term has exactly seven `departments` rows** with the CBL Art. III §4 codes — the assertion that catches a rollover which forgot step 5.
 - Only `exec_admin` fixtures can write `memberships.status = 'terminated'` (CBL Art. VII §3.2.3) or any `officer_assignments.status` (CBL Art. VI).
-- Exact row counts **and exact visible column sets** for nine fixtures: `anon`, `member`, `officer`, two different `regional_rep`s, `moderator`, `crrd_admin`, `exec_admin`, `tech_admin`.
+- Exact row counts **and exact visible column sets** for nine fixtures: `anon`, `member` (the revoked tier), `officer`, two different `regional_rep`s, `crrd_deputy` (a second `crrd_admin`, deliberately without a confidentiality acknowledgement), `crrd_admin`, `exec_admin`, `tech_admin`.
 
 ---
 

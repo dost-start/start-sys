@@ -151,8 +151,8 @@ select is(
 -- (Art. V §1). DATA_MODEL.md §8.4 makes it a PRECONDITION, not a report, and PRD US-J5 is
 -- explicit that the refusal is an ERROR and never an empty result.
 --
--- The moderator's acknowledgement is added by helpers/review-fixtures.psql (and deliberately
--- NOT by helpers/fixtures.psql, where its absence is 020's negative case). Here the moderator
+-- The crrd_deputy's acknowledgement is added by helpers/review-fixtures.psql (and deliberately
+-- NOT by helpers/fixtures.psql, where its absence is 020's negative case). Here the crrd_deputy
 -- is admitted WITH it and then refused WITHOUT it, so the gate is proven to BITE rather than
 -- merely assumed from a missing fixture row — an absence proves nothing about a function that
 -- never checks, and the same fixture doing both is what makes the difference attributable to
@@ -164,10 +164,10 @@ select lives_ok(
   'exec_admin with an acknowledgement may record a view');
 select pg_temp.logout();
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator, HAS an ack here
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy, HAS an ack here
 select lives_ok(
   $$ select public.log_document_view('00000000-0000-4000-8000-000000000201') $$,
-  'moderator with an acknowledgement may record a view — ARCHITECTURE.md §5: you cannot '
+  'crrd_deputy with an acknowledgement may record a view — ARCHITECTURE.md §5: you cannot '
   'review an application without reading it, and the proof document is the point of reviewing');
 select pg_temp.logout();
 
@@ -186,11 +186,11 @@ delete from public.confidentiality_acknowledgements
 insert into fx_audit (k, v)
 values ('before_no_ack', (select coalesce(max(id), 0) from public.audit_log));
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator, ack removed
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy, ack removed
 select throws_ok(
   $$ select public.log_document_view('00000000-0000-4000-8000-000000000201') $$,
   '42501'::char(5), null::text,
-  'the SAME moderator, with the acknowledgement removed, is REFUSED — CBL Art. VIII §7.1 as a '
+  'the SAME crrd_deputy, with the acknowledgement removed, is REFUSED — CBL Art. VIII §7.1 as a '
   'precondition. PRD US-J5: an error, not an empty result. **This is the deliberate day-one '
   'failure mode: on the morning a term opens, nobody has signed and no document opens**'
 );
@@ -370,14 +370,14 @@ select throws_ok(
   'anon CANNOT — EXECUTE revoked (0026) and auth_role() NULL inside the guard');
 select pg_temp.logout();
 
--- The moderator's acknowledgement was removed before assertion 10 and never restored (see
+-- The crrd_deputy's acknowledgement was removed before assertion 10 and never restored (see
 -- the note there on why no savepoint is used), so this is the same reviewer in the same
 -- unacknowledged state, refused at the OTHER sensitive door.
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator, ack removed
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy, ack removed
 select throws_ok(
   $$ select public.get_application_detail('00000000-0000-4000-8000-000000000201') $$,
   '42501'::char(5), null::text,
-  'a moderator without a current-term acknowledgement is REFUSED by the detail RPC too — the '
+  'a crrd_deputy without a current-term acknowledgement is REFUSED by the detail RPC too — the '
   'gate is asserted on BOTH sensitive doors, because a gate on one of two doors is a gate on '
   'neither (CBL Art. VIII §7.1, PRD US-J5)');
 select pg_temp.logout();

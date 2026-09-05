@@ -33,7 +33,7 @@
 --   reading it.
 --
 -- ⚠ AUDIT ROWS ARE READ AS THE SESSION ROLE, ALWAYS. audit_log_read (0014) admits only
---   exec_admin and tech_admin, so counting the log while impersonating a moderator would
+--   exec_admin and tech_admin, so counting the log while impersonating a crrd_deputy would
 --   return zero and every delta assertion would trivially "pass". Deltas are measured from a
 --   captured baseline, never as absolute counts, because the fixtures themselves fire audit
 --   triggers.
@@ -105,11 +105,11 @@ select is(
 );
 select pg_temp.logout();
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator, P3, ack via records-fixtures
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy, P3, ack via records-fixtures
 select is(
   (public.get_member_record('00000000-0000-4000-b000-000000000004') ->> 'school_id_no'),
   'PLANTED-SCH-001',
-  'a MODERATOR reads the record in full too: ARCHITECTURE.md §5 — you cannot review an '
+  'a CRRD_DEPUTY reads the record in full too: ARCHITECTURE.md §5 — you cannot review an '
   'application or correct a member record without reading it. Their reads are audited '
   'identically and gated on the same acknowledgement'
 );
@@ -289,11 +289,11 @@ select throws_like(
 );
 select pg_temp.logout();
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator, ack removed
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy, ack removed
 select throws_ok(
   $$ select public.get_member_record('00000000-0000-4000-b000-000000000004') $$,
   '42501'::char(5), null::text,
-  'the MODERATOR is refused too. All three permitted tiers were admitted above and all three '
+  'the CRRD_DEPUTY is refused too. All three permitted tiers were admitted above and all three '
   'are refused now, so these assertions are measuring the ACKNOWLEDGEMENT gate rather than a '
   'role guard that would have refused anyway (PRD US-J5)'
 );

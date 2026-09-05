@@ -117,9 +117,6 @@ describe("who may open or close the application period (ADR 0003)", () => {
     // the CRRD's operational act (PRD US-B4) or the CTO's system configuration.
     // `application_windows_insert` names exactly crrd_admin and tech_admin.
     "exec_admin",
-    // Structure and scheduling are chief-level — the same reason a moderator cannot
-    // create a committee (OQ-14's documented reading).
-    "moderator",
     "officer",
     "regional_rep",
     "member",

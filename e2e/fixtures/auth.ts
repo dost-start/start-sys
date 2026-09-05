@@ -43,12 +43,12 @@ import type { Page } from "@playwright/test";
 // The contract: names, uuids, emails, password
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** The nine CONVENTIONS.md §8.1 fixture names, minus `anon` (which has no account). */
+/** The CONVENTIONS.md §8.1 fixture names, minus `anon` (which has no account). */
 export type FixtureName =
   | "exec_admin"
   | "tech_admin"
   | "crrd_admin"
-  | "moderator"
+  | "crrd_deputy"
   | "officer"
   | "regional_rep_a"
   | "regional_rep_b"
@@ -109,11 +109,14 @@ export const FIXTURES: Record<FixtureName, FixtureAccount> = {
     enrolTotp: true,
     home: "/dashboard",
   },
-  moderator: {
-    name: "moderator",
-    role: "moderator",
+  // The CRRD deputy (DCCDO-C): crrd_admin under the SRS (2026-09-05, migration 0036),
+  // and the ONE privileged account with no confidentiality acknowledgement — the
+  // day-one refusal case. Same uuid and person as pgTAP's crrd_deputy fixture.
+  crrd_deputy: {
+    name: "crrd_deputy",
+    role: "crrd_admin",
     id: A(4),
-    email: "moderator@fixture.start-sys.test",
+    email: "crrd.deputy@fixture.start-sys.test",
     personId: B(3),
     regionCode: null,
     enrolTotp: true,
@@ -152,8 +155,9 @@ export const FIXTURES: Record<FixtureName, FixtureAccount> = {
     enrolTotp: true,
     home: "/region",
   },
-  // Members are the documented 2FA exception (ADR 0004): no factor, and none is
-  // demanded, because a member holds no organizational data.
+  // `member` is the REVOKED tier (0036): members hold no accounts under the SRS, so
+  // this label exists only as what revokeRole writes. No factor, none demanded (ADR
+  // 0004), and no route — it lands on the explicit refusal page.
   member: {
     name: "member",
     role: "member",
@@ -162,7 +166,7 @@ export const FIXTURES: Record<FixtureName, FixtureAccount> = {
     personId: B(4),
     regionCode: null,
     enrolTotp: false,
-    home: "/portal",
+    home: "/unauthorized",
   },
 };
 
@@ -516,7 +520,7 @@ async function seedOrgData(admin: SupabaseClient, userIds: Record<string, string
   );
 
   // CBL Art. VIII §7.1 (US-J5). exec_admin's and crrd_admin's people have signed for
-  // the current term; the moderator's DELIBERATELY has not, so the day-one refusal is
+  // the current term; the CRRD deputy's DELIBERATELY has not, so the day-one refusal is
   // a tested behaviour rather than a surprise.
   await insertIfAbsent(
     "confidentiality_acknowledgements",

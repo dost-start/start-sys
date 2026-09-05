@@ -4,7 +4,7 @@
 -- WHAT:
 --    1-6    POSITIVE CONTROL — crrd_admin's exact row set and exact sum(member_count) from
 --           all three aggregate views
---    7-24   the other three all-see tiers: exec_admin, moderator, officer
+--    7-24   the other three all-see tiers: exec_admin, crrd_deputy, officer
 --   25-30   tech_admin sees ZERO of everything, and that is a designed answer
 --   31-36   regional_rep_a — region A only, with region A's own status mix
 --   37-42   regional_rep_b — region B only, with a DIFFERENT status mix
@@ -35,15 +35,15 @@
 --   stay green under exactly that break.
 --
 -- ⚠ tech_admin's ZEROS (25-30) ARE AN EXPECTED VALUE, NOT A BUG. memberships_read names
---   exec_admin, crrd_admin, moderator, officer, a region-scoped regional_rep branch and a
+--   exec_admin, crrd_admin, crrd_deputy, officer, a region-scoped regional_rep branch and a
 --   self-scoped member branch — and does NOT name tech_admin (PRD OQ-5, least privilege:
 --   "configure the system and control access" is not "read everyone's address"). They are
 --   PINNED here rather than left unasserted, so the day someone widens that policy CI says
 --   exactly what changed. It is also why BUILD_PLAN S6-T13 lands the CTO on /system rather
 --   than on an all-zero dashboard that would read as a broken system.
 --
--- ⚠ moderator's FULL VISIBILITY (13-18) is likewise READ OUT OF THE POLICY, not assumed.
---   memberships_read does name moderator, so a moderator's dashboard is an admin's.
+-- ⚠ crrd_deputy's FULL VISIBILITY (13-18) is likewise READ OUT OF THE POLICY, not assumed.
+--   memberships_read does name crrd_deputy, so a crrd_deputy's dashboard is an admin's.
 --
 -- ⚠ THIS FILE MUTATES NOTHING after its fixtures, which is why the numbers below can be
 --   written down. The arithmetic they derive from is the table at the head of
@@ -212,29 +212,29 @@ select pg_temp.logout();
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════════
--- 13-18 — moderator (DCCDO-C / DCCDO-D / DCTO-PD)
+-- 13-18 — crrd_deputy (DCCDO-C / DCCDO-D / DCTO-PD)
 --
 -- FULL visibility, and it is the POLICY that says so, not an assumption: memberships_read
--- names 'moderator' alongside the two admin tiers. The moderator's boundary against
+-- names 'crrd_deputy' alongside the two admin tiers. The crrd_deputy's boundary against
 -- crrd_admin is structural (create a committee, issue an rr_send_grant, assign a role) and
 -- lives in 0014 §5 — it is not a narrower READ of the same rows. Asserted here so a future
 -- narrowing of memberships_read cannot land silently.
 -- ═══════════════════════════════════════════════════════════════════════════════════
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy
 
 select is(pg_temp.dash_status(pg_temp.fx_active_term()),
-  'active=12 | graduated=2 | resigned=1', 'moderator — exact status row set (policy names moderator)');
+  'active=12 | graduated=2 | resigned=1', 'crrd_deputy — exact status row set (memberships_read names crrd_admin)');
 select is(pg_temp.dash_status_sum(pg_temp.fx_active_term()), 15,
-  'moderator — status counts sum to 15');
+  'crrd_deputy — status counts sum to 15');
 select is(pg_temp.dash_region(pg_temp.fx_active_term()),
-  'NCR=9 | R07=6', 'moderator — exact region row set');
+  'NCR=9 | R07=6', 'crrd_deputy — exact region row set');
 select is(pg_temp.dash_region_sum(pg_temp.fx_active_term()), 15,
-  'moderator — region counts sum to 15');
+  'crrd_deputy — region counts sum to 15');
 select is(pg_temp.dash_committee(pg_temp.fx_active_term()),
-  'FIXT_DASH_OPS=2 | FIXT_ETHICS=3 | _UNASSIGNED=11', 'moderator — exact committee row set');
+  'FIXT_DASH_OPS=2 | FIXT_ETHICS=3 | _UNASSIGNED=11', 'crrd_deputy — exact committee row set');
 select is(pg_temp.dash_committee_sum(pg_temp.fx_active_term()), 16,
-  'moderator — committee counts sum to 16');
+  'crrd_deputy — committee counts sum to 16');
 
 select pg_temp.logout();
 

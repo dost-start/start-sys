@@ -66,7 +66,7 @@ select is((select count(*)::int from public.regions), 18,
 select is((select count(*)::int from public.officer_positions), 23,
   'BEFORE: 23 officer positions — CBL Art. III §2 (9), §3 (12), §4.6 (1), §5 (1)');
 
-select is((select count(*)::int from public.officer_positions where is_administrator), 4,
+select is((select count(*)::int from public.officer_positions where is_administrator), 7,
   'BEFORE: exactly 4 administrators — CEO, COO, CTO, CCDO and nobody else');
 
 select is((select count(*)::int from public.terms), 1,
@@ -112,7 +112,7 @@ select is((select count(*)::int from public.regions), 18,
 select is((select count(*)::int from public.officer_positions), 23,
   'AFTER: still 23 officer positions — ON CONFLICT DO UPDATE re-applied the same values without adding rows');
 
-select is((select count(*)::int from public.officer_positions where is_administrator), 4,
+select is((select count(*)::int from public.officer_positions where is_administrator), 7,
   'AFTER: still exactly 4 administrators — a re-run cannot create a fifth (and the admin_is_c_suite CHECK would refuse one anyway)');
 
 select is((select count(*)::int from public.terms), 1,

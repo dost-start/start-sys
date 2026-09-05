@@ -7,7 +7,7 @@
 --  9-12     the terminal states are terminal — four illegal edges, 23514
 -- 13-14     the INSERT branch: a membership is born active or renewal_pending, never else
 -- 15-18     the forward terminated edge belongs to the Executive Board — refused for
---           crrd_admin and moderator by RLS *and*, independently, by the trigger
+--           crrd_admin and crrd_deputy by RLS *and*, independently, by the trigger
 -- 19-21     a termination must name a FRESH, substantial ground
 -- 22-25     the reversal edge (PRD US-D6) belongs to the Executive Board too
 -- 26-28     officer, regional rep and member update ZERO rows — and do not raise
@@ -90,11 +90,11 @@ select pg_temp.logout();
 -- 2-8 — every legal edge, walked by a permitted actor
 -- ═══════════════════════════════════════════════════════════════════════════════════
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy
 select lives_ok(
   $$ update public.memberships set status = 'active'
       where id = '00000000-0000-4000-c100-000000000011' $$,
-  'renewal_pending -> active by a moderator: CRRD approves a renewal (DATA_MODEL.md §3.1). '
+  'renewal_pending -> active by a crrd_deputy: CRRD approves a renewal (DATA_MODEL.md §3.1). '
   'The operating tier owns every membership transition except the two the Constitution '
   'reserves to the Executive Board'
 );
@@ -102,7 +102,7 @@ select lives_ok(
 select lives_ok(
   $$ update public.memberships set status = 'left'
       where id = '00000000-0000-4000-c100-000000000012' $$,
-  'renewal_pending -> left by a moderator: the renewal was declined or never completed. '
+  'renewal_pending -> left by a crrd_deputy: the renewal was declined or never completed. '
   'This is also the edge roll_over_term() sweeps at term end'
 );
 select pg_temp.logout();
@@ -115,11 +115,11 @@ select lives_ok(
 );
 select pg_temp.logout();
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy
 select lives_ok(
   $$ update public.memberships set status = 'resigned'
       where id = '00000000-0000-4000-c100-000000000014' $$,
-  'active -> resigned by a moderator (PRD US-D3)'
+  'active -> resigned by a crrd_deputy (PRD US-D3)'
 );
 select pg_temp.logout();
 
@@ -232,9 +232,9 @@ select lives_ok(
 -- ═══════════════════════════════════════════════════════════════════════════════════
 -- 15-18 — the forward terminated edge is the Executive Board's alone
 -- ═══════════════════════════════════════════════════════════════════════════════════
--- CBL Art. VII §3.2.3. crrd_admin and moderator own every OTHER membership transition, so
+-- CBL Art. VII §3.2.3. crrd_admin and crrd_deputy own every OTHER membership transition, so
 -- this is the narrowest write in the system and the one most likely to be widened by
--- accident — "the moderator can update member status" is true of five values out of six.
+-- accident — "the crrd_deputy can update member status" is true of five values out of six.
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000003');   -- crrd_admin
 select throws_ok(
@@ -249,13 +249,13 @@ select throws_ok(
 );
 select pg_temp.logout();
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy
 select throws_ok(
   $$ update public.memberships
         set status = 'terminated', ended_reason = 'attempted by the wrong tier entirely'
       where id = '00000000-0000-4000-c100-000000000017' $$,
   '42501'::char(5), null::text,
-  'a MODERATOR cannot terminate a membership either, even though the locked role model gives '
+  'a CRRD_DEPUTY cannot terminate a membership either, even though the locked role model gives '
   'them "update member status" for every other value'
 );
 select pg_temp.logout();
@@ -264,13 +264,13 @@ select pg_temp.logout();
 -- privileges intact, so RLS is out of the picture and this reaches enforce_membership_
 -- transition() directly. If the trigger's role gate were deleted, 15 and 16 would still pass
 -- and only THIS assertion would go red — which is the whole reason it exists.
-select pg_temp.set_claims('00000000-0000-4000-a000-000000000004');  -- moderator claims only
+select pg_temp.set_claims('00000000-0000-4000-a000-000000000004');  -- crrd_deputy claims only
 select throws_ok(
   $$ update public.memberships
         set status = 'terminated', ended_reason = 'attempted around RLS, as a definer would'
       where id = '00000000-0000-4000-c100-000000000017' $$,
   '42501'::char(5), null::text,
-  'THE TRIGGER REFUSES INDEPENDENTLY OF RLS: a moderator''s claims with the session role''s '
+  'THE TRIGGER REFUSES INDEPENDENTLY OF RLS: a crrd_deputy''s claims with the session role''s '
   'privileges is the shape a SECURITY DEFINER caller presents, and RLS does not reach it. '
   '0028 is the guard for approve_application(), roll_over_term() and every future definer'
 );
@@ -365,7 +365,7 @@ select throws_ok(
       where id = '00000000-0000-4000-c100-000000000019' $$,
   '42501'::char(5), null::text,
   'the trigger refuses the REVERSAL edge for a non-exec caller too, so the silent filter '
-  'above is not the only thing standing between a moderator and an overturned Executive '
+  'above is not the only thing standing between a crrd_deputy and an overturned Executive '
   'Board ruling'
 );
 select pg_temp.logout();

@@ -114,7 +114,7 @@ on conflict (code) do nothing;
 --                           2026-09-01 — the deputy operates, the chief configures. The
 --                           continuity risk when this seat is vacant is PRD OQ-13, open.
 --   DCTO_PD, DCCDO_C,
---   DCCDO_D -> moderator    The operating tier. CBL Art. IV §6.2.2 puts "membership
+--   DCCDO_D -> crrd_deputy    The operating tier. CBL Art. IV §6.2.2 puts "membership
 --                           recruitment, application, retention, and re-engagement" in the
 --                           DCCDO-C's hands, so application review is constitutionally
 --                           theirs. Full-column reads on what they operate on, every read
@@ -163,15 +163,15 @@ insert into public.officer_positions (code, title, grants_org_role, is_administr
   ('SPECIAL_ADVISOR',  'Special Advisor',                                                        'officer',      false,  90),
   -- ── Deputy Board — CBL Art. III §3 ───────────────────────────────────────────────
   ('DCOO',             'Deputy Chief Operations Officer for Administrative Affairs',             'officer',      false, 100),
-  ('DCTO_PD',          'Deputy Chief Technology Officer for Product Development',                'moderator',    false, 110),
+  ('DCTO_PD',          'Deputy Chief Technology Officer for Product Development',                'tech_admin',   true,  110),
   ('DCTO_TE',          'Deputy Chief Technology Officer for Tech Education',                     'officer',      false, 120),
   ('DCFO_RMD',         'Deputy Chief Finance Officer for Resource Management and Development',   'officer',      false, 130),
   ('DCMO_SP',          'Deputy Chief Marketing Officer for Strategic Promotions',                'officer',      false, 140),
   ('DCMO_CC',          'Deputy Chief Marketing Officer for Creative Content',                    'officer',      false, 150),
   ('DCCO_P',           'Deputy Chief Communications Officer for Partnerships',                   'officer',      false, 160),
   ('DCCO_SMR',         'Deputy Chief Communications Officer for Sponsorships and Media Relations','officer',     false, 170),
-  ('DCCDO_C',          'Deputy Chief Community Development Officer for Community',               'moderator',    false, 180),
-  ('DCCDO_D',          'Deputy Chief Community Development Officer for Development',             'moderator',    false, 190),
+  ('DCCDO_C',          'Deputy Chief Community Development Officer for Community',               'crrd_admin',   true,  180),
+  ('DCCDO_D',          'Deputy Chief Community Development Officer for Development',             'crrd_admin',   true,  190),
   ('DCEVO_P',          'Deputy Chief Events Officer for Programs',                               'officer',      false, 200),
   ('DCEVO_L',          'Deputy Chief Events Officer for Logistics',                              'officer',      false, 210),
   -- ── Regional Representatives — CBL Art. III §4.6, duties at Art. IV §6.4 ─────────

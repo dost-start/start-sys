@@ -30,7 +30,7 @@
 --   the moment the table changes shape, which is the failure direction that protects
 --   scholars. PRD §6 Success Metric 8: "0 sensitive fields returned to Officer or RR tiers."
 --
--- ⚠ WHY exec_admin, crrd_admin AND moderator ARE ALSO REFUSED (assertions 42-59). They are
+-- ⚠ WHY exec_admin, crrd_admin AND crrd_deputy ARE ALSO REFUSED (assertions 42-59). They are
 --   the three tiers that legitimately read sensitive columns — but never through a GRANT.
 --   They read through get_person_sensitive() (0012), a SECURITY DEFINER RPC that is
 --   role-gated, gated on a CURRENT-TERM confidentiality acknowledgement (CBL Art. VIII
@@ -218,11 +218,11 @@ select throws_ok($$ select birthdate from public.people $$, '42501'::char(5), nu
 select throws_ok($$ select * from public.people $$, '42501'::char(5), null::text,
   'crrd_admin cannot `select *` from people');
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy
 select throws_ok($$ select birthdate from public.people $$, '42501'::char(5), null::text,
-  'moderator cannot select people.birthdate through a GRANT');
+  'crrd_deputy cannot select people.birthdate through a GRANT');
 select throws_ok($$ select * from public.people $$, '42501'::char(5), null::text,
-  'moderator cannot `select *` from people');
+  'crrd_deputy cannot `select *` from people');
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000005');   -- officer
 select throws_ok($$ select birthdate from public.people $$, '42501'::char(5), null::text,
@@ -274,7 +274,7 @@ select lives_ok($$ select id, member_id, given_name, family_name, join_year, cre
   'crrd_admin CAN read the six granted columns');
 select pg_temp.login_as('00000000-0000-4000-a000-000000000004');
 select lives_ok($$ select id, member_id, given_name, family_name, join_year, created_at from public.people $$,
-  'moderator CAN read the six granted columns');
+  'crrd_deputy CAN read the six granted columns');
 select pg_temp.login_as('00000000-0000-4000-a000-000000000005');
 select lives_ok($$ select id, member_id, given_name, family_name, join_year, created_at from public.people $$,
   'officer CAN read the six granted columns — the directory works, the record does not open');

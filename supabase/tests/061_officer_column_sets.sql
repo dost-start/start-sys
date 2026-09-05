@@ -309,7 +309,7 @@ select throws_ok(
 );
 
 -- The officer counterpart of the rep's zero-rows probe above: memberships carries the
--- UPDATE table privilege (moderators need it), so for an officer the refusal arrives
+-- UPDATE table privilege (crrd_deputys need it), so for an officer the refusal arrives
 -- as a MISSING POLICY — zero rows affected, no error (PRD US-D2).
 do $$
 declare n int;

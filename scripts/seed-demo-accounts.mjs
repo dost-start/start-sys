@@ -9,7 +9,7 @@
 //
 // What it creates, idempotently (re-runs update passwords, never duplicate rows):
 //   · one account per tier: demo.ceo (exec_admin), demo.cto (tech_admin),
-//     demo.ccdo (crrd_admin), demo.moderator, demo.officer, demo.rep (NCR),
+//     demo.ccdo (crrd_admin), demo.dccdo (crrd_admin, a deputy), demo.officer, demo.rep (NCR),
 //     demo.member — fresh random password each run, printed ONCE and written to
 //     demo-credentials.local.md (gitignored).
 //   · people + current-term memberships for the accounts that represent members,
@@ -78,8 +78,9 @@ const ACCOUNTS = [
     name: ["Carlos", "Domingo"],
   },
   {
-    email: "demo.moderator@start-sys.test",
-    role: "moderator",
+    // DCCDO-C — a CRRD deputy is crrd_admin under the SRS (migration 0036).
+    email: "demo.dccdo@start-sys.test",
+    role: "crrd_admin",
     region: null,
     person: 3,
     name: ["Mia", "Santos"],
@@ -92,14 +93,15 @@ const ACCOUNTS = [
     person: null,
     name: null,
   },
-  {
-    email: "demo.member@start-sys.test",
-    role: "member",
-    region: null,
-    person: 4,
-    name: ["Juan", "Dela Cruz"],
-  },
 ];
+
+/**
+ * Accounts from before migration 0036 that must not survive a re-seed: the moderator
+ * tier is retired (the migration converted its row to crrd_admin, so the old login
+ * would be a stray CCDO-equivalent), and members hold no accounts at all under the
+ * SRS. Demo tooling on a scratch project — the only place a user is ever deleted.
+ */
+const RETIRED_ACCOUNTS = ["demo.moderator@start-sys.test", "demo.member@start-sys.test"];
 
 const FIRST = [
   "Alon",
@@ -166,7 +168,16 @@ async function main() {
 
   const creds = [];
 
-  // ── the seven demo accounts ────────────────────────────────────────────────
+  // ── retire pre-0036 demo accounts ──────────────────────────────────────────
+  {
+    const { data: list, error } = await admin.auth.admin.listUsers({ perPage: 1000 });
+    if (error) throw new Error(`listUsers: ${error.message}`);
+    for (const u of list.users.filter((x) => RETIRED_ACCOUNTS.includes(x.email ?? ""))) {
+      await must(admin.auth.admin.deleteUser(u.id), `retire ${u.email}`);
+    }
+  }
+
+  // ── the six demo accounts ──────────────────────────────────────────────────
   for (const a of ACCOUNTS) {
     const pass = password();
     const userId = await upsertUser(a.email, pass);
@@ -220,7 +231,7 @@ async function main() {
 
     // CBL Art. VIII §7.1 — without a current-term acknowledgement every sensitive
     // read (correctly) fails, which would make the demo look broken.
-    if (personId && ["exec_admin", "crrd_admin", "moderator"].includes(a.role)) {
+    if (personId && ["exec_admin", "crrd_admin"].includes(a.role)) {
       await must(
         admin.from("confidentiality_acknowledgements").upsert(
           {

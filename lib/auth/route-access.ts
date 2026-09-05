@@ -21,11 +21,17 @@
 
 import type { Enums } from "@/database.types";
 
-/** The seven access tiers. Generated from the `org_role` enum — never hand-typed. */
+/**
+ * Every label of the `org_role` enum. Generated — never hand-typed. Two labels are
+ * not live tiers (migration 0036, CRRD SRS 2026-09-05): `moderator` is retired and
+ * unassignable, and `member` is the REVOKED state — members hold no accounts, so the
+ * only account that can carry that label is one whose role was taken away. Both reach
+ * nothing here.
+ */
 export type OrgRole = Enums<"org_role">;
 
-/** The audience a path belongs to. One group per PRD tier, plus `public` and `auth`. */
-export type RouteGroup = "public" | "auth" | "admin" | "officer" | "member" | "rr";
+/** The audience a path belongs to. One group per SRS tier, plus `public` and `auth`. */
+export type RouteGroup = "public" | "auth" | "admin" | "officer" | "rr";
 
 /**
  * The `/system` surface is `tech_admin` alone — terms, application windows and
@@ -57,37 +63,37 @@ export const ROUTE_GROUPS = {
   auth: [LOGIN_PATH, "/auth"],
   admin: ["/dashboard", "/members", "/applications", "/audit", ADMIN_SYSTEM_PREFIX],
   officer: ["/directory", "/committees"],
-  member: ["/portal"],
   rr: ["/region"],
 } as const satisfies Record<RouteGroup, readonly string[]>;
 
 /** Deterministic iteration order for `groupForPath`. */
-const GROUP_ORDER: readonly RouteGroup[] = ["public", "auth", "admin", "officer", "member", "rr"];
+const GROUP_ORDER: readonly RouteGroup[] = ["public", "auth", "admin", "officer", "rr"];
 
 /**
- * The four roles that reach the admin surface. `moderator` is included because the
- * operating tier reviews applications and updates member records (PRD §2 Moderator);
- * it is excluded from `/system` by the check in `canAccess`, not by this list.
+ * The three roles that reach the admin surface — the SRS's administrator groups
+ * (CEO & COO; CTO & DCTO-PD; CRRD Chiefs and Deputies). `tech_admin` alone reaches
+ * `/system`, by the check in `canAccess`, not by this list.
  */
-const ADMIN_GROUP_ROLES: readonly OrgRole[] = [
-  "exec_admin",
-  "tech_admin",
-  "crrd_admin",
-  "moderator",
-];
+const ADMIN_GROUP_ROLES: readonly OrgRole[] = ["exec_admin", "tech_admin", "crrd_admin"];
 
-/** Landing route per role. A `Record` over the enum, so a new tier is a compile error. */
+/**
+ * Landing route per role. A `Record` over the enum, so a new tier is a compile error.
+ * The two dead labels land on the explicit refusal page — reachable by any signed-in
+ * account, so a revoked account cannot bounce forever.
+ */
 const HOME_BY_ROLE: Record<OrgRole, string> = {
   exec_admin: "/dashboard",
   crrd_admin: "/dashboard",
-  moderator: "/dashboard",
   // NOT `/dashboard`: the `memberships` SELECT policy does not name `tech_admin`, so
   // the CTO would land on an all-zero headcount screen that reads as a broken system
   // (BUILD_PLAN S6-T13). Their surface is system configuration.
   tech_admin: ADMIN_SYSTEM_PREFIX,
   officer: "/directory",
   regional_rep: "/region",
-  member: "/portal",
+  // Retired (0036): unassignable, so never actually reached. Total map regardless.
+  moderator: UNAUTHORIZED_PATH,
+  // Revoked (0036): the label revokeRole writes. No surface, by design.
+  member: UNAUTHORIZED_PATH,
 };
 
 /** Strip a trailing slash so `/members/` and `/members` are the same path. */
@@ -168,11 +174,6 @@ export function canAccess(role: OrgRole | null, pathname: string): boolean {
       // `v_member_directory`, never by this function (ARCHITECTURE §5).
       return role === "officer" || isAdminGroupRole(role);
 
-    case "member":
-      // Strictly the member's own portal. US-E4: a member sees their own assignment
-      // and nothing else, so nobody else has a reason to be here.
-      return role === "member";
-
     case "rr":
       // Scoped to `auth_region_id()` by RLS. Only the regional rep tier lands here.
       return role === "regional_rep";
@@ -193,9 +194,10 @@ export function homeForRole(role: OrgRole | null): string {
 /**
  * Is TOTP enrolment mandatory for this role?
  *
- * PRD MVP item 2 / US-A3: every account above Member tier. Members hold no
- * organizational data — the risk-proportionate exception is documented in ADR 0004,
- * not left implicit.
+ * PRD MVP item 2 / US-A3: every account above Member tier. `member` is now the
+ * revoked tier (0036) — it holds no organizational data and reaches no route — so
+ * the risk-proportionate exception of ADR 0004 still applies to it and to nothing
+ * else.
  *
  * This is the UX half. The database backstop is the `(auth.jwt() ->> 'aal') = 'aal2'`
  * predicate on the privileged write policies (BUILD_PLAN S2-T16, S2-T25): delete this

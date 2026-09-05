@@ -68,7 +68,7 @@ describe("withRole — denies without invoking the body", () => {
     const body = vi.fn(async () => ({ ok: true as const, data: "written" }));
     mockedGetSessionContext.mockResolvedValue(null);
 
-    const action = withRole(["exec_admin", "crrd_admin", "moderator"], body);
+    const action = withRole(["exec_admin", "crrd_admin"], body);
     const result = await action(undefined);
 
     expect(result.ok).toBe(false);
@@ -76,13 +76,7 @@ describe("withRole — denies without invoking the body", () => {
   });
 
   test("every non-listed tier is refused for the same action", async () => {
-    const denied: readonly OrgRole[] = [
-      "tech_admin",
-      "moderator",
-      "officer",
-      "regional_rep",
-      "member",
-    ];
+    const denied: readonly OrgRole[] = ["tech_admin", "officer", "regional_rep", "member"];
 
     for (const role of denied) {
       const body = vi.fn(async () => ({ ok: true as const, data: "written" }));
@@ -118,7 +112,7 @@ describe("withRole — allows a listed tier exactly once", () => {
     const body = vi.fn(async () => ({ ok: true as const, data: "2026-014" }));
     mockedGetSessionContext.mockResolvedValue(contextFor("crrd_admin"));
 
-    const action = withRole(["crrd_admin", "moderator", "exec_admin"], body);
+    const action = withRole(["crrd_admin", "exec_admin"], body);
     const result = await action(undefined);
 
     expect(body).toHaveBeenCalledTimes(1);
@@ -126,13 +120,13 @@ describe("withRole — allows a listed tier exactly once", () => {
   });
 
   test("the body receives the caller's context and the input verbatim", async () => {
-    const ctx = contextFor("moderator");
+    const ctx = contextFor("officer");
     // eslint-disable-next-line @typescript-eslint/no-unused-vars -- rest param widens TIn so any input type is accepted
     const body = vi.fn(async (..._args: unknown[]) => ({ ok: true as const, data: null }));
     mockedGetSessionContext.mockResolvedValue(ctx);
 
     const input = { id: "6f1b1c2e-0000-4000-8000-000000000001" };
-    await withRole(["moderator"], body)(input);
+    await withRole(["officer"], body)(input);
 
     expect(body).toHaveBeenCalledTimes(1);
     expect(body).toHaveBeenCalledWith(ctx, input);
@@ -155,7 +149,7 @@ describe("withRole — allows a listed tier exactly once", () => {
   });
 
   test("each of the listed tiers is allowed", async () => {
-    const allowed: readonly OrgRole[] = ["crrd_admin", "moderator", "exec_admin"];
+    const allowed: readonly OrgRole[] = ["crrd_admin", "exec_admin"];
 
     for (const role of allowed) {
       const body = vi.fn(async () => ({ ok: true as const, data: role }));
@@ -185,7 +179,6 @@ describe("withAnyRole", () => {
       "exec_admin",
       "tech_admin",
       "crrd_admin",
-      "moderator",
       "officer",
       "regional_rep",
       "member",

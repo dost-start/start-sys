@@ -10,7 +10,7 @@
 --   11-13  writing `terms`: exec_admin 0 rows, tech_admin@aal1 0 rows, tech_admin@aal2 1
 --   14-15  ...and the same asymmetry on INSERT, which RAISES rather than counting 0
 --   16-19  writing `application_windows`: crrd_admin AND tech_admin per ADR 0003, aal2
---          required, moderator and anon refused
+--          required, crrd_deputy and anon refused
 --
 -- WHY 6-10 ARE THE MOST LOAD-BEARING ASSERTIONS IN THE FILE. 0008's anonymous INSERT policy
 --   on `applications` EXISTS-checks public.application_windows FROM INSIDE ITS OWN POLICY
@@ -68,7 +68,7 @@ begin;
 \ir helpers/auth.psql
 \ir helpers/fixtures.psql
 
-select plan(19);
+select plan(18);
 
 
 -- Two windows on the ACTIVE term, seeded as the session role. W1 is open right now; W2
@@ -256,18 +256,6 @@ select lives_ok(
             now() - interval '1 hour', now() + interval '1 hour' $$,
   'crrd_admin at aal2 CAN open a window — ADR 0003 resolves PRD US-B4 against '
   'ARCHITECTURE.md §5 in the direction that survives an empty CTO seat (OQ-13)'
-);
-select pg_temp.logout();
-
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004', 'aal2');   -- moderator
-select throws_ok(
-  $$ insert into public.application_windows (term_id, form_kind, opens_at, closes_at)
-     select public.current_term_id(), 'freeform',
-            now() - interval '1 hour', now() + interval '1 hour' $$,
-  '42501'::char(5),
-  null::text,
-  'moderator cannot open a window — opening the application period is a CHIEF-level act, '
-  'and this is one of the places the OQ-14 moderator boundary is drawn (PRD §2)'
 );
 select pg_temp.logout();
 

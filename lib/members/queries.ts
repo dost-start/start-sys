@@ -61,12 +61,7 @@ import type {
  * officers and reps do not gain access to prior terms they could not see at the time).
  * Not sending the parameter simply keeps a stale link from looking like it worked.
  */
-const TERM_SELECTING_ROLES: readonly OrgRole[] = [
-  "exec_admin",
-  "crrd_admin",
-  "moderator",
-  "tech_admin",
-];
+const TERM_SELECTING_ROLES: readonly OrgRole[] = ["exec_admin", "crrd_admin", "tech_admin"];
 
 /** `undefined` for an empty facet, so JSON.stringify drops it and the SQL default (NULL) wins. */
 const facetArg = <T>(values: readonly T[]): T[] | undefined =>

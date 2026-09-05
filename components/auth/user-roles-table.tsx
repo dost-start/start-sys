@@ -19,7 +19,7 @@ import { useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import { assignRole, revokeRole } from "@/lib/auth/role-actions";
-import { ORG_ROLES } from "@/lib/auth/invite-schema";
+import { ASSIGNABLE_ROLES } from "@/lib/auth/invite-schema";
 import type { OrgRole } from "@/lib/auth/route-access";
 
 export type RegionOption = { id: string; code: string; name: string };
@@ -124,7 +124,7 @@ function UserRoleRowItem({ row, regions }: { row: UserRoleRow; regions: readonly
           disabled={isPending}
           onChange={(event) => setRole(event.target.value as OrgRole)}
         >
-          {ORG_ROLES.map((r) => (
+          {ASSIGNABLE_ROLES.map((r) => (
             <option key={r} value={r}>
               {r}
             </option>

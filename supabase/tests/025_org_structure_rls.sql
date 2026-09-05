@@ -1,7 +1,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════════════
 -- 025_org_structure_rls.sql  —  BUILD_PLAN S2-T19, the test half
 --
--- WHERE THE OQ-14 MODERATOR BOUNDARY IS ACTUALLY DRAWN. The split is the Constitution's,
+-- WHERE THE OQ-14 CRRD_DEPUTY BOUNDARY IS ACTUALLY DRAWN. The split is the Constitution's,
 -- not ours, and this file is what stops it from being widened by accident:
 --
 --   STRUCTURE   creating or renaming a committee or a department  ->  crrd_admin ALONE.
@@ -9,7 +9,7 @@
 --               dissolution through a co-endorsement, COO review and CEO approval, so it
 --               was never a deputy's to make. exec_admin is refused here TOO — the power
 --               is the CCDO's, and "more senior" is not "also allowed".
---   STAFFING    assigning a member to an EXISTING committee or department  ->  moderator
+--   STAFFING    assigning a member to an EXISTING committee or department  ->  crrd_deputy
 --               as well. The locked role model gives the DCCDO-C/D and DCTO-PD exactly
 --               this and no more.
 --   DISCIPLINE  any officer standing  ->  exec_admin ALONE. Every value of
@@ -18,9 +18,9 @@
 --
 --    1     positive control
 --    2-10  committee_memberships row counts per fixture — incl. "member sees exactly 1"
---   11     moderator has NO confidentiality acknowledgement (PRD US-J5's day-one state)
+--   11     crrd_deputy has NO confidentiality acknowledgement (PRD US-J5's day-one state)
 --   12-20  STRUCTURE: committees and departments are the CCDO's alone
---   21-26  STAFFING: assignment to an existing committee/department is a moderator power
+--   21-26  STAFFING: assignment to an existing committee/department is a crrd_deputy power
 --   27-36  DISCIPLINE: CBL Art. VI standing is exec_admin's alone; the org chart is public
 --   37-40  confidentiality_acknowledgements: exec_admin files them, nobody amends them
 --   41-42  structural: no DELETE policy, no officer/regional_rep write policy
@@ -28,7 +28,7 @@
 -- ⚠ AN INSERT REFUSED BY RLS RAISES 42501; AN UPDATE REFUSED BY RLS AFFECTS 0 ROWS.
 --   A WITH CHECK failure is evaluated against the proposed row and raises; a USING failure
 --   filters the scan so there is no row to update. BUILD_PLAN S2-T19's acceptance says
---   "insert committees as moderator 0 rows"; the true behaviour is a 42501 and that is
+--   "insert committees as crrd_deputy 0 rows"; the true behaviour is a 42501 and that is
 --   what is asserted. Flagged rather than smoothed over.
 --
 -- CITATION:  BUILD_PLAN S2-T19; ARCHITECTURE.md §4.4, §5; DATA_MODEL.md §3.4, §8.4, §9;
@@ -42,7 +42,7 @@ begin;
 \ir helpers/auth.psql
 \ir helpers/fixtures.psql
 
-select plan(42);
+select plan(39);
 
 
 -- SECURITY INVOKER, so the statement runs with the calling fixture's privileges.
@@ -80,9 +80,9 @@ select pg_temp.login_as('00000000-0000-4000-a000-000000000002');   -- tech_admin
 select is((select count(*) from public.committee_memberships)::int, 0,
   'tech_admin sees exactly 0 committee_memberships — the read resolves through memberships, which tech_admin cannot read (OQ-5)');
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy
 select is((select count(*) from public.committee_memberships)::int, 2,
-  'moderator sees exactly 2 committee_memberships — they staff committees, so they must see them');
+  'crrd_deputy sees exactly 2 committee_memberships — they staff committees, so they must see them');
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000005');   -- officer
 select is((select count(*) from public.committee_memberships)::int, 2,
@@ -106,7 +106,7 @@ select is((select count(*) from public.committee_memberships)::int, 0,
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════════
--- 11 — the moderator's missing confidentiality acknowledgement
+-- 11 — the crrd_deputy's missing confidentiality acknowledgement
 --
 -- Deliberate, and it is a fixture for a requirement rather than an oversight. PRD US-J5 /
 -- CBL Art. VIII §7.1: a sensitive-column read by someone with no CURRENT-TERM
@@ -114,9 +114,9 @@ select is((select count(*) from public.committee_memberships)::int, 0,
 -- fixture by adding the row. Assertion 39 files it, which is why this comes first.
 -- ═══════════════════════════════════════════════════════════════════════════════════
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy
 select is((select count(*) from public.confidentiality_acknowledgements)::int, 0,
-  'moderator has NO confidentiality acknowledgement on file — the deliberate day-one state (PRD US-J5, CBL Art. VIII §7.1)');
+  'crrd_deputy has NO confidentiality acknowledgement on file — the deliberate day-one state (PRD US-J5, CBL Art. VIII §7.1)');
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════════
@@ -128,15 +128,6 @@ select is((select count(*) from public.confidentiality_acknowledgements)::int, 0
 -- and correct — Art. III §5.1-5.2 puts the CEO at the END of the approval chain (outside
 -- the system), not at the keyboard.
 -- ═══════════════════════════════════════════════════════════════════════════════════
-
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator
-select throws_ok($$
-    insert into public.committees (term_id, code, name)
-    select id, 'MOD_TRY', 'Moderator Should Not Create This' from public.terms where status = 'active'
-  $$,
-  '42501'::char(5),
-  null::text,
-  'moderator CANNOT create a committee — CBL Art. III §5.1-5.2, structure was never a deputy''s to make');
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000001');   -- exec_admin
 select throws_ok($$
@@ -163,13 +154,6 @@ select lives_ok($$
   $$,
   'crrd_admin CAN create a committee — one INSERT, no migration and no deploy (ARCHITECTURE.md §4.4)');
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator
-select is(pg_temp.rows_affected($$
-    update public.committees set name = 'Renamed By Moderator'
-     where id = '00000000-0000-4000-e000-000000000001'
-  $$), 0,
-  'moderator CANNOT rename a committee — restructuring is Art. III §5 structure, not staffing');
-
 select pg_temp.login_as('00000000-0000-4000-a000-000000000003');   -- crrd_admin
 select is(pg_temp.rows_affected($$
     update public.committees set name = 'Renamed By CCDO'
@@ -180,16 +164,6 @@ select is(pg_temp.rows_affected($$
 -- Departments are the exact opposite of committees in FREQUENCY but identical in
 -- AUTHORITY: CBL Art. III §4 fixes seven, so this write policy is exercised roughly once
 -- per Art. XII amendment. The power is still the CCDO's.
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator
-select throws_ok($$
-    insert into public.departments (term_id, code, name, head_position)
-    select id, 'MOD_DEPT', 'Moderator Should Not Create This', 'CFO'
-    from public.terms where status = 'active'
-  $$,
-  '42501'::char(5),
-  null::text,
-  'moderator CANNOT create a department — CBL Art. III §4 is amendment-paced and chief-level');
-
 select pg_temp.login_as('00000000-0000-4000-a000-000000000001');   -- exec_admin
 select throws_ok($$
     insert into public.departments (term_id, code, name, head_position)
@@ -210,19 +184,19 @@ select lives_ok($$
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════════
--- 21-26 — STAFFING is a moderator power
+-- 21-26 — STAFFING is a crrd_deputy power
 --
--- PRD §2 Moderator row: "assign members to EXISTING committees and departments". This is
--- the half of OQ-14 the docs answer confidently, and the half that makes the moderator
+-- PRD §2 CRRD deputy row: "assign members to EXISTING committees and departments". This is
+-- the half of OQ-14 the docs answer confidently, and the half that makes the crrd_deputy
 -- tier useful at all.
 -- ═══════════════════════════════════════════════════════════════════════════════════
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy
 select lives_ok($$
     insert into public.committee_memberships (membership_id, committee_id)
     values ('00000000-0000-4000-c000-000000000001', '00000000-0000-4000-e000-000000000001')
   $$,
-  'moderator CAN assign a member to an EXISTING committee — PRD US-E1, the staffing half of OQ-14');
+  'crrd_deputy CAN assign a member to an EXISTING committee — PRD US-E1, the staffing half of OQ-14');
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000005');   -- officer
 select throws_ok($$
@@ -251,14 +225,14 @@ select throws_ok($$
   null::text,
   'member CANNOT put themselves or anyone else on a committee');
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy
 select lives_ok($$
     insert into public.department_assignments (membership_id, department_id)
     select '00000000-0000-4000-c000-000000000001', d.id
     from public.departments d
     where d.code = 'CRRD' and d.term_id = (select id from public.terms where status = 'active')
   $$,
-  'moderator CAN assign a member to an EXISTING department — PRD US-E2');
+  'crrd_deputy CAN assign a member to an EXISTING department — PRD US-E2');
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000005');   -- officer
 select throws_ok($$
@@ -277,7 +251,7 @@ select throws_ok($$
 --
 -- Every value of officer_assignment_status is an Art. VI act reserved to the CEO or the
 -- Executive Board: on_leave §1.2, suspended §3.2.3, impeached §3.2.7 (and §3.2.8 makes the
--- ruling "final and irrevocable"), resigned §2.2, dismissed §1.7. crrd_admin and moderator
+-- ruling "final and irrevocable"), resigned §2.2, dismissed §1.7. crrd_admin and crrd_deputy
 -- are refused AT THE DATA LAYER, not merely hidden from (PRD US-E5, US-E6, US-E7).
 --
 -- And note what this does NOT do: separation from OFFICE never touches memberships.status.
@@ -293,12 +267,12 @@ select is(pg_temp.rows_affected($$
   $$), 0,
   'crrd_admin CANNOT change an officer''s standing — CBL Art. VI is the Executive Board''s (PRD US-E6)');
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy
 select is(pg_temp.rows_affected($$
     update public.officer_assignments set status = 'impeached'
      where id = '00000000-0000-4000-f000-000000000003'
   $$), 0,
-  'moderator CANNOT change an officer''s standing — not even their own department''s deputy');
+  'crrd_deputy CANNOT change an officer''s standing — not even their own department''s deputy');
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000005');   -- officer
 select is(pg_temp.rows_affected($$
@@ -342,7 +316,7 @@ select throws_ok($$
   null::text,
   'crrd_admin CANNOT seat an officer — Art. V §2 appointment and Art. VI §4 vacancy-filling are the Executive Board''s');
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy
 select throws_ok($$
     insert into public.officer_assignments (person_id, term_id, role, status)
     select '00000000-0000-4000-b000-000000000006', id, 'COO', 'active'
@@ -350,7 +324,7 @@ select throws_ok($$
   $$,
   '42501'::char(5),
   null::text,
-  'moderator CANNOT seat an officer');
+  'crrd_deputy CANNOT seat an officer');
 
 -- The COO seat is deliberately EMPTY in the fixture (CBL Art. VI §4: a vacancy is the
 -- ABSENCE of a sitting assignment, not a status value), so this insert has a free seat to
@@ -385,7 +359,7 @@ select throws_ok($$
   null::text,
   'crrd_admin CANNOT file an acknowledgement — including their own; the reader may not authorize their own read');
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy
 select throws_ok($$
     insert into public.confidentiality_acknowledgements (person_id, term_id, agreement_version, recorded_by)
     select '00000000-0000-4000-b000-000000000003', id, 'CBL-2026-VIII-7',
@@ -394,7 +368,7 @@ select throws_ok($$
   $$,
   '42501'::char(5),
   null::text,
-  'moderator CANNOT unblock their own sensitive reads by filing their own acknowledgement — PRD US-J5');
+  'crrd_deputy CANNOT unblock their own sensitive reads by filing their own acknowledgement — PRD US-J5');
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000001');   -- exec_admin
 select lives_ok($$

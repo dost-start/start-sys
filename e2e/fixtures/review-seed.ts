@@ -125,7 +125,7 @@ async function regionIdByCode(admin: SupabaseClient, code: string): Promise<stri
  * CBL Art. VIII §7.1 / US-J5 — see the header. Idempotent on the (person, term) PK.
  *
  * `e2e/fixtures/auth.ts` already records one for exec_admin's and crrd_admin's people,
- * and deliberately NOT for the moderator's (so the day-one refusal stays a tested
+ * and deliberately NOT for the CRRD deputy's (so the day-one refusal stays a tested
  * behaviour). This re-asserts the reviewer's own so this spec does not silently depend
  * on the order in which the two seeders ran.
  */

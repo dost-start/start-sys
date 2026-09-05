@@ -14,7 +14,7 @@
 --     exec_admin            6          8
 --     tech_admin            0          8
 --     crrd_admin            6          1
---     moderator             6          1
+--     crrd_deputy             6          1
 --     officer               6          1
 --     regional_rep_a        2          1
 --     regional_rep_b        2          1
@@ -24,7 +24,7 @@
 --   TWO OF THESE ARE SURPRISING AND BOTH ARE REAL PROPERTIES OF 0014, NOT FIXTURE
 --   ACCIDENTS:
 --
---   • tech_admin sees ZERO people. people_read names exec_admin, crrd_admin, moderator,
+--   • tech_admin sees ZERO people. people_read names exec_admin, crrd_admin, crrd_deputy,
 --     officer, regional_rep and member — tech_admin is simply absent. That is PRD OQ-5
 --     ("configure the system and control access" is not "read everyone's address")
 --     expressed as a MISSING ROLE LITERAL rather than as a comment, and it is why
@@ -120,9 +120,9 @@ select is((select count(p.id)::int from public.people p), 6,
   'crrd_admin reads all 6 people — the operational heart of the system (PRD US-D1)');
 select pg_temp.logout();
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy
 select is((select count(p.id)::int from public.people p), 6,
-  'moderator reads all 6 people — you cannot review an application without reading it');
+  'crrd_deputy reads all 6 people — you cannot review an application without reading it');
 select pg_temp.logout();
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000005');   -- officer
@@ -186,7 +186,7 @@ select is(
 -- which is what makes revocation instant and is why roles are never stamped into a JWT.
 -- Every account may see its OWN row — that is the read getSessionContext() makes on
 -- literally every request — and only exec_admin and tech_admin may enumerate the org's
--- accounts. A moderator has no business doing so.
+-- accounts. A crrd_deputy has no business doing so.
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000001');   -- exec_admin
 select is((select count(*)::int from public.user_roles), 8,
@@ -203,9 +203,9 @@ select is((select count(*)::int from public.user_roles), 1,
   'crrd_admin sees exactly its OWN user_roles row — operational power is not oversight');
 select pg_temp.logout();
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- moderator
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy
 select is((select count(*)::int from public.user_roles), 1,
-  'moderator sees exactly its own user_roles row');
+  'crrd_deputy sees exactly its own user_roles row');
 select pg_temp.logout();
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000005');   -- officer
@@ -258,9 +258,9 @@ select is((select public.auth_role()), 'crrd_admin'::public.org_role,
 select pg_temp.logout();
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000004');
-select is((select public.auth_role()), 'moderator'::public.org_role,
-  'auth_role() = moderator — the tier whose boundary against crrd_admin is easiest to '
-  'widen by accident (OQ-14)');
+select is((select public.auth_role()), 'crrd_admin'::public.org_role,
+  'auth_role() = crrd_admin for the CRRD deputy — DCCDO-C holds crrd_admin under the SRS '
+  '(2026-09-05); the retired crrd_deputy tier is unassignable (0036)');
 select pg_temp.logout();
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000005');

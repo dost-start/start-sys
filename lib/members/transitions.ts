@@ -81,19 +81,15 @@ export const LEGAL_EDGES: readonly MembershipEdge[] = [
  * is absent because the CTO configures the system and does not edit member records
  * (PRD OQ-5); `member` because a member's write surface is forms only.
  */
-export const STATUS_WRITER_ROLES: readonly OrgRole[] = [
-  "exec_admin",
-  "crrd_admin",
-  "moderator",
-] as const;
+export const STATUS_WRITER_ROLES: readonly OrgRole[] = ["exec_admin", "crrd_admin"] as const;
 
 /**
  * The tier that may cross either `terminated` edge, and it is one tier.
  *
  * CBL Art. VII §3.2.3: removal from the organization requires "a simple majority vote
  * (50% + 1) of the Executive Board". §3.2.5-3.2.6 gives the reversal to the same body
- * on the Special Advisor's recommendation. `crrd_admin` and `moderator` own every OTHER
- * membership transition and are narrowed out of these two — collapsing them into `left`
+ * on the Special Advisor's recommendation. `crrd_admin` owns every OTHER membership
+ * transition and is narrowed out of these two — collapsing them into `left`
  * would make an Executive Board ruling indistinguishable from an unreturned renewal
  * form in the audit log (PRD US-D5, US-D6).
  */

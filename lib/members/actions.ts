@@ -70,7 +70,7 @@ import {
  * policies, not hidden buttons (026's negative-space meta-test asserts exactly that).
  * `tech_admin` is absent per PRD OQ-5.
  */
-const RECORD_WRITER_ROLES = ["exec_admin", "crrd_admin", "moderator"] as const;
+const RECORD_WRITER_ROLES = ["exec_admin", "crrd_admin"] as const;
 
 /** Everything this surface serves. Route groups are URL-invisible: `/members`, not `/admin/members`. */
 function revalidateMember(personId?: string): void {

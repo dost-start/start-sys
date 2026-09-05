@@ -78,6 +78,10 @@ select is(
   'the two R07 scholars are ABSENT — region B is not rep_a''s to read (PRD US-F1)');
 
 -- ── 5-6 — audited per call ─────────────────────────────────────────────────────────
+-- Counted OUTSIDE the rep's session: audit_log_read (0014) is exec_admin/tech_admin only,
+-- so a count taken as the rep reads 0 rows and the difference goes negative.
+select pg_temp.logout();
+
 select is(
   (select count(*)::int from public.audit_log) - (select n from fx_audit_before),
   1,
@@ -89,8 +93,6 @@ select ok(
       and old_data is null and new_data is null
      from public.audit_log order by id desc limit 1),
   'the row is attributed to rep_a, operation VIEW_CONTACTS, and carries NO values — the log is not a PII store');
-
-select pg_temp.logout();
 
 -- ── 7 — no acknowledgement, no read ───────────────────────────────────────────────
 create temp table fx_audit_mid on commit drop as

@@ -55,11 +55,35 @@ const PH_MOBILE_RE = /^(?:\+63|0)9\d{9}$/;
 const PHONE_SEPARATORS_RE = /[\s()\-.]/g;
 
 /** Philippine ZIP code: exactly four digits. */
-const POSTAL_CODE_RE = /^\d{4}$/;
-
-/** `join_year`/`expected_grad_year` bounds, matching the CHECK constraints in 0004/0006. */
+const FACEBOOK_URL_RE = /^https?:\/\/(www\.|m\.|web\.)?(facebook\.com|fb\.com|fb\.me)\/.+/i;
 const YEAR_MIN = 2000;
 const YEAR_MAX = 2100;
+const AWARD_YEAR_MIN = 2000;
+const AWARD_YEAR_MAX = new Date().getUTCFullYear();
+
+/** SRS 2026-09-05 — the `sex_option` enum (0038), in display order. */
+export const SEX_OPTIONS = ["male", "female", "prefer_not_to_say"] as const;
+export const SEX_LABELS: Record<(typeof SEX_OPTIONS)[number], string> = {
+  male: "Male",
+  female: "Female",
+  prefer_not_to_say: "Prefer not to say",
+};
+
+/** SRS 2026-09-05 — the `scholarship_award` enum (0038), in the SRS's order. */
+export const SCHOLARSHIP_AWARDS = [
+  "ra_7687",
+  "merit",
+  "jlss_ra_7687",
+  "jlss_merit",
+  "jlss_ra_10612",
+] as const;
+export const SCHOLARSHIP_AWARD_LABELS: Record<(typeof SCHOLARSHIP_AWARDS)[number], string> = {
+  ra_7687: "RA 7687",
+  merit: "Merit",
+  jlss_ra_7687: "JLSS RA 7687",
+  jlss_merit: "JLSS Merit",
+  jlss_ra_10612: "JLSS RA 10612",
+};
 
 /** Nobody in this organization was born before this. Catches a mistyped century. */
 const EARLIEST_PLAUSIBLE_BIRTH_YEAR = 1900;
@@ -133,15 +157,13 @@ const personalShape = {
   middle_name: optionalText(),
   applicant_family_name: requiredText("Last name"),
   suffix: optionalText(16),
-
-  // `.trim()` BEFORE the format check, via a pipe: a trailing space pasted out of a
-  // messaging app must not be an "invalid email address".
+  // SRS 2026-09-05: "Sex (male/female/prefer not to say)". Stored on people.sex (0038).
+  sex: z.enum(SEX_OPTIONS, "Select an option"),
   applicant_email: z
     .string()
     .trim()
     .max(254, "Email address is too long")
     .pipe(z.email("Enter a valid email address")),
-
   birthdate: z.iso
     .date("Enter your date of birth as YYYY-MM-DD")
     .refine((value) => new Date(`${value}T00:00:00Z`).getTime() <= Date.now(), {
@@ -150,7 +172,6 @@ const personalShape = {
     .refine((value) => Number(value.slice(0, 4)) >= EARLIEST_PLAUSIBLE_BIRTH_YEAR, {
       message: "Enter a valid date of birth",
     }),
-
   contact_number: z
     .string()
     .trim()
@@ -158,34 +179,36 @@ const personalShape = {
     .refine((value) => PH_MOBILE_RE.test(value.replace(PHONE_SEPARATORS_RE, "")), {
       message: "Enter a Philippine mobile number, e.g. 09171234567 or +639171234567",
     }),
-
-  address_line: requiredText("Street address", 200),
-  city_municipality: requiredText("City or municipality"),
-  province: requiredText("Province"),
-  postal_code: z.string().trim().regex(POSTAL_CODE_RE, "Enter a four-digit postal code, e.g. 1101"),
+  // SRS: "Facebook Account Link" — a contact channel, sensitive (RA 10173), registered.
+  facebook_account: z
+    .string()
+    .trim()
+    .min(1, "Facebook account link is required")
+    .max(300, "Facebook account link is too long")
+    .refine((value) => FACEBOOK_URL_RE.test(value), {
+      message: "Enter the full link to your Facebook profile, e.g. https://facebook.com/yourname",
+    }),
 };
 
-// ── Section 2 — academic ─────────────────────────────────────────────────────
-
 const academicShape = {
-  school: requiredText("School", 200),
-  school_id_no: requiredText("School ID number", 64),
-
-  // OQ-17: free text with a datalist, never an enum. See the header.
-  program: requiredText("Degree program", 200),
-
+  // SRS: "DOST Scholarship Award" and "Year of Award" — the scholarship, not the org.
+  scholarship_award: z.enum(SCHOLARSHIP_AWARDS, "Select your DOST scholarship award"),
+  award_year: coercedInt(
+    "Enter the year of your award",
+    `Enter a four-digit year between ${AWARD_YEAR_MIN} and ${AWARD_YEAR_MAX}`,
+    AWARD_YEAR_MIN,
+    AWARD_YEAR_MAX,
+  ),
+  // SRS: closed lists, rows not code (0037). The ids are validated against the tables by
+  // the FK on approval; here they are checked for shape only.
+  university_id: z.uuid("Select your university"),
+  program_id: z.uuid("Select your program"),
   year_level: coercedInt(
     "Select your year level",
-    "Year level must be a whole number between 1 and 8",
+    "Year level must be a whole number between 1 and 5",
     1,
-    8,
+    5,
   ),
-
-  // OQ-3 is unresolved: how the system knows a member is graduating is the sole input
-  // to the renewal rule the PRD states as "if and only if" (US-G7). v1.0 takes the
-  // applicant's own declaration and records it; v1.2 must decide whether CRRD confirms
-  // it at renewal. Do not derive it from year_level — that is wrong for irregulars,
-  // shiftees and anyone on a five-year program.
   expected_grad_year: coercedInt(
     "Enter your expected year of graduation",
     `Enter a four-digit year between ${YEAR_MIN} and ${YEAR_MAX}`,
@@ -193,8 +216,6 @@ const academicShape = {
     YEAR_MAX,
   ),
 };
-
-// ── Section 3 — membership ───────────────────────────────────────────────────
 
 const membershipShape = {
   // A uuid from the seeded `regions` table (18 regions — RA 12000 added the Negros
@@ -219,18 +240,14 @@ const consentShape = {
   consent_privacy_notice: z.literal(true, {
     message: "You must agree to the privacy notice before submitting",
   }),
-  /** Which published notice was agreed to. Amending the notice is a NEW version row. */
   consent_privacy_notice_version: requiredText("Privacy notice version", 32),
+  // SRS: "A tick box certifying accuracy of all information and confirmation of
+  // understanding that falsification may lead to banning from future START activities."
+  certify_accuracy: z.literal(true, {
+    message: "You must certify that the information you provided is accurate",
+  }),
 };
 
-// ── The composed form ────────────────────────────────────────────────────────
-
-/**
- * The whole application body. `.strict()` so an unknown key is REJECTED rather than
- * silently carried into `payload` — the payload is a jsonb column and would happily
- * store anything a client invented, including a field a later migration gives meaning
- * to.
- */
 export const applicationSubmitSchema = z
   .object({
     ...personalShape,
@@ -260,14 +277,25 @@ const proofDeclarationShape = {
     "Upload a PDF, JPEG, PNG or HEIC file — that is what a phone photo or a scan produces",
   ),
   proof_size_bytes: coercedInt(
-    "Attach your proof of enrollment",
+    "Attach your latest registration form",
+    `The file must be between 1 byte and ${MAX_DECLARED_PROOF_BYTES / (1024 * 1024)}MB`,
+    1,
+    MAX_DECLARED_PROOF_BYTES,
+  ),
+  // SRS 2026-09-05: the Notice of Award is the second required file (0040).
+  noa_file_name: requiredText("File name", 255),
+  noa_mime_type: z.enum(
+    DECLARED_ALLOWED_MIME,
+    "Upload a PDF, JPEG, PNG or HEIC file — that is what a phone photo or a scan produces",
+  ),
+  noa_size_bytes: coercedInt(
+    "Attach your Notice of Award",
     `The file must be between 1 byte and ${MAX_DECLARED_PROOF_BYTES / (1024 * 1024)}MB`,
     1,
     MAX_DECLARED_PROOF_BYTES,
   ),
 };
 
-/** The full input to `startApplication`: the form body plus the file declaration. */
 export const startApplicationSchema = applicationSubmitSchema.extend(proofDeclarationShape);
 
 export type StartApplicationInput = z.infer<typeof startApplicationSchema>;
@@ -285,9 +313,9 @@ export const finalizeApplicationSchema = z
     application_id: z.uuid(),
     upload_token: z.string().min(1),
     storage_ref: z.string().min(1),
+    noa_storage_ref: z.string().min(1),
   })
   .strict();
-
 export type FinalizeApplicationInput = z.infer<typeof finalizeApplicationSchema>;
 
 // ── The payload contract ─────────────────────────────────────────────────────
@@ -303,17 +331,16 @@ export type FinalizeApplicationInput = z.infer<typeof finalizeApplicationSchema>
 export const APPLICATION_PAYLOAD_KEYS = [
   "birthdate",
   "contact_number",
-  "address_line",
-  "city_municipality",
-  "province",
-  "postal_code",
-  "school",
-  "school_id_no",
   "region_id",
   "year_level",
   "expected_grad_year",
+  "sex",
+  "facebook_account",
+  "scholarship_award",
+  "award_year",
+  "university_id",
+  "program_id",
 ] as const;
-
 export type ApplicationPayloadKey = (typeof APPLICATION_PAYLOAD_KEYS)[number];
 
 /**
@@ -345,55 +372,25 @@ export function buildApplicationPayload(
   consentGivenAt: string,
 ): ApplicationPayload {
   return {
-    // The eleven, spelled exactly as approve_application() reads them.
     birthdate: data.birthdate,
     contact_number: data.contact_number,
-    address_line: data.address_line,
-    city_municipality: data.city_municipality,
-    province: data.province,
-    postal_code: data.postal_code,
-    school: data.school,
-    school_id_no: data.school_id_no,
     region_id: data.region_id,
     year_level: data.year_level,
     expected_grad_year: data.expected_grad_year,
-
-    // Collected and preserved; not read by approve_application() today (see header).
+    sex: data.sex,
+    facebook_account: data.facebook_account,
+    scholarship_award: data.scholarship_award,
+    award_year: data.award_year,
+    university_id: data.university_id,
+    program_id: data.program_id,
     middle_name: data.middle_name ?? null,
     suffix: data.suffix ?? null,
-    program: data.program,
-
-    // RA 10173: which notice was agreed to, and when, by the server's clock.
     consent_privacy_notice_version: data.consent_privacy_notice_version,
     consent_given_at: consentGivenAt,
+    certified_accuracy_at: consentGivenAt,
   };
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// S4 — THE REVIEW SURFACE (BUILD_PLAN S4-T13)
-// ═════════════════════════════════════════════════════════════════════════════
-// Appended to this module rather than started as a second one, because CONVENTIONS
-// §6 says a form and the Server Action that receives it share ONE schema module. The
-// reviewer screens are a different audience from the applicant, not a different
-// feature — and a `review-schema.ts` beside this file is exactly how two validation
-// rules for the same table start to drift.
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * The floor on a rejection reason, in characters after trimming.
- *
- * ⚠ THIS NUMBER IS A CONTRACT WITH THE DATABASE, NOT A UI PREFERENCE.
- * `0024_reject_application.sql` ships BOTH `rejected_has_reason`
- * (`check (status <> 'rejected' or length(btrim(review_note)) >= 10)`) AND the same
- * floor inside `reject_application()`. If this constant and that CHECK ever disagree,
- * the form accepts a reason the database then refuses — the reviewer sees a generic
- * validation error on a field they filled in correctly, and the bug is invisible in
- * every test that does not cross the boundary. Change one, change all three.
- *
- * PRD US-C2: "rejection records a reason". CBL-adjacent but not constitutional — this
- * is the PRD's requirement, enforced at the row so a direct PostgREST call cannot
- * bypass the form.
- */
 export const REJECT_REASON_MIN_LENGTH = 10;
 
 /** Bounded so a paste of an entire email thread does not become the audit record. */

@@ -65,17 +65,17 @@ select plan(24);
 -- requires it on every non-draft row.
 insert into public.applications
   (id, term_id, status, applicant_email, applicant_given_name, applicant_family_name,
-   payload, proof_drive_file_id, submitted_at, consented_at)
+   payload, proof_drive_file_id, noa_drive_file_id, submitted_at, consented_at)
 values
   ('00000000-0000-4000-8000-00000000000a', pg_temp.fx_active_term(), 'draft',
    'draft.applicant@fixture.start-sys.test', 'Draft', 'Applicant',
-   '{"school_id_no":"FIXT-APP-A"}'::jsonb, null, null, null),
+   '{"school_id_no":"FIXT-APP-A"}'::jsonb, null, null, null, null),
   ('00000000-0000-4000-8000-00000000000b', pg_temp.fx_active_term(), 'pending',
    'pending.applicant@fixture.start-sys.test', 'Pending', 'Applicant',
-   '{"school_id_no":"FIXT-APP-B"}'::jsonb, 'ref-pending-b', now(), now()),
+   '{"school_id_no":"FIXT-APP-B"}'::jsonb, 'ref-pending-b', 'noa-pending-b', now(), now()),
   ('00000000-0000-4000-8000-00000000000c', pg_temp.fx_active_term(), 'rejected',
    'rejected.applicant@fixture.start-sys.test', 'Rejected', 'Applicant',
-   '{"school_id_no":"FIXT-APP-C"}'::jsonb, 'ref-rejected-c', now(), now());
+   '{"school_id_no":"FIXT-APP-C"}'::jsonb, 'ref-rejected-c', 'noa-rejected-c', now(), now());
 
 -- One renewal submission, belonging to P4 — the MEMBER fixture's person. That is what makes
 -- assertion 21 a real scoping test: the member sees a row because it is theirs, not because
@@ -178,12 +178,13 @@ select columns_are(
     'applicant_email', 'applicant_given_name', 'applicant_family_name', 'payload',
     'proof_drive_file_id', 'proof_web_view_link', 'proof_mime_type', 'proof_size_bytes',
     'proof_verified_at',
+    'noa_drive_file_id', 'noa_mime_type', 'noa_size_bytes', 'noa_verified_at',
     'submit_token_hash', 'submit_token_expires_at',
     'person_id', 'reviewed_by', 'reviewed_at', 'review_note',
     'redacted_at', 'submitted_at', 'created_at',
     'consented_at', 'privacy_notice_version'
   ]::name[],
-  'public.applications has exactly its 23 documented columns — the two S3-T4 divergences '
+  'public.applications has exactly its 27 documented columns (0040 added the four noa_* columns) — the two S3-T4 divergences '
   '(submit_token_hash, submit_token_expires_at) plus 0035''s consent pair'
 );
 

@@ -9,7 +9,13 @@
 //
 // Server Component — `MemberRecord` (`Tables<"people">`) carries every sensitive
 // column and must never enter a client bundle (CONVENTIONS.md §1.3).
+import { SCHOLARSHIP_AWARD_LABELS, SEX_LABELS } from "@/lib/applications/schema";
 import type { MemberRecord } from "@/lib/members/types";
+
+export type MemberRecordLookups = {
+  universities: Record<string, string>;
+  programs: Record<string, string>;
+};
 
 function Field({ label, value }: { label: string; value: string | null }) {
   return (
@@ -20,7 +26,13 @@ function Field({ label, value }: { label: string; value: string | null }) {
   );
 }
 
-export function MemberSensitivePanel({ record }: { record: MemberRecord }) {
+export function MemberSensitivePanel({
+  record,
+  lookups,
+}: {
+  record: MemberRecord;
+  lookups: MemberRecordLookups;
+}) {
   return (
     <section className="space-y-3 rounded-lg border border-border bg-card p-4 sm:p-6">
       <div className="flex items-center justify-between gap-2">
@@ -43,6 +55,32 @@ export function MemberSensitivePanel({ record }: { record: MemberRecord }) {
         <Field label="Postal code" value={record.postal_code} />
         <Field label="School" value={record.school} />
         <Field label="School ID number" value={record.school_id_no} />
+        <Field label="Sex" value={record.sex ? SEX_LABELS[record.sex] : null} />
+        <Field label="Facebook account" value={record.facebook_account} />
+        <Field
+          label="DOST scholarship award"
+          value={
+            record.scholarship_award ? SCHOLARSHIP_AWARD_LABELS[record.scholarship_award] : null
+          }
+        />
+        <Field
+          label="Year of award"
+          value={record.award_year === null ? null : String(record.award_year)}
+        />
+        <Field
+          label="University"
+          value={
+            record.university_id
+              ? (lookups.universities[record.university_id] ?? record.university_id)
+              : null
+          }
+        />
+        <Field
+          label="Program"
+          value={
+            record.program_id ? (lookups.programs[record.program_id] ?? record.program_id) : null
+          }
+        />
       </dl>
     </section>
   );

@@ -58,6 +58,8 @@ Triggered by the framework rule: *"`DATA_MODEL.md` — schema has >5 entities OR
 | 26 | `notifications` | term | PRD | In-system notifications. Required by the PRD user flow: *"Admin can send forms out to members through notifications from the system (e.g. Call for Committee Members)."* |
 | 27 | `audit_log` | event | PRD | Append-only. Who changed what, when. Sensitive values are masked at write time — see §8. |
 | 28 | `sensitive_column_registry` | global | EXT | The RA 10173 classification, **as data**. Drives both audit masking and the 5-year purge, so the two can never disagree. |
+| 30 | `programs` | global | SRS | The thirteen accredited programs (CRRD SRS 2026-09-05, CBL Art. I §4), a closed list — PRD OQ-17 resolved. Rows, not code; `is_active` retires, nothing deletes. (0037) |
+| 31 | `universities` | global | SRS | Institutions by region, a starter list pending the DOST-SEI eligible-institution list. CRRD edits; the RR view filters by it. (0037) |
 | 29 | `confidentiality_acknowledgements` | **term** | **CBL** | CBL Art. VIII §7.1: *"All elected and appointed officers, committee members, and advisors shall sign a Confidentiality Agreement"* — §7 requires it *"upon assuming their roles."* One row per person per term. Precondition for every sensitive-column read — see §8.4. |
 
 ### 1.1 Requested entities that are deliberately NOT tables
@@ -74,6 +76,8 @@ Triggered by the framework rule: *"`DATA_MODEL.md` — schema has >5 entities OR
 | events / budgets / files / analytics | Excluded | PRD Constraints: *"does not include operations management, event management, financial management, file storage or advanced analytics."* |
 
 ---
+
+> **Amended 2026-09-05/06 — the CRRD SRS membership form (migrations `0037`–`0041`).** The application form is the SRS's: sex, Facebook account link, DOST scholarship award and year of award, **university and program chosen from two new reference tables** (`universities` by region, `programs` — the closed thirteen-item list, closing OQ-17), year level 1–5, and **two documents** — the latest registration form (the proof columns) and the **Notice of Award** (four `noa_*` columns on `applications`, mirrored contract). Address and school ID are no longer collected; the columns stay. New member IDs pad to four digits (`2026-0001`). Where the text below still describes the single-document, address-bearing form, this note wins.
 
 ## 2. THE core decision: per-term vs per-person-forever
 

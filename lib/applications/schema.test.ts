@@ -39,15 +39,15 @@ import {
 const KEYS_APPROVE_APPLICATION_READS = [
   "birthdate",
   "contact_number",
-  "address_line",
-  "city_municipality",
-  "province",
-  "postal_code",
-  "school",
-  "school_id_no",
   "region_id",
   "year_level",
   "expected_grad_year",
+  "sex",
+  "facebook_account",
+  "scholarship_award",
+  "award_year",
+  "university_id",
+  "program_id",
 ];
 
 /** A complete, valid submission. Every rejection case below mutates exactly one field. */
@@ -57,20 +57,20 @@ const VALID = {
   applicant_family_name: "Dela Cruz",
   suffix: "",
   applicant_email: "maria.delacruz@example.edu.ph",
+  sex: "female",
   birthdate: "2005-03-14",
   contact_number: "09171234567",
-  address_line: "123 Katipunan Avenue",
-  city_municipality: "Quezon City",
-  province: "Metro Manila",
-  postal_code: "1108",
-  school: "University of the Philippines Diliman",
-  school_id_no: "2023-12345",
-  program: "BS Computer Science",
+  facebook_account: "https://www.facebook.com/maria.delacruz",
+  scholarship_award: "ra_7687",
+  award_year: "2023",
+  university_id: "33333333-3333-4333-8333-333333333333",
+  program_id: "44444444-4444-4444-8444-444444444444",
   year_level: "2",
   expected_grad_year: "2027",
   region_id: "11111111-1111-4111-8111-111111111111",
   consent_privacy_notice: true,
   consent_privacy_notice_version: "v1.0",
+  certify_accuracy: true,
 };
 
 /** The first issue path for a failed parse, as the dotted key `error.fields` uses. */
@@ -84,7 +84,7 @@ function firstIssuePath(input: unknown): string {
 }
 
 describe("payload keys match every key approve_application() reads", () => {
-  it("APPLICATION_PAYLOAD_KEYS is exactly the eleven keys in DATA_MODEL §6/0012", () => {
+  it("APPLICATION_PAYLOAD_KEYS is exactly the eleven keys approve_application() reads (0041)", () => {
     expect([...APPLICATION_PAYLOAD_KEYS].sort()).toEqual(
       [...KEYS_APPROVE_APPLICATION_READS].sort(),
     );
@@ -109,15 +109,27 @@ describe("payload keys match every key approve_application() reads", () => {
     }
   });
 
-  it("keeps middle_name, suffix and program even though approve_application() drops them", () => {
-    // The known gap handed to S4: these are collected and, until approve_application()
-    // is extended, discarded at approval. Storing them means nothing the applicant
-    // typed is lost in the meantime.
+  it("keeps middle_name and suffix, and stamps the accuracy certification with the SERVER time", () => {
     const parsed = applicationSubmitSchema.parse(VALID);
     const payload = buildApplicationPayload(parsed, "2026-09-03T01:00:00.000Z");
     expect(payload["middle_name"]).toBe("Santos");
     expect(payload["suffix"]).toBeNull();
-    expect(payload["program"]).toBe("BS Computer Science");
+    expect(payload["certified_accuracy_at"]).toBe("2026-09-03T01:00:00.000Z");
+  });
+
+  it("no longer carries the address block or the school ID — the SRS form has no such fields", () => {
+    const parsed = applicationSubmitSchema.parse(VALID);
+    const payload = buildApplicationPayload(parsed, "2026-09-03T01:00:00.000Z");
+    for (const gone of [
+      "address_line",
+      "city_municipality",
+      "province",
+      "postal_code",
+      "school",
+      "school_id_no",
+    ]) {
+      expect(Object.keys(payload)).not.toContain(gone);
+    }
   });
 
   it("never duplicates the applicant's identity columns into the payload", () => {
@@ -170,15 +182,26 @@ describe("applicationSubmitSchema rejects", () => {
     expect(firstIssuePath({ ...VALID, contact_number: "091712345678" })).toBe("contact_number");
   });
 
-  it("an alphabetic postal code, on the postal_code field", () => {
-    expect(firstIssuePath({ ...VALID, postal_code: "ABCD" })).toBe("postal_code");
-    expect(firstIssuePath({ ...VALID, postal_code: "110" })).toBe("postal_code");
-    expect(firstIssuePath({ ...VALID, postal_code: "11080" })).toBe("postal_code");
+  it("a Facebook link that is not a Facebook profile, on the facebook_account field", () => {
+    expect(firstIssuePath({ ...VALID, facebook_account: "maria.delacruz" })).toBe(
+      "facebook_account",
+    );
+    expect(firstIssuePath({ ...VALID, facebook_account: "https://twitter.com/maria" })).toBe(
+      "facebook_account",
+    );
+    expect(firstIssuePath({ ...VALID, facebook_account: "" })).toBe("facebook_account");
   });
 
-  it("year_level 0 and year_level 9", () => {
+  it("a scholarship award outside the five DOST-SEI programs, and a university that is not a uuid", () => {
+    expect(firstIssuePath({ ...VALID, scholarship_award: "dost_sei" })).toBe("scholarship_award");
+    expect(firstIssuePath({ ...VALID, university_id: "UP Diliman" })).toBe("university_id");
+    expect(firstIssuePath({ ...VALID, program_id: "BS CS" })).toBe("program_id");
+    expect(firstIssuePath({ ...VALID, certify_accuracy: false })).toBe("certify_accuracy");
+  });
+
+  it("year_level 0 and year_level 6 — the SRS offers 1st to 5th (0038)", () => {
     expect(firstIssuePath({ ...VALID, year_level: "0" })).toBe("year_level");
-    expect(firstIssuePath({ ...VALID, year_level: "9" })).toBe("year_level");
+    expect(firstIssuePath({ ...VALID, year_level: "6" })).toBe("year_level");
     expect(firstIssuePath({ ...VALID, year_level: "2.5" })).toBe("year_level");
   });
 
@@ -229,6 +252,9 @@ describe("startApplicationSchema — the file DECLARATION", () => {
     proof_file_name: "cor.jpg",
     proof_mime_type: "image/jpeg",
     proof_size_bytes: String(6 * 1024 * 1024),
+    noa_file_name: "noa.pdf",
+    noa_mime_type: "application/pdf",
+    noa_size_bytes: String(512 * 1024),
   };
 
   it("accepts a 6MB phone photo — the size the whole direct-PUT design exists for", () => {
@@ -275,9 +301,10 @@ describe("finalizeApplicationSchema", () => {
     application_id: "22222222-2222-4222-8222-222222222222",
     upload_token: "a".repeat(64),
     storage_ref: "drive-file-id-abc",
+    noa_storage_ref: "drive-file-id-noa",
   };
 
-  it("accepts the three values startApplication handed back", () => {
+  it("accepts the four values startApplication handed back", () => {
     expect(finalizeApplicationSchema.parse(VALID_FINALIZE)).toEqual(VALID_FINALIZE);
   });
 

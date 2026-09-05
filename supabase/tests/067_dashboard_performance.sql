@@ -221,7 +221,7 @@ insert into public.applications (
   id, term_id, status,
   applicant_email, applicant_given_name, applicant_family_name,
   proof_drive_file_id, proof_mime_type, proof_size_bytes, proof_verified_at,
-  submitted_at, consented_at
+  noa_drive_file_id, submitted_at, consented_at
 )
 select ('00000000-0000-4000-8900-' || lpad(i::text, 12, '0'))::uuid,
        (select term_id from vol_terms where idx = 0),
@@ -229,6 +229,7 @@ select ('00000000-0000-4000-8900-' || lpad(i::text, 12, '0'))::uuid,
        'vol.applicant.' || i || '@fixture.start-sys.test',
        'VolApplicant' || i, 'Loadfixture',
        'ref-vol-' || i, 'application/pdf', 524288, now(),
+       'noa-vol-' || i,
        now() - (i || ' minutes')::interval, now()
 from generate_series(1, 300) i;
 

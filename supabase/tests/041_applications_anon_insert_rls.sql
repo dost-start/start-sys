@@ -137,9 +137,9 @@ select pg_temp.login_anon();
 select throws_ok(
   $$ insert into public.applications
        (term_id, status, applicant_email, applicant_given_name, applicant_family_name,
-        proof_drive_file_id)
+        proof_drive_file_id, noa_drive_file_id)
      values (public.current_term_id(), 'pending',
-             'forged.status@fixture.start-sys.test', 'Forged', 'Status', 'ref-forged') $$,
+             'forged.status@fixture.start-sys.test', 'Forged', 'Status', 'ref-forged', 'noa-forged') $$,
   '42501'::char(5), null::text,
   'anon cannot insert with status = ''pending'' — the draft pin is what stops an anonymous '
   'caller from writing a reviewable, or approvable, row directly'
@@ -425,12 +425,12 @@ select pg_temp.logout();
 -- values); an UPDATE must NOT touch it — enforce_consent_server_values raises on any
 -- change ("captured at collection and immutable thereafter").
 update public.applications
-   set status = 'pending', proof_drive_file_id = 'ref-live-1', submitted_at = now()
+   set status = 'pending', proof_drive_file_id = 'ref-live-1', noa_drive_file_id = 'noa-live-1', submitted_at = now()
  where id = '00000000-0000-4000-8000-000000000001';
 
 select throws_ok(
   $$ update public.applications
-        set status = 'pending', proof_drive_file_id = 'ref-live-2', submitted_at = now()
+        set status = 'pending', proof_drive_file_id = 'ref-live-2', noa_drive_file_id = 'noa-live-2', submitted_at = now()
       where id = '00000000-0000-4000-8000-000000000003' $$,
   '23505'::char(5), null::text,
   'a SECOND live application for the same (term, email) raises 23505 — the constraint still '

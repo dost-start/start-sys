@@ -50,18 +50,18 @@ const migration = (file: string): string =>
 // 1 — the whitelist matches update_member_record()
 // ═════════════════════════════════════════════════════════════════════════════
 
-describe("MEMBER_PATCHABLE_KEYS mirrors 0030's whitelist", () => {
+describe("MEMBER_PATCHABLE_KEYS mirrors 0041's whitelist (update_member_record v2)", () => {
   /**
    * Pull the `k not in ( ... )` list out of `update_member_record()`. Scoped to the text
    * after `where k not in (` so the function's other quoted literals cannot be swept in.
    */
   function whitelistFromMigration(): string[] {
-    const sql = migration("0030_member_record_rpcs.sql");
+    const sql = migration("0041_approve_and_record_v2.sql");
     const marker = "where k not in (";
     const start = sql.indexOf(marker);
     if (start === -1) {
       throw new Error(
-        "0030 no longer contains update_member_record()'s `where k not in (` whitelist that " +
+        "0041 no longer contains update_member_record()'s `where k not in (` whitelist that " +
           "this test parses. Restore it, or the schema/SQL parity is unguarded.",
       );
     }
@@ -81,9 +81,9 @@ describe("MEMBER_PATCHABLE_KEYS mirrors 0030's whitelist", () => {
     expect([...MEMBER_PATCHABLE_KEYS].sort()).toEqual(parsed);
   });
 
-  it("has thirteen keys and no duplicates", () => {
-    expect(MEMBER_PATCHABLE_KEYS).toHaveLength(13);
-    expect(new Set(MEMBER_PATCHABLE_KEYS).size).toBe(13);
+  it("has nineteen keys and no duplicates", () => {
+    expect(MEMBER_PATCHABLE_KEYS).toHaveLength(19);
+    expect(new Set(MEMBER_PATCHABLE_KEYS).size).toBe(19);
   });
 
   it("names none of the columns that must never be patchable", () => {

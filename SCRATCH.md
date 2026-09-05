@@ -60,6 +60,13 @@ verified_at). Committee form needs up to 4 docs × 3 departments, so a table is 
 Tick boxes: existing privacy consent (immutable, DB-enforced) + NEW accuracy/falsification
 certification. Meeting: "data privacy act checked per form" → consent on all three forms.
 
+**BUILT 2026-09-06 (slice 2, migrations 0037–0041):** programs + universities tables (starter list),
+people.sex/facebook_account/scholarship_award/award_year/university_id/program_id, year_level 1–5,
+four-digit allocator (CHECK left at `{3,}` so existing IDs stay valid), NOA as four `noa_*` columns on
+`applications` (NOT a documents table — the committee form gets its own multi-file table later),
+finalize_application v2 (8 args), approve_application v2, update_member_record v2, get_application_detail v2,
+form/review/proxy/fixtures/e2e updated, pgTAP 070 for the two tables. Accuracy certification tick added.
+
 ### D. Renewal form — accountless (new)
 
 Identify by `member_id` + email, both must match one `people` row; uniform response either way

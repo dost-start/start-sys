@@ -70,6 +70,8 @@ export type CreateUploadSessionInput = {
   mimeType: string;
   /** The client's CLAIM about the size. Checked against `MAX_PROOF_BYTES` here and re-verified after upload. */
   sizeBytes: number;
+  /** Which of an application's documents this is ("registration" | "noa"). Naming only. */
+  documentKind?: string;
 };
 
 export type UploadSession = {

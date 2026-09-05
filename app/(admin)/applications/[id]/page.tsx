@@ -58,6 +58,21 @@ export default async function ApplicationDetailPage({
   const reviewedAt = readString(detail, "reviewed_at");
   const reviewNote = readString(detail, "review_note");
   const proofMimeType = readString(detail, "proof_mime_type");
+  const noaMimeType = readString(detail, "noa_mime_type");
+
+  // Names for the three uuid choices. Public reference tables, read as the caller.
+  const [regionRows, universityRows, programRows] = await Promise.all([
+    ctx.supabase.from("regions").select("id, name"),
+    ctx.supabase.from("universities").select("id, name"),
+    ctx.supabase.from("programs").select("id, name"),
+  ]);
+  const toMap = (rows: { id: string; name: string }[] | null): Record<string, string> =>
+    Object.fromEntries((rows ?? []).map((r) => [r.id, r.name]));
+  const lookups = {
+    regions: toMap(regionRows.data),
+    universities: toMap(universityRows.data),
+    programs: toMap(programRows.data),
+  };
 
   // `applications` carries no `member_id` column — the number lives on `people`
   // (DATA_MODEL.md §2/§4: it is not on the record renewal touches). `member_id` is one
@@ -122,12 +137,19 @@ export default async function ApplicationDetailPage({
         </div>
       ) : null}
 
+      {/* Two documents (SRS 2026-09-05, 0040). Each viewer is ONE audited proxy read —
+          do not mount either twice. */}
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold">Proof of enrollment</h2>
-        <ProofDocumentViewer applicationId={id} mimeType={proofMimeType} />
+        <h2 className="text-sm font-semibold">Notice of Award</h2>
+        <ProofDocumentViewer applicationId={id} mimeType={noaMimeType} doc="noa" />
       </section>
 
-      <ApplicationDetailFields detail={detail} />
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold">Latest registration form</h2>
+        <ProofDocumentViewer applicationId={id} mimeType={proofMimeType} doc="registration" />
+      </section>
+
+      <ApplicationDetailFields detail={detail} lookups={lookups} />
     </div>
   );
 }

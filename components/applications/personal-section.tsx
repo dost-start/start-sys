@@ -1,9 +1,13 @@
-// Section 1 of the application form: personal information (BUILD_PLAN S3-T18).
-// Reads/writes through `useFormContext` — `application-form.tsx` is the sole
-// `<FormProvider>`, so this component never receives `register`/`errors` as props.
-// Field `name` attributes are exactly the `applicationSubmitSchema` keys, which are
-// exactly the `people` column names (CONVENTIONS.md §6).
 "use client";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Personal information — the SRS membership form (2026-09-05), section one.
+//
+// Field `name`s are the zod keys, which are the payload / column names — CONVENTIONS
+// §6, no mapping layer. The SRS dropped the address block and the school ID; they are
+// not collected here any more (0038). Age is computed from the birthdate at review time
+// and never stored.
+// ─────────────────────────────────────────────────────────────────────────────
 
 import { useFormContext } from "react-hook-form";
 
@@ -13,7 +17,7 @@ import {
   fieldClassName,
   FormSection,
 } from "@/components/applications/form-section";
-import type { ApplicationSubmitInput } from "@/lib/applications/schema";
+import { SEX_LABELS, SEX_OPTIONS, type ApplicationSubmitInput } from "@/lib/applications/schema";
 
 export function PersonalSection() {
   const {
@@ -24,7 +28,7 @@ export function PersonalSection() {
   return (
     <FormSection
       title="Personal information"
-      description="As it appears on your government or school ID."
+      description="As it appears on your Notice of Award and school records."
     >
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
@@ -38,7 +42,6 @@ export function PersonalSection() {
           />
           <FieldError message={errors.applicant_given_name?.message} />
         </div>
-
         <div className="space-y-1.5">
           <FieldLabel htmlFor="middle_name" optional>
             Middle name
@@ -52,7 +55,6 @@ export function PersonalSection() {
           />
           <FieldError message={errors.middle_name?.message} />
         </div>
-
         <div className="space-y-1.5">
           <FieldLabel htmlFor="applicant_family_name">Last name</FieldLabel>
           <input
@@ -64,7 +66,6 @@ export function PersonalSection() {
           />
           <FieldError message={errors.applicant_family_name?.message} />
         </div>
-
         <div className="space-y-1.5">
           <FieldLabel htmlFor="suffix" optional>
             Suffix
@@ -78,6 +79,41 @@ export function PersonalSection() {
             {...register("suffix")}
           />
           <FieldError message={errors.suffix?.message} />
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <FieldLabel htmlFor="sex">Sex</FieldLabel>
+          <select
+            id="sex"
+            className={fieldClassName(Boolean(errors.sex))}
+            aria-invalid={errors.sex ? "true" : "false"}
+            defaultValue=""
+            {...register("sex")}
+          >
+            <option value="" disabled>
+              Select…
+            </option>
+            {SEX_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {SEX_LABELS[option]}
+              </option>
+            ))}
+          </select>
+          <FieldError message={errors.sex?.message} />
+        </div>
+        <div className="space-y-1.5">
+          <FieldLabel htmlFor="birthdate">Date of birth</FieldLabel>
+          <input
+            id="birthdate"
+            type="date"
+            autoComplete="bday"
+            className={fieldClassName(Boolean(errors.birthdate))}
+            aria-invalid={errors.birthdate ? "true" : "false"}
+            {...register("birthdate")}
+          />
+          <FieldError message={errors.birthdate?.message} />
         </div>
       </div>
 
@@ -96,19 +132,6 @@ export function PersonalSection() {
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <FieldLabel htmlFor="birthdate">Date of birth</FieldLabel>
-          <input
-            id="birthdate"
-            type="date"
-            autoComplete="bday"
-            className={fieldClassName(Boolean(errors.birthdate))}
-            aria-invalid={errors.birthdate ? "true" : "false"}
-            {...register("birthdate")}
-          />
-          <FieldError message={errors.birthdate?.message} />
-        </div>
-
-        <div className="space-y-1.5">
           <FieldLabel htmlFor="contact_number">Contact number</FieldLabel>
           <input
             id="contact_number"
@@ -121,57 +144,19 @@ export function PersonalSection() {
           />
           <FieldError message={errors.contact_number?.message} />
         </div>
-      </div>
-
-      <div className="space-y-1.5">
-        <FieldLabel htmlFor="address_line">Street address</FieldLabel>
-        <input
-          id="address_line"
-          autoComplete="address-line1"
-          className={fieldClassName(Boolean(errors.address_line))}
-          aria-invalid={errors.address_line ? "true" : "false"}
-          {...register("address_line")}
-        />
-        <FieldError message={errors.address_line?.message} />
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-3">
         <div className="space-y-1.5">
-          <FieldLabel htmlFor="city_municipality">City / municipality</FieldLabel>
+          <FieldLabel htmlFor="facebook_account">Facebook account link</FieldLabel>
           <input
-            id="city_municipality"
-            autoComplete="address-level2"
-            className={fieldClassName(Boolean(errors.city_municipality))}
-            aria-invalid={errors.city_municipality ? "true" : "false"}
-            {...register("city_municipality")}
+            id="facebook_account"
+            type="url"
+            inputMode="url"
+            placeholder="https://facebook.com/yourname"
+            autoComplete="url"
+            className={fieldClassName(Boolean(errors.facebook_account))}
+            aria-invalid={errors.facebook_account ? "true" : "false"}
+            {...register("facebook_account")}
           />
-          <FieldError message={errors.city_municipality?.message} />
-        </div>
-
-        <div className="space-y-1.5">
-          <FieldLabel htmlFor="province">Province</FieldLabel>
-          <input
-            id="province"
-            autoComplete="address-level1"
-            className={fieldClassName(Boolean(errors.province))}
-            aria-invalid={errors.province ? "true" : "false"}
-            {...register("province")}
-          />
-          <FieldError message={errors.province?.message} />
-        </div>
-
-        <div className="space-y-1.5">
-          <FieldLabel htmlFor="postal_code">Postal code</FieldLabel>
-          <input
-            id="postal_code"
-            inputMode="numeric"
-            placeholder="1101"
-            autoComplete="postal-code"
-            className={fieldClassName(Boolean(errors.postal_code))}
-            aria-invalid={errors.postal_code ? "true" : "false"}
-            {...register("postal_code")}
-          />
-          <FieldError message={errors.postal_code?.message} />
+          <FieldError message={errors.facebook_account?.message} />
         </div>
       </div>
     </FormSection>

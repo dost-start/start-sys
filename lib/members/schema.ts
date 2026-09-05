@@ -45,6 +45,10 @@
 
 import { z } from "zod";
 
+import { SCHOLARSHIP_AWARDS, SEX_OPTIONS } from "@/lib/applications/schema";
+
+const FACEBOOK_URL_RE = /^https?:\/\/(www\.|m\.|web\.)?(facebook\.com|fb\.com|fb\.me)\/.+/i;
+
 import { MEMBERSHIP_STATUSES } from "@/lib/members/filters";
 import type { MembershipStatus } from "@/lib/members/transitions";
 
@@ -145,6 +149,12 @@ export const MEMBER_PATCHABLE_KEYS = [
   "postal_code",
   "school",
   "school_id_no",
+  "sex",
+  "facebook_account",
+  "scholarship_award",
+  "award_year",
+  "university_id",
+  "program_id",
 ] as const;
 
 export type MemberPatchableKey = (typeof MEMBER_PATCHABLE_KEYS)[number];
@@ -212,6 +222,30 @@ const patchShape = {
 
   school: clearableText("School", 200),
   school_id_no: clearableText("School ID number", 64),
+
+  // The SRS profile fields (0038, 0041). Same "clearable" contract as the rest: an empty
+  // string clears the column, absence leaves it alone.
+  sex: clearable(z.enum(SEX_OPTIONS, "Select an option")),
+  facebook_account: clearable(
+    z
+      .string()
+      .trim()
+      .max(300, "Facebook account link is too long")
+      .refine((value) => FACEBOOK_URL_RE.test(value), {
+        message: "Enter the full link to the member's Facebook profile",
+      }),
+  ),
+  scholarship_award: clearable(z.enum(SCHOLARSHIP_AWARDS, "Select a DOST scholarship award")),
+  // A string, like every other patch value: the RPC casts it (0041), and MemberPatch is
+  // a map of strings-or-null so the absent / null / value distinction survives the wire.
+  award_year: clearable(
+    z
+      .string()
+      .trim()
+      .regex(/^(20\d{2}|2100)$/, "Enter a four-digit year"),
+  ),
+  university_id: clearable(z.uuid("Select a university")),
+  program_id: clearable(z.uuid("Select a program")),
 };
 
 // ── memberUpdateSchema ───────────────────────────────────────────────────────

@@ -1,14 +1,15 @@
-// Section 2 of the application form: academic information (BUILD_PLAN S3-T18).
-//
-// `program` is a free-text input with a `<datalist>` suggesting the CBL Art. I §4
-// programs, NOT a `<select>`. OQ-17 (see `lib/applications/schema.ts` header) is
-// unresolved and the PRD's default is RECORD ONLY — free text with CRRD adjudicating
-// at review — because Art. VII §2 lets a program reach accreditation "in the
-// succeeding amendment", so a closed list would refuse a legitimate applicant whose
-// program is mid-accreditation. The list below is illustrative, not authoritative;
-// verify it against the actual CBL text before treating it as anything more than a
-// typing aid.
 "use client";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Academic information — the SRS membership form (2026-09-05), section two.
+//
+// The form is hardcoded; the CHOICES come from the database (meeting 2026-09-05: "form
+// is hardcoded but choices are flexible based on the data"). Universities and programs
+// are rows in `universities` and `programs` (0037), loaded by the Server Component and
+// passed down as plain options — this client leaf never fetches. Year level is 1..5 per
+// the SRS (0038). "Year of Award" is the DOST scholarship year and is NOT the member-ID
+// year (that is the year the scholar joins the org).
+// ─────────────────────────────────────────────────────────────────────────────
 
 import { useFormContext } from "react-hook-form";
 
@@ -18,75 +19,167 @@ import {
   fieldClassName,
   FormSection,
 } from "@/components/applications/form-section";
-import type { ApplicationSubmitInput } from "@/lib/applications/schema";
+import type { RegionOption } from "@/components/applications/membership-section";
+import {
+  SCHOLARSHIP_AWARD_LABELS,
+  SCHOLARSHIP_AWARDS,
+  type ApplicationSubmitInput,
+} from "@/lib/applications/schema";
 
-const YEAR_LEVELS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
+export type UniversityOption = {
+  id: string;
+  name: string;
+  region_id: string;
+  city_municipality: string | null;
+};
 
-/** Illustrative only — see the header. Not sourced from the CBL text; do not treat as a closed list. */
-const SUGGESTED_PROGRAMS = [
-  "BS Computer Science",
-  "BS Information Technology",
-  "BS Computer Engineering",
-  "BS Electronics Engineering",
-  "BS Electrical Engineering",
-  "BS Mechanical Engineering",
-  "BS Civil Engineering",
-  "BS Industrial Engineering",
-  "BS Chemical Engineering",
-  "BS Mathematics",
-  "BS Physics",
-  "BS Statistics",
-];
+export type ProgramOption = {
+  id: string;
+  name: string;
+};
 
-export function AcademicSection() {
+const YEAR_LEVELS = [1, 2, 3, 4, 5] as const;
+const YEAR_LEVEL_LABELS: Record<(typeof YEAR_LEVELS)[number], string> = {
+  1: "1st year",
+  2: "2nd year",
+  3: "3rd year",
+  4: "4th year",
+  5: "5th year",
+};
+
+/** The SRS lists 2022–2026; a scholar can hold an older award, so offer ten years back. */
+function awardYears(): number[] {
+  const current = new Date().getUTCFullYear();
+  return Array.from({ length: 11 }, (_, i) => current - i);
+}
+
+export function AcademicSection({
+  universities,
+  programs,
+  regions,
+}: {
+  universities: UniversityOption[];
+  programs: ProgramOption[];
+  regions: RegionOption[];
+}) {
   const {
     register,
     formState: { errors },
   } = useFormContext<ApplicationSubmitInput>();
 
-  return (
-    <FormSection title="Academic information" description="About your current program of study.">
-      <div className="space-y-1.5">
-        <FieldLabel htmlFor="school">School</FieldLabel>
-        <input
-          id="school"
-          autoComplete="organization"
-          className={fieldClassName(Boolean(errors.school))}
-          aria-invalid={errors.school ? "true" : "false"}
-          {...register("school")}
-        />
-        <FieldError message={errors.school?.message} />
-      </div>
+  const byRegion = new Map<string, UniversityOption[]>();
+  for (const u of universities) {
+    const list = byRegion.get(u.region_id) ?? [];
+    list.push(u);
+    byRegion.set(u.region_id, list);
+  }
+  const groups = regions
+    .filter((r) => byRegion.has(r.id))
+    .map((r) => ({ region: r, items: byRegion.get(r.id) ?? [] }));
 
+  return (
+    <FormSection
+      title="Scholarship and academic information"
+      description="From your Notice of Award and current enrollment."
+    >
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <FieldLabel htmlFor="school_id_no">School ID number</FieldLabel>
-          <input
-            id="school_id_no"
-            className={fieldClassName(Boolean(errors.school_id_no))}
-            aria-invalid={errors.school_id_no ? "true" : "false"}
-            {...register("school_id_no")}
-          />
-          <FieldError message={errors.school_id_no?.message} />
-        </div>
-
-        <div className="space-y-1.5">
-          <FieldLabel htmlFor="program">Degree program</FieldLabel>
-          <input
-            id="program"
-            list="program-suggestions"
-            placeholder="e.g. BS Computer Science"
-            className={fieldClassName(Boolean(errors.program))}
-            aria-invalid={errors.program ? "true" : "false"}
-            {...register("program")}
-          />
-          <datalist id="program-suggestions">
-            {SUGGESTED_PROGRAMS.map((program) => (
-              <option key={program} value={program} />
+          <FieldLabel htmlFor="scholarship_award">DOST scholarship award</FieldLabel>
+          <select
+            id="scholarship_award"
+            className={fieldClassName(Boolean(errors.scholarship_award))}
+            aria-invalid={errors.scholarship_award ? "true" : "false"}
+            defaultValue=""
+            {...register("scholarship_award")}
+          >
+            <option value="" disabled>
+              Select…
+            </option>
+            {SCHOLARSHIP_AWARDS.map((award) => (
+              <option key={award} value={award}>
+                {SCHOLARSHIP_AWARD_LABELS[award]}
+              </option>
             ))}
-          </datalist>
-          <FieldError message={errors.program?.message} />
+          </select>
+          <FieldError message={errors.scholarship_award?.message} />
         </div>
+        <div className="space-y-1.5">
+          <FieldLabel htmlFor="award_year">Year of award</FieldLabel>
+          <select
+            id="award_year"
+            className={fieldClassName(Boolean(errors.award_year))}
+            aria-invalid={errors.award_year ? "true" : "false"}
+            defaultValue=""
+            {...register("award_year")}
+          >
+            <option value="" disabled>
+              Select…
+            </option>
+            {awardYears().map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </select>
+          <FieldError message={errors.award_year?.message} />
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <FieldLabel htmlFor="university_id">University</FieldLabel>
+        <select
+          id="university_id"
+          className={fieldClassName(Boolean(errors.university_id))}
+          aria-invalid={errors.university_id ? "true" : "false"}
+          defaultValue=""
+          {...register("university_id")}
+        >
+          <option value="" disabled>
+            Select your university…
+          </option>
+          {groups.map(({ region, items }) => (
+            <optgroup key={region.id} label={region.name}>
+              {items.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                  {u.city_municipality ? ` — ${u.city_municipality}` : ""}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+        <FieldError message={errors.university_id?.message} />
+        {universities.length === 0 ? (
+          <p className="text-sm text-destructive">
+            Universities could not be loaded. Reload the page before submitting.
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Not listed? Choose the nearest campus and tell CRRD in your email — the list is
+            maintained by CRRD and grows as scholars apply.
+          </p>
+        )}
+      </div>
+
+      <div className="space-y-1.5">
+        <FieldLabel htmlFor="program_id">Program</FieldLabel>
+        <select
+          id="program_id"
+          className={fieldClassName(Boolean(errors.program_id))}
+          aria-invalid={errors.program_id ? "true" : "false"}
+          defaultValue=""
+          {...register("program_id")}
+        >
+          <option value="" disabled>
+            Select your program…
+          </option>
+          {programs.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+        <FieldError message={errors.program_id?.message} />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -104,15 +197,14 @@ export function AcademicSection() {
             </option>
             {YEAR_LEVELS.map((level) => (
               <option key={level} value={level}>
-                Year {level}
+                {YEAR_LEVEL_LABELS[level]}
               </option>
             ))}
           </select>
           <FieldError message={errors.year_level?.message} />
         </div>
-
         <div className="space-y-1.5">
-          <FieldLabel htmlFor="expected_grad_year">Expected graduation year</FieldLabel>
+          <FieldLabel htmlFor="expected_grad_year">Expected year of graduation</FieldLabel>
           <input
             id="expected_grad_year"
             inputMode="numeric"

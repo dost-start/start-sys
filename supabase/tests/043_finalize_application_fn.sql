@@ -44,7 +44,7 @@ begin;
 \ir helpers/auth.psql
 \ir helpers/fixtures.psql
 
-select plan(21);
+select plan(22);
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════════
@@ -114,7 +114,10 @@ select lives_ok(
        'tok-alpha-happy',
        'ref-happy-verified',
        'image/jpeg',
-       6291456::bigint) $$,
+       6291456::bigint,
+       'noa-happy-verified',
+       'application/pdf',
+       262144::bigint) $$,
   'POSITIVE CONTROL: anon with the correct, unexpired token finalizes the application — '
   'every denial below is trusted only because this succeeds'
 );
@@ -146,9 +149,12 @@ select ok(
       and submitted_at      is not null
       and proof_mime_type   = 'image/jpeg'
       and proof_drive_file_id = 'ref-happy-verified'
+      and noa_drive_file_id   = 'noa-happy-verified'
+      and noa_mime_type       = 'application/pdf'
+      and noa_verified_at is not null
      from public.applications
     where id = '00000000-0000-4000-8000-000000000101'),
-  'proof_verified_at, submitted_at, proof_mime_type and proof_drive_file_id are all stamped '
+  'proof_verified_at, submitted_at, proof_mime_type, proof_drive_file_id AND the three noa_* fields are all stamped '
   'in the same statement — a half-finalized row is not a state this function can produce'
 );
 
@@ -171,7 +177,10 @@ select lives_ok(
        'tok-alpha-happy',
        'ref-happy-verified',
        'image/jpeg',
-       6291456::bigint) $$,
+       6291456::bigint,
+       'noa-happy-verified',
+       'application/pdf',
+       262144::bigint) $$,
   'a retried finalize with the SAME token and the SAME file reference succeeds — and this '
   'assertion is why the token is deliberately not cleared on success (0019 step 8)'
 );
@@ -202,7 +211,7 @@ select throws_ok(
   $$ select public.finalize_application(
        '00000000-0000-4000-8000-000000000102',
        'tok-wrong-entirely',
-       'ref-attacker', 'application/pdf', 1024::bigint) $$,
+       'ref-attacker', 'application/pdf', 1024::bigint, 'noa-doc', 'application/pdf', 1024::bigint) $$,
   '42501'::char(5), null::text,
   'a WRONG token raises 42501 — the one-row bearer capability is what authorizes this call, '
   'and there is no anon UPDATE policy to fall back on'
@@ -212,7 +221,7 @@ select throws_ok(
   $$ select public.finalize_application(
        '00000000-0000-4000-8000-000000000103',
        'tok-charlie-expired',
-       'ref-late', 'application/pdf', 1024::bigint) $$,
+       'ref-late', 'application/pdf', 1024::bigint, 'noa-doc', 'application/pdf', 1024::bigint) $$,
   '42501'::char(5), null::text,
   'a CORRECT but EXPIRED token raises 42501, identically to a wrong one — the applicant '
   'cannot distinguish the two, which is deliberate'
@@ -249,7 +258,7 @@ select lives_ok(
   $$ select public.finalize_application(
        '00000000-0000-4000-8000-0000000009ff',
        'tok-anything',
-       'ref-nothing', 'application/pdf', 1024::bigint) $$,
+       'ref-nothing', 'application/pdf', 1024::bigint, 'noa-doc', 'application/pdf', 1024::bigint) $$,
   'an UNKNOWN application id returns silently rather than raising — the function is not an '
   'oracle for whether an application id exists'
 );
@@ -276,7 +285,7 @@ select throws_ok(
   $$ select public.finalize_application(
        '00000000-0000-4000-8000-000000000102',
        'tok-bravo-validation',
-       'ref-executable', 'application/x-msdownload', 1024::bigint) $$,
+       'ref-executable', 'application/x-msdownload', 1024::bigint, 'noa-doc', 'application/pdf', 1024::bigint) $$,
   '23514'::char(5), null::text,
   'a disallowed MIME type raises 23514 EVEN WITH A VALID TOKEN — the allowlist is not a '
   'client-side convenience'
@@ -286,7 +295,7 @@ select throws_ok(
   $$ select public.finalize_application(
        '00000000-0000-4000-8000-000000000102',
        'tok-bravo-validation',
-       'ref-huge', 'application/pdf', 10485761::bigint) $$,
+       'ref-huge', 'application/pdf', 10485761::bigint, 'noa-doc', 'application/pdf', 1024::bigint) $$,
   '23514'::char(5), null::text,
   'one byte over MAX_PROOF_BYTES (10 MiB) raises 23514 — asserted at the boundary, not at a '
   'comfortable distance from it'
@@ -296,7 +305,7 @@ select throws_ok(
   $$ select public.finalize_application(
        '00000000-0000-4000-8000-000000000102',
        'tok-bravo-validation',
-       '   ', 'application/pdf', 1024::bigint) $$,
+       '   ', 'application/pdf', 1024::bigint, 'noa-doc', 'application/pdf', 1024::bigint) $$,
   '23514'::char(5), null::text,
   'a blank document reference raises 23514 — PRD US-B2 makes proof of enrollment part of '
   'the application, and pending_has_proof would refuse the row anyway'
@@ -309,10 +318,21 @@ select throws_ok(
   $$ select public.finalize_application(
        '00000000-0000-4000-8000-000000000105',
        'tok-echo-decided',
-       'ref-reopen', 'application/pdf', 1024::bigint) $$,
+       'ref-reopen', 'application/pdf', 1024::bigint, 'noa-doc', 'application/pdf', 1024::bigint) $$,
   '55000'::char(5), null::text,
   'a REJECTED application cannot be re-finalized even with a valid token — draft -> pending '
   'is the only edge this function may traverse (DATA_MODEL.md §3.2)'
+);
+
+select throws_ok(
+  $$ select public.finalize_application(
+       '00000000-0000-4000-8000-000000000102',
+       'tok-bravo-validation',
+       'ref-same', 'application/pdf', 1024::bigint,
+       'ref-same', 'application/pdf', 1024::bigint) $$,
+  '23514'::char(5), null::text,
+  'the SAME reference for both documents raises 23514 — the registration form and the '
+  'Notice of Award are two files (SRS 2026-09-05), and one upload cannot stand in for both'
 );
 
 select pg_temp.logout();
@@ -333,7 +353,7 @@ select lives_ok(
   $$ select public.finalize_application(
        '00000000-0000-4000-8000-000000000104',
        'tok-delta-duplicate',
-       'ref-duplicate', 'image/png', 2048::bigint) $$,
+       'ref-duplicate', 'image/png', 2048::bigint, 'noa-doc', 'application/pdf', 1024::bigint) $$,
   'a DUPLICATE (term, email) finalize returns SUCCESS, not an error — the response is '
   'byte-identical to a first-time submission, so the public form cannot be used to '
   'enumerate which addresses have already applied'
@@ -376,7 +396,7 @@ select throws_ok(
   $$ select public.finalize_application(
        '00000000-0000-4000-8000-000000000102',
        'tok-bravo-validation',
-       'ref-just-too-late', 'application/pdf', 1024::bigint) $$,
+       'ref-just-too-late', 'application/pdf', 1024::bigint, 'noa-doc', 'application/pdf', 1024::bigint) $$,
   '42501'::char(5), null::text,
   'a valid token is NOT enough once the window has closed — PRD US-B4 is enforced on the '
   'finalize half of the flow as well as on the insert half'

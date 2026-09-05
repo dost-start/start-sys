@@ -10,8 +10,9 @@
 // What it creates, idempotently (re-runs update passwords, never duplicate rows):
 //   · one account per tier: demo.ceo (exec_admin), demo.cto (tech_admin),
 //     demo.ccdo (crrd_admin), demo.dccdo (crrd_admin, a deputy), demo.officer, demo.rep (NCR),
-//     demo.member — fresh random password each run, printed ONCE and written to
-//     demo-credentials.local.md (gitignored).
+//     demo.member — each with the FIXED password `<name>123` (demo.ceo -> ceo123),
+//     written to demo-credentials.local.md (gitignored). Set DEMO_RANDOM_PASSWORDS=1
+//     for a fresh random password per account instead (the pre-2026-09-06 behaviour).
 //   · people + current-term memberships for the accounts that represent members,
 //     confidentiality acknowledgements for the three sensitive-reader tiers
 //     (CBL Art. VIII §7.1 — without these, every sensitive read correctly fails).
@@ -53,7 +54,14 @@ if (/placeholder/.test(url)) {
 
 const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
 
-const password = () => `demo-${randomBytes(9).toString("base64url")}`;
+// Fixed, trivially guessable passwords BY DESIGN (Ethan, 2026-09-06): this is a scratch
+// project holding fake data and nobody but the team reaches it. `demo.ceo@…` -> `ceo123`.
+// Anything that ever holds real scholar data must not be seeded by this script at all
+// (see the header), so the weak default never meets real PII.
+const password = (email) =>
+  process.env.DEMO_RANDOM_PASSWORDS === "1"
+    ? `demo-${randomBytes(9).toString("base64url")}`
+    : `${email.replace(/^demo\./, "").replace(/@.*$/, "")}123`;
 
 /** Stable ids so re-runs are updates, not duplicates. */
 const PERSON = (n) => `00000000-0000-4000-de00-${String(n).padStart(12, "0")}`;
@@ -196,7 +204,7 @@ async function main() {
 
   // ── the six demo accounts ──────────────────────────────────────────────────
   for (const a of ACCOUNTS) {
-    const pass = password();
+    const pass = password(a.email);
     const userId = await upsertUser(a.email, pass);
     const personId = a.person ? PERSON(a.person) : null;
 
@@ -409,7 +417,7 @@ async function main() {
         `| ${c.email} | ${c.role} | \`${c.pass}\` | ${c.role === "member" ? "none (ADR 0004)" : "enrol on first login — scan the QR with any authenticator app"} |`,
     ),
     "",
-    "Re-running `node scripts/seed-demo-accounts.mjs` rotates every password.",
+    "Passwords are fixed (`<name>123`). Re-run with DEMO_RANDOM_PASSWORDS=1 for random ones.",
   ].join("\n");
 
   writeFileSync("demo-credentials.local.md", lines + "\n");

@@ -61,7 +61,15 @@ export const LOGIN_PATH = "/login";
 export const ROUTE_GROUPS = {
   public: ["/apply", "/renew", "/privacy"],
   auth: [LOGIN_PATH, "/auth"],
-  admin: ["/dashboard", "/members", "/applications", "/renewals", "/audit", ADMIN_SYSTEM_PREFIX],
+  admin: [
+    "/dashboard",
+    "/members",
+    "/applications",
+    "/renewals",
+    "/campaigns",
+    "/audit",
+    ADMIN_SYSTEM_PREFIX,
+  ],
   officer: ["/directory", "/committees"],
   rr: ["/region"],
 } as const satisfies Record<RouteGroup, readonly string[]>;

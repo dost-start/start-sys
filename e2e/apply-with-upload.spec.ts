@@ -298,7 +298,12 @@ const applyScreens = {
   /** The closed state (US-B4). No form fields; explains when applications closed. */
   closed: (page: Page) => page.getByText(/closed|not (currently )?open|not accepting/i).first(),
 
-  error: (page: Page) => page.getByRole("alert").first(),
+  /**
+   * An alert WITH text. The upload widget renders an empty live region the moment a submit
+   * starts, and a bare `getByRole("alert")` matched it before the server had stored the
+   * draft — the (d) magic-byte case then read the database too early and found no row.
+   */
+  error: (page: Page) => page.getByRole("alert").filter({ hasText: /\S/ }).first(),
 
   /** The determinate upload bar (S3-T19). Best-effort — see `attachProof`. */
   progress: (page: Page) => page.getByRole("progressbar").first(),

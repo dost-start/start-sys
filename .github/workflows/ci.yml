@@ -300,6 +300,8 @@ jobs:
           CI_E2E_CHROMIUM_ONLY: "1"
           NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
           DOCUMENT_STORE: fake
+          # The campaign flow sends through the in-memory transport; nothing leaves CI.
+          MAIL_TRANSPORT: fake
           JOB_SHARED_SECRET: ci-test-secret
           # `pnpm start` is NODE_ENV=production, and the rate limiter refuses to run
           # on a guessable digest there — a real requirement in prod, satisfied with a

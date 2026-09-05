@@ -51,7 +51,7 @@ function roleOf(actor: Actor): OrgRole | null {
 const COLUMNS = {
   public: ["/apply", "/renew", "/privacy"],
   auth: [LOGIN_PATH, "/auth/reset", "/auth/mfa/enroll", "/auth/mfa/verify", "/auth/callback"],
-  admin: ["/dashboard", "/members", "/applications", "/renewals", "/audit"],
+  admin: ["/dashboard", "/members", "/applications", "/renewals", "/campaigns", "/audit"],
   adminSystem: [ADMIN_SYSTEM_PREFIX, "/system/user-roles"],
   officer: ["/directory", "/committees"],
   rr: ["/region"],

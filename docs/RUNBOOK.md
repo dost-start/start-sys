@@ -73,6 +73,24 @@ id under one driver, an object path under the other — and nothing outside `lib
 interprets it (DATA_MODEL.md §6/0008). If a swap looks like it needs a migration, something
 outside `lib/documents/` has started reading that column's contents, and that is the bug.
 
+## Send a campaign (email or a form link)
+
+**Who:** the CCDO or a CRRD deputy (`crrd_admin`), or the CEO/COO (`exec_admin`). Nobody else sees `/campaigns`; the database refuses everyone else independently of the screen (migration `0043`).
+
+**Before the first real send:** `MAIL_TRANSPORT=gmail_smtp` with `GMAIL_SMTP_USER`, `GMAIL_SMTP_APP_PASSWORD`, `MAIL_FROM_NAME` and `MAIL_REPLY_TO` set in the Vercel Production scope (runbook 03, row 11). With `MAIL_TRANSPORT=fake` the whole flow runs but nothing leaves the server — that is the setting for previews and local work.
+
+1. `/campaigns` → **New campaign**. Pick a template (the three form sends carry the link to this site's public form) or Freeform.
+2. Edit the subject and message. Formatting is Telegram-style (`**bold**`, `_italic_`, `[label](https://…)`, `- ` lists). Merge fields are `{{given_name}}`, `{{family_name}}`, `{{member_id}}`, `{{join_year}}`, `{{region_name}}`, `{{island_group}}`, `{{term_label}}`, `{{year_level}}`, `{{committee_name}}`, `{{department_name}}` — nothing else can be merged, and an unknown token blocks saving.
+3. Choose the audience: status, year of membership, island group, region, role, affiliation. The count shown is the count the send uses — same database function. Only scholars with an email on file in the current term are counted.
+4. **Save draft** → the campaign page. **Freeze the recipient list** writes one row per recipient; nothing is sent yet.
+5. **Send now.** Leave the page open; it sends 25 at a time and shows progress. Closing the page mid-way is safe: **Send** again later resumes and never re-sends anyone (each recipient row is marked in the database).
+6. The delivery report at the bottom lists every recipient as sent or failed with the reason.
+
+**If it stops with "sending limit reached":** the Gmail account's daily cap (~500 messages on a consumer account) was hit. The remainder stays queued; come back the next day and click **Send** again. A 600-person blast therefore takes two days on Gmail — plan acceptance emails accordingly, or move to Workspace/Resend (env flip, ADR 0010).
+
+**What "Sent" means:** the mail server accepted the message. Gmail SMTP has no bounce reporting; a bounced address shows up as a bounce email in the sending inbox, not in the report.
+
+**Audit:** freezing a campaign writes one `CAMPAIGN_QUEUED` row to the audit log naming the officer. The frozen filter is stored on the campaign so the recipient list can be reproduced.
 ## Open the renewal period and review renewals
 
 **Who:** the CCDO or the CTO opens the period (ADR 0003); the CCDO or a CRRD deputy (`crrd_admin`), or the CEO/COO (`exec_admin`), reviews. Members have no accounts — the form is public and the scholar proves who they are with their member ID and the email on file.

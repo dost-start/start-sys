@@ -1413,7 +1413,6 @@ export type Database = {
       is_user_roles_writer: { Args: never; Returns: boolean }
       isnt_empty: { Args: { "": string }; Returns: string }
       issue_recovery_codes: { Args: never; Returns: string[] }
-      lives_ok: { Args: { "": string }; Returns: string }
       list_region_member_contacts: {
         Args: { p_university_id?: string }
         Returns: {
@@ -1432,6 +1431,7 @@ export type Database = {
           university_name: string
         }[]
       }
+      lives_ok: { Args: { "": string }; Returns: string }
       log_document_view: { Args: { p_app_id: string }; Returns: undefined }
       mask_sensitive: { Args: { p_row: Json; p_table: string }; Returns: Json }
       no_plan: { Args: never; Returns: boolean[] }

@@ -20,6 +20,7 @@ import { redirect } from "next/navigation";
 
 import { CountBarList, type CountBarRow } from "@/components/dashboard/count-bar-list";
 import { DashboardEmptyState } from "@/components/dashboard/dashboard-empty-state";
+import { DirectoryTable } from "@/components/dashboard/directory-table";
 import { RegionContactsTable } from "@/components/dashboard/region-contacts-table";
 import { StatTile } from "@/components/dashboard/stat-tile";
 import { getSessionContext } from "@/lib/auth/queries";
@@ -34,6 +35,8 @@ import {
   listStatusCounts,
 } from "@/lib/dashboard/queries";
 import { zeroFillRegions, zeroFillStatuses } from "@/lib/dashboard/status-buckets";
+import { DEFAULT_MEMBER_FILTERS } from "@/lib/members/filters";
+import { listMemberDirectory } from "@/lib/members/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -74,6 +77,15 @@ export default async function RegionDashboardPage({
       regions.map((region) => region.id),
     ),
   ]);
+
+  // The name-only roster (v_member_directory, RLS-scoped, no contact columns) is what a
+  // rep sees while the contact read is refused — the region list itself is never locked,
+  // only the contact details are (ADR 0011).
+  const fallbackRoster =
+    contacts.ok || termId === null
+      ? null
+      : await listMemberDirectory(ctx, { ...DEFAULT_MEMBER_FILTERS, per_page: 100 });
+  const fallbackRows = fallbackRoster?.ok ? fallbackRoster.data.rows : [];
 
   const statusBuckets = zeroFillStatuses(statusRows);
   const total = statusBuckets.reduce((sum, bucket) => sum + bucket.count, 0);
@@ -172,26 +184,41 @@ export default async function RegionDashboardPage({
                 }
               />
             ) : contacts.denial === "missing_acknowledgement" ? (
-              <div
-                role="alert"
-                className="space-y-1 rounded-lg border border-amber-500/40 bg-amber-50 p-4 text-sm dark:bg-amber-950"
-              >
-                <p className="font-medium">
-                  Contact details are locked until your confidentiality acknowledgement is on file.
-                </p>
-                <p className="text-muted-foreground">
-                  CBL Art. VIII §7.1 requires every officer — Regional Representatives included — to
-                  sign the Confidentiality Agreement on assuming their role each term. An Executive
-                  Admin records the acknowledgement; once it is on file for the current term this
-                  roster shows names, member IDs, universities, emails, contact numbers and Facebook
-                  links for your region. Headcounts above are unaffected.
-                </p>
-              </div>
+              <>
+                <div
+                  role="alert"
+                  className="space-y-1 rounded-lg border border-amber-500/40 bg-amber-50 p-4 text-sm dark:bg-amber-950"
+                >
+                  <p className="font-medium">
+                    Contact details are locked until your confidentiality acknowledgement is on
+                    file.
+                  </p>
+                  <p className="text-muted-foreground">
+                    CBL Art. VIII §7.1 requires every officer — Regional Representatives included —
+                    to sign the Confidentiality Agreement on assuming their role each term. An
+                    Executive Admin records the acknowledgement; once it is on file for the current
+                    term this roster shows names, member IDs, universities, emails, contact numbers
+                    and Facebook links for your region. Headcounts above are unaffected.
+                  </p>
+                </div>
+                <DirectoryTable
+                  rows={fallbackRows}
+                  showRegion={regions.length > 1}
+                  emptyMessage="No scholars are recorded in your region for the current term."
+                />
+              </>
             ) : (
-              <DashboardEmptyState
-                message="Contact details are not available."
-                detail="Your account is not bound to a member record, so the acknowledgement cannot be recorded yet. Ask the CTO to link your account."
-              />
+              <>
+                <DashboardEmptyState
+                  message="Contact details are not available."
+                  detail="Your account is not bound to a member record, so the acknowledgement cannot be recorded yet. Ask the CTO to link your account."
+                />
+                <DirectoryTable
+                  rows={fallbackRows}
+                  showRegion={regions.length > 1}
+                  emptyMessage="No scholars are recorded in your region for the current term."
+                />
+              </>
             )}
           </section>
         </>

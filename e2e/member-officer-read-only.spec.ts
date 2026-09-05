@@ -81,7 +81,11 @@ const FORBIDDEN_LITERALS = [...DASHBOARD_PLANTED_VALUES, PLANTED_SCHOOL_ID];
  * @param page      a page already navigated to the surface under test
  * @param expectVisible a string that MUST be present, so an empty page cannot pass
  */
-async function expectNoSensitiveLeak(page: Page, expectVisible: string): Promise<void> {
+async function expectNoSensitiveLeak(
+  page: Page,
+  expectVisible: string,
+  allowed: readonly string[] = [],
+): Promise<void> {
   const html = await page.content();
 
   // Non-vacuity first. A redirect, a 404 or a crashed render contains no planted value
@@ -92,6 +96,7 @@ async function expectNoSensitiveLeak(page: Page, expectVisible: string): Promise
   ).toBe(true);
 
   for (const literal of FORBIDDEN_LITERALS) {
+    if (allowed.includes(literal)) continue;
     expect(html.includes(literal), `served HTML contains the planted value ${literal}`).toBe(false);
   }
 }
@@ -203,7 +208,10 @@ test.describe("read-only tiers see no sensitive data and hold no write path", ()
     await page.goto(REGION_PATH);
     await page.waitForLoadState("networkidle");
 
-    await expectNoSensitiveLeak(page, anyRegionAMember);
+    // ADR 0011: rep A has signed the confidentiality agreement, so its OWN region's
+    // contact numbers render on /region through the audited RPC. The address and the
+    // school ID remain leaks. The region-B contact scoping is proven in pgTAP 071.
+    await expectNoSensitiveLeak(page, anyRegionAMember, ["+63917PLANTED99"]);
     await expectNoWriteControls(page);
   });
 

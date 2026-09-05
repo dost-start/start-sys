@@ -222,7 +222,9 @@ test.describe("regional-rep scope gate (US-F1, US-F2, US-J1)", () => {
     expect(deepLink?.status()).not.toBe(403);
     const deepHtml = await page.content();
     expect(deepHtml.includes(bravoTarget)).toBe(false);
-    for (const literal of FORBIDDEN_LITERALS) {
+    // The bounce lands on /region, which now carries rep A's OWN contact numbers (ADR
+    // 0011); the region-B leak is the absence of bravoTarget above, not the shared literal.
+    for (const literal of REGION_FORBIDDEN_LITERALS) {
       expect(deepHtml.includes(literal), `deep link leaked ${literal}`).toBe(false);
     }
   });

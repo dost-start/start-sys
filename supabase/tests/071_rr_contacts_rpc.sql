@@ -48,12 +48,14 @@ update public.people
 
 create temp table fx_audit_before on commit drop as
   select count(*)::int as n from public.audit_log;
+grant select on fx_audit_before to public;
 
 -- ── 1-4 — the positive case ────────────────────────────────────────────────────────
 select pg_temp.login_as('00000000-0000-4000-a000-000000000006');   -- regional_rep_a (NCR)
 
 create temp table fx_contacts on commit drop as
   select * from public.list_region_member_contacts();
+grant select on fx_contacts to public;
 
 select is(
   (select count(*)::int from fx_contacts),
@@ -93,6 +95,7 @@ select pg_temp.logout();
 -- ── 7 — no acknowledgement, no read ───────────────────────────────────────────────
 create temp table fx_audit_mid on commit drop as
   select count(*)::int as n from public.audit_log;
+grant select on fx_audit_mid to public;
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000007');   -- regional_rep_b (R07), no person, no ack
 select throws_ok(

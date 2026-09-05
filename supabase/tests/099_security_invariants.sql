@@ -280,29 +280,22 @@ select is(
   '(offenders appear as the have-value)'
 );
 
--- 12 — the ONE declared whitelist in this file, and it is a whitelist of tables that do not
--- exist YET rather than of rules that do not apply.
---
--- DATA_MODEL.md §8.1 classifies email_recipients.to_email and .merge — a FROZEN copy of
--- contact data at send time, which outlives the five-year purge on `people` unless it is
--- classified before the table exists. 0016 registers both deliberately, and 0010_email.sql
--- is reserved for v1.1 (BUILD_PLAN "Scope honesty"). Forward-registration is correct: the
--- alternative is a v1.1 migration that creates the table and forgets the registry, which is
--- exactly the silent failure assertion 11 exists to catch.
---
--- ⚠ WHEN 0010_email.sql LANDS, THIS ASSERTION GOES RED AND THE FIX IS TO EXPECT '' HERE.
---   That red is the point: it is the reminder that assertion 11 now covers those two
---   columns for real.
+-- 12 — every registry table exists. Until 0043 this assertion whitelisted ONE table:
+-- email_recipients, whose to_email and merge columns 0016 registered ahead of the table
+-- (DATA_MODEL.md §8.1 — a FROZEN copy of contact data at send time, which outlives the
+-- five-year purge on `people` unless classified before it exists). 0043 created the table,
+-- the forward-registration became a real one, and assertion 11 now covers both columns.
+-- The whitelist is therefore empty, and a registry row naming a table that does not exist
+-- is once again an unnoticed stale row.
 select is(
   (
     select coalesce(string_agg(distinct r.table_name, ', ' order by r.table_name), '')
     from public.sensitive_column_registry r
     where to_regclass('public.' || quote_ident(r.table_name)) is null
   ),
-  'email_recipients',
-  '(e) the only registry table that does not exist yet is email_recipients — a DECLARED '
-  'v1.1 forward-registration (DATA_MODEL.md §8.1), not an unnoticed stale row. This goes '
-  'red when 0010_email.sql lands, and the fix is to expect an empty string'
+  '',
+  '(e) every table named in sensitive_column_registry exists — the email_recipients '
+  'forward-registration was made good by 0043, so the whitelist is empty again'
 );
 
 -- ── SELF-TEST for (e) ──────────────────────────────────────────────────────────────

@@ -264,9 +264,10 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_role public.org_role := public.auth_role();
-  c      public.email_campaigns;
-  v_n    int;
+  v_role     public.org_role := public.auth_role();
+  c          public.email_campaigns;
+  v_n        int;
+  v_inserted int;
 begin
   if v_role is null or v_role not in ('crrd_admin', 'exec_admin') then
     raise exception 'not authorized to send a campaign' using errcode = '42501';
@@ -286,6 +287,7 @@ begin
   select p_campaign_id, r.person_id, r.email, r.merge
   from public.resolve_recipients(c.audience_filter) r
   on conflict (campaign_id, person_id) do nothing;
+  get diagnostics v_inserted = row_count;
 
   select count(*)::int into v_n from public.email_recipients where campaign_id = p_campaign_id;
 
@@ -294,10 +296,14 @@ begin
    where id = p_campaign_id;
 
   -- PRD US-I1 names campaign sends among the significant actions; email_campaigns carries
-  -- no row trigger, so the attribution is written here, value-free.
-  insert into public.audit_log (actor_user_id, actor_role, table_name, row_id, operation, note)
-  values ((select auth.uid()), v_role::text, 'email_campaigns', p_campaign_id, 'CAMPAIGN_QUEUED',
-          format('%s recipient(s) queued', v_n));
+  -- no row trigger, so the attribution is written here, value-free. Once per freeze that
+  -- changed something: a retried or double-clicked freeze that added no rows is the
+  -- no-op it claims to be, in the log as well as in the queue.
+  if c.status = 'draft' or v_inserted > 0 then
+    insert into public.audit_log (actor_user_id, actor_role, table_name, row_id, operation, note)
+    values ((select auth.uid()), v_role::text, 'email_campaigns', p_campaign_id, 'CAMPAIGN_QUEUED',
+            format('%s recipient(s) queued', v_n));
+  end if;
 
   return v_n;
 end;

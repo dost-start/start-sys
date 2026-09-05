@@ -26,16 +26,17 @@ import { getMailTransport } from "@/lib/mail";
 
 import { markdownToHtml, markdownToText, wrapEmailHtml } from "./markdown";
 import { assertMergeTokensKnown, mergeHtml, mergeText, type MergePayload } from "./merge";
-import { previewAudience } from "./queries";
+import { listAudienceCandidates, previewAudience } from "./queries";
 import { CAMPAIGN_ROLES } from "./roles";
 import {
+  audienceCandidatesQuerySchema,
   audienceFilterSchema,
   campaignComposeSchema,
   campaignIdSchema,
   DRAIN_BATCH_SIZE,
 } from "./schema";
 import { TEMPLATES } from "./templates";
-import type { AudiencePreview } from "./types";
+import type { AudienceCandidatePage, AudiencePreview } from "./types";
 
 const CAMPAIGNS_PATH = "/campaigns";
 
@@ -47,6 +48,21 @@ export const previewAudienceAction = withRole<unknown, AudiencePreview>(
     const preview = await previewAudience(ctx, parsed.data);
     if (preview === null) return err<AudiencePreview>("unknown");
     return ok(preview);
+  },
+);
+
+/**
+ * One page of the composer's people picker (2026-09-06). Same role guard as every other
+ * campaign action; the definer function refuses independently.
+ */
+export const listAudienceCandidatesAction = withRole<unknown, AudienceCandidatePage>(
+  CAMPAIGN_ROLES,
+  async (ctx, input) => {
+    const parsed = audienceCandidatesQuerySchema.safeParse(input);
+    if (!parsed.success) return validationFailure<AudienceCandidatePage>(parsed.error);
+    const page = await listAudienceCandidates(ctx, parsed.data);
+    if (page === null) return err<AudienceCandidatePage>("unknown");
+    return ok(page);
   },
 );
 

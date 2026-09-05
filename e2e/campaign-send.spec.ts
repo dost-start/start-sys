@@ -86,16 +86,33 @@ const campaignScreens = {
   sendMessage: (page: Page) => page.getByTestId("send-message"),
   sentRows: (page: Page) => page.getByTestId("recipient-sent"),
   statusBadge: (page: Page, status: string) => page.getByTestId(`campaign-status-${status}`),
+  // The 2026-09-06 audience picker: search by name/member ID, one checkbox per row,
+  // aria-label "Select <family>, <given>" (never an email — see components/campaigns/
+  // audience-picker.tsx).
+  audienceSearch: (page: Page) => page.getByLabel("Search by name or member ID"),
+  candidateCheckbox: (page: Page, familyName: string, givenName: string) =>
+    page.getByRole("checkbox", { name: `Select ${familyName}, ${givenName}` }),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Seeding — one guaranteed recipient, so the audience is never empty
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** A person with an email and an active current-term membership in NCR. Unique per run. */
-async function seedRecipient(admin: SupabaseClient): Promise<{ personId: string; email: string }> {
+export type SeededRecipient = {
+  personId: string;
+  email: string;
+  /** Always "Campaign" — kept on the return so a caller never has to hardcode it. */
+  givenName: string;
+  /** `Recipient<4 hex>`, unique per call — what the audience picker's search matches on. */
+  familyName: string;
+};
+
+/** A person with an email and an active current-term membership in NCR. Unique per call. */
+async function seedRecipient(admin: SupabaseClient): Promise<SeededRecipient> {
   const personId = randomUUID();
   const email = `campaign-${personId.slice(0, 8)}@fixture.start-sys.test`;
+  const givenName = "Campaign";
+  const familyName = `Recipient${personId.slice(0, 4)}`;
 
   const { data: region, error: regionError } = await admin
     .from("regions")
@@ -115,8 +132,8 @@ async function seedRecipient(admin: SupabaseClient): Promise<{ personId: string;
     id: personId,
     member_id: memberId,
     join_year: 2019,
-    given_name: "Campaign",
-    family_name: `Recipient${personId.slice(0, 4)}`,
+    given_name: givenName,
+    family_name: familyName,
     personal_email: email,
   });
   if (personError) throw new Error(`seeding person: ${personError.message}`);
@@ -131,7 +148,7 @@ async function seedRecipient(admin: SupabaseClient): Promise<{ personId: string;
   });
   if (membershipError) throw new Error(`seeding membership: ${membershipError.message}`);
 
-  return { personId, email };
+  return { personId, email, givenName, familyName };
 }
 
 async function campaignRow(admin: SupabaseClient, id: string) {
@@ -173,6 +190,12 @@ test("US-G1/G2/G4: the CRRD composes, freezes and sends; every recipient row is 
 }) => {
   const admin = adminClient();
   const recipient = await seedRecipient(admin);
+  // A second, disposable recipient — matched by the default filter (active, NCR) exactly
+  // like `recipient` — that the audience picker below finds by name and drops. Keeping it
+  // separate from `recipient` means every assertion downstream (the frozen count, the
+  // sent rows, the final "recipients-table contains recipient.email" check) still
+  // describes `recipient`, which is never excluded.
+  const excludedRecipient = await seedRecipient(admin);
   const subject = `E2E campaign ${recipient.personId.slice(0, 8)}`;
 
   await signIn(page, "crrd_admin");
@@ -187,6 +210,25 @@ test("US-G1/G2/G4: the CRRD composes, freezes and sends; every recipient row is 
     const text = await campaignScreens.audienceCount(page).textContent();
     shownCount = Number(COUNT_TEXT.exec(text ?? "")?.[1] ?? "0");
     expect(shownCount).toBeGreaterThanOrEqual(1);
+  });
+
+  await test.step("the audience picker finds a seeded recipient by family name, and unticking them narrows the count by exactly one", async () => {
+    await campaignScreens.audienceSearch(page).fill(excludedRecipient.familyName);
+    const candidate = campaignScreens.candidateCheckbox(
+      page,
+      excludedRecipient.familyName,
+      excludedRecipient.givenName,
+    );
+    await expect(candidate).toBeVisible();
+    // select_all is the default, so a matching candidate starts ticked.
+    await expect(candidate).toBeChecked();
+    await candidate.uncheck();
+
+    const reduced = shownCount - 1;
+    await expect(campaignScreens.audienceCount(page)).toHaveText(
+      new RegExp(`This will reach ${reduced} (?:person|people)\\.`),
+    );
+    shownCount = reduced;
   });
 
   await campaignScreens.saveDraft(page).click();
@@ -208,6 +250,8 @@ test("US-G1/G2/G4: the CRRD composes, freezes and sends; every recipient row is 
     const rows = await recipientRows(admin, campaignId);
     expect(rows).toHaveLength(shownCount);
     expect(rows.some((r) => r.person_id === recipient.personId)).toBe(true);
+    // Unticked in the picker above — the frozen list must not resurrect them.
+    expect(rows.some((r) => r.person_id === excludedRecipient.personId)).toBe(false);
     expect(rows.every((r) => r.status === "queued")).toBe(true);
     const row = await campaignRow(admin, campaignId);
     expect(row.status).toBe("queued");

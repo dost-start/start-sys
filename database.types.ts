@@ -1723,6 +1723,26 @@ export type Database = {
       is_user_roles_writer: { Args: never; Returns: boolean }
       isnt_empty: { Args: { "": string }; Returns: string }
       issue_recovery_codes: { Args: never; Returns: string[] }
+      list_audience_candidates: {
+        Args: {
+          p_filter?: Json
+          p_limit?: number
+          p_offset?: number
+          p_q?: string
+        }
+        Returns: {
+          committee_name: string
+          department_name: string
+          family_name: string
+          given_name: string
+          member_id: string
+          person_id: string
+          position_title: string
+          region_name: string
+          status: string
+          total_count: number
+        }[]
+      }
       list_pending_standards: {
         Args: { p_term_id?: string }
         Returns: {

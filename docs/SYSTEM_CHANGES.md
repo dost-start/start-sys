@@ -173,6 +173,28 @@ Every other failure is highlighted on the exact field. The check runs inside the
 
 ---
 
+### 10. Choosing exactly who gets an email
+
+**What it is.** The campaign screen used to show CRRD a count of how many people matched their filters. Now it shows the actual people, one tick box each, so CRRD can add or leave out specific individuals rather than trusting the filters to get everyone right.
+
+**How it works from the user's side.**
+- The filters gained four more ways to narrow the list — department, committee, university, and year level — alongside the ones already there (status, year joined, region, island group, role, affiliation).
+- Under the filters, the list of everyone the filters currently match appears, showing name, member ID, region, department, committee, and position for each person — **never their email address.**
+- A checkbox at the top, "Everyone matching the filters," is ticked by default and takes the whole matching list. Untick it to start from nobody, untick a single row to drop that one person, or tick someone who isn't in the filtered list to add them anyway.
+- A search box finds a person by name or member ID, for pulling in one or two specific people without paging through the whole list.
+- Changing the filters afterward doesn't undo anyone CRRD ticked or unticked by hand — a hand-pick sticks.
+- The number shown is exactly who the send will go to.
+- Once that number passes about 400, a note explains that Gmail's daily sending limit means the send will spill into a second day and pick back up on its own — nothing to do differently, just something to plan around for a time-sensitive send.
+
+**What CRRD must do or know.**
+- The picker never shows an email address, a phone number, or a birthday, no matter who is looking — the same rule that already keeps those out of mail-merged messages applies here.
+- The 400 mark is a heads-up, not a limit on what CRRD can send — the system already resumes automatically the next day if Gmail's daily cap is hit partway through (see the campaigns runbook).
+- Only CRRD admins and the executive admins see this screen, the same access rule as composing and sending itself.
+
+**Decided by:** Ethan, 2026-09-06, defaults accepted.
+
+---
+
 ## Still open
 
 Decided or defaulted, waiting for a final word or an action:

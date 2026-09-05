@@ -117,9 +117,11 @@ grant select (
   proof_drive_file_id, proof_mime_type, proof_size_bytes, proof_verified_at,
   noa_drive_file_id,   noa_mime_type,   noa_size_bytes,   noa_verified_at,
   consented_at, privacy_notice_version, redacted_at
-) on public.renewal_submissions to authenticated;
+) on public.renewal_submissions to anon, authenticated;
 -- `payload` and `submit_token_hash` are deliberately absent: the body is read only through
--- get_renewal_detail(), which audits; the hash is never read by a session at all.
+-- get_renewal_detail(), which audits; the hash is never read by a session at all. anon holds
+-- the same column grant and NO policy, so it reads zero rows — an RLS-empty result, never a
+-- privilege error that would tell a caller the table is there (CONVENTIONS §4.3).
 
 -- ── 4. start_renewal ───────────────────────────────────────────────────────────────
 create or replace function public.start_renewal(

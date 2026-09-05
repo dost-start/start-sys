@@ -1521,7 +1521,7 @@ export type Database = {
         }[]
       }
       purge_abandoned_renewal_drafts: {
-        Args: { p_age?: unknown }
+        Args: { p_age?: string }
         Returns: {
           noa_ref: string
           renewal_id: string
@@ -1532,10 +1532,13 @@ export type Database = {
         Args: { p_app_id: string; p_reason: string }
         Returns: undefined
       }
+      reject_renewal: {
+        Args: { p_id: string; p_note: string }
+        Returns: undefined
+      }
       runtests:
         | { Args: never; Returns: string[] }
         | { Args: { "": string }; Returns: string[] }
-      reject_renewal: { Args: { p_id: string; p_note: string }; Returns: undefined }
       search_member_directory: {
         Args: {
           p_committee_ids?: string[]

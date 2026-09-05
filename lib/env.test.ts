@@ -48,6 +48,7 @@ const VALID_SERVER = {
   GOOGLE_DRIVE_SHARED_DRIVE_ID: "drive-placeholder",
   GOOGLE_DRIVE_PROOF_FOLDER_ID: "folder-placeholder",
   SENTRY_DSN: "https://example.ingest.sentry.io/1",
+  MAIL_TRANSPORT: "fake",
 } as const;
 
 /** Which server keys the schema treats as required, derived from the schema itself. */
@@ -132,6 +133,7 @@ describe("parseServerEnv", () => {
       DOCUMENT_STORE: "supabase_storage",
       JOB_SHARED_SECRET: VALID_SERVER.JOB_SHARED_SECRET,
       RATE_LIMIT_HMAC_KEY: VALID_SERVER.RATE_LIMIT_HMAC_KEY,
+      MAIL_TRANSPORT: "fake",
     };
 
     const parsed = parseServerEnv(withoutGoogle);

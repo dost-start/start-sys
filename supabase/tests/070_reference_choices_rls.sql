@@ -56,6 +56,7 @@ select ok(
 create temp table fx_ref_counts on commit drop as
   select (select count(*)::int from public.programs)     as programs,
          (select count(*)::int from public.universities) as universities;
+grant select on fx_ref_counts to public;
 
 select pg_temp.login_anon();
 select is((select count(*)::int from public.programs), (select programs from fx_ref_counts),

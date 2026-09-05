@@ -149,7 +149,7 @@ select ('00000000-0000-4000-c900-' || lpad((t.idx * 10000 + i)::text, 12, '0')):
        t.term_id,
        (case when t.idx = 0 and i % 20 = 0 then 'renewal_pending' else 'active' end)::public.membership_status,
        r.id,
-       1 + (i % 8),
+       1 + (i % 5),
        2027 + (i % 4)
 from generate_series(1, 800) i
 cross join vol_terms t

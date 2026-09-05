@@ -44,7 +44,7 @@ begin
     return v_id;
   end if;
 
-  -- ONE statement, ONE row-level lock on ONE counter row. Never max(seq)+1, never a
+  -- ONE statement, ONE row-level lock on ONE counter row. Never a max-plus-one read, never a
   -- SEQUENCE (DATA_MODEL.md §4).
   insert into public.member_id_counters (join_year, last_seq)
   values (v_year, 1)

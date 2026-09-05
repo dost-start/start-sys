@@ -198,7 +198,7 @@ select ok(
 
 select ok(
   has_function_privilege(
-    'anon', 'public.finalize_application(uuid, text, text, text, bigint)', 'execute'),
+    'anon', 'public.finalize_application(uuid, text, text, text, bigint, text, text, bigint)', 'execute'),
   'anon may call finalize_application() — the token gate inside it is the control, and it '
   'exists so no anon UPDATE policy has to (BUILD_PLAN S3-T6)'
 );

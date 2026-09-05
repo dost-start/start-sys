@@ -1,6 +1,6 @@
 # START-SYS — What changed, and why (for the CCDO)
 
-**How to read this.** "Built" means it exists in the system right now, ready to review. "Agreed, being built next" means Ethan and the CCDO's team already decided it on 2026-09-06, but the engineering work has not started. Everything here traces back to one of three moments: the team meeting on 2026-09-05, the CCDO's "Questions Roles and Features" document from that same day, or Ethan's written answers on 2026-09-06 after relaying the CCDO's replies. Where a decision has a name attached (an "ADR"), that is a short written record of who decided it and why — ask Ethan if you want to read the full version. Nothing below has gone live for real scholars yet; this is all in development.
+**How to read this.** "Built" means it exists in the system right now, ready to review. "Still open" means a default is in place but someone still has to say yes, or do something outside the system. Everything here traces back to one of three moments: the team meeting on 2026-09-05, the CCDO's "Questions Roles and Features" document from that same day, or Ethan's written answers on 2026-09-06 after relaying the CCDO's replies. Where a decision has a name attached (an "ADR"), that is a short written record of who decided it and why — ask Ethan if you want to read the full version. Nothing below has gone live for real scholars yet; this is all in development.
 
 ---
 
@@ -36,7 +36,7 @@
 - **Two** documents instead of one: their latest registration form (Certificate of Registration) **and** their DOST Notice of Award
 - Two tick boxes: the privacy notice (as before) **and** a new one certifying that everything they entered is accurate, and that giving false information can get them banned from future START activities
 
-Home address and school ID number are **not** currently on the form — see "Agreed, being built next" below, where address is coming back.
+Home address is on the form again (section 8 below). The school ID number is no longer collected anywhere.
 
 **Member IDs changed shape.** A new member's ID is now four digits after the year, for example `2026-0001` instead of the old `2026-001`. The year in the ID is still the year the person **joins START-DOST** — not the year they received their DOST scholarship award, which is now tracked as a separate, new piece of information.
 
@@ -103,17 +103,84 @@ Home address and school ID number are **not** currently on the form — see "Agr
 
 ---
 
-## Agreed on 2026-09-06, being built next
+### 6. Bad submissions are refused on the spot (both forms)
 
-These are decided, not yet built:
+**What it is.** The application form and the renewal form now check the membership standards the CCDO listed **before** accepting a submission. A submission that fails is not stored as "pending" at all — the applicant sees exactly which fields to fix and can resubmit.
 
-- When someone submits the application form, the system will now refuse it and explain exactly what's wrong, rather than accepting a bad submission: both documents must be attached; the expected graduation year must be later than the end of the current term (so only current students apply); the program and university must be from the approved lists; the scholarship award type and year must be filled in; and the email must not belong to someone whose membership was terminated (that last case shows only a generic "this email cannot be used to apply, contact CRRD" message, not the reason).
-- The system cannot check on its own whether DOST has ended someone's scholarship — the uploaded Notice of Award, plus CRRD's own review of the queue, is the actual safeguard. When the CCDO calls an application "invalid," that means either DOST ended the scholarship or the program isn't on the eligible list.
-- After the application period closes, CRRD will be able to click one button — "Approve all" — and every still-pending application gets a member ID at once, in a single batch. CRRD can still reject any individual application before clicking that button. CRRD then sends the acceptance emails as one campaign to everyone approved. There is no rejection email — a bad submission is simply never let in, so nothing needs to be sent about it.
-- For renewals: anyone whose membership was **not** terminated can renew while the renewal period is open — there is no additional requirement that they were active last term. The renewal form will keep showing the scholar's name, birthday, email, and member ID for CRRD to compare, and approving a renewal will never overwrite those from what CRRD already has on file.
-- Home address is coming back onto the application form. The school ID number field is being removed everywhere.
-- START-SYS will become the org's system of record for officer appointments and departures. CRRD will get a screen to appoint anyone to any officer position — for example, replacing someone who goes AWOL or steps down — and to record when someone leaves a position. Creating that person's actual login, though, is expected to stay with the CTO (this is the current default and still needs a final yes from everyone).
-- On the Gmail sending account: it is a regular (not Workspace) Gmail account. Dani will create the app password herself (2-Step Verification → App passwords → name it "START-SYS") and hand it to Ethan privately — never typed into chat or committed to the codebase.
+**How it works from the user's side.** On submit, the system checks that:
+- both documents are attached (latest registration form and Notice of Award);
+- the expected graduation year is later than the end of the current term — so only current students get in;
+- the program and the university are both chosen from the approved lists;
+- the scholarship award type is one of the DOST-SEI programs and the year of award is a real year;
+- the email does not belong to someone whose membership was terminated. That case shows only "This email address cannot be used to apply. Please contact CRRD." — never the reason.
+
+Every other failure is highlighted on the exact field. The check runs inside the database itself, so it cannot be skipped by someone bypassing the web form.
+
+**What CRRD must do or know.** The system still cannot tell whether DOST has actually ended someone's scholarship — the uploaded Notice of Award and CRRD's own look at the queue remain the real safeguard for that. On the review screen, every pending row now shows a "Standards" column: "meets" or the list of what fails, so CRRD can see at a glance which rows the batch (next section) will take.
+
+**Decided by:** the CCDO's answer of 2026-09-05 ("automatic as long as it meets the standards"), Ethan's answers of 2026-09-06 (decision record ADR 0013). Built 2026-09-06.
+
+---
+
+### 7. "Approve all" — one batch after the period closes
+
+**What it is.** Instead of approving applications one by one, CRRD clicks **Approve all** once the application period is closed. Every still-pending application **and** every pending renewal that meets the standards is approved in one go and gets its member ID.
+
+**How it works from the user's side.**
+1. Close the application period on the periods screen.
+2. On the applications screen, click **Approve all**. A confirmation shows how many rows will be approved and how many will be skipped (with the reason for each skip).
+3. Confirm. The batch runs in the database as one operation; rows that fail a standard are left pending with their reasons shown, and nothing else is touched.
+4. Send the acceptance emails as one campaign to everyone approved (section 3). There is no rejection email — a bad submission was never let in, so there is nothing to send.
+
+**What CRRD must do or know.**
+- The button refuses to run while the application period is still open. That is deliberate: the batch is meant to happen once, after the deadline.
+- CRRD can still reject any individual application before running the batch; rejected rows are never picked up.
+- Running it twice is harmless — already-approved rows are skipped.
+- Only CRRD admins and the executive admins can run it. The activity log records one summary line per batch, plus the usual entry for every individual approval.
+
+**Decided by:** Ethan, 2026-09-06, on the CCDO's "one batch" answer (decision record ADR 0013). Built 2026-09-06.
+
+---
+
+### 8. Renewal rules, home address, school ID
+
+**What it is.** Three smaller changes from the same 2026-09-06 answers.
+
+- **Who can renew.** Anyone whose membership was **not** terminated can renew while the renewal period is open — there is no extra requirement that they were active last term. The same standards as section 6 apply to a renewal.
+- **What a renewal changes.** The renewal form keeps showing the scholar's name, birthday, email and member ID so CRRD can compare them, but approving a renewal **never** overwrites those from what CRRD already has on file. It updates only the things that legitimately change: contact number, home address, Facebook link, sex, scholarship award and year, university, program, year level, expected graduation year, region.
+- **Home address is back** on both forms (street, city or municipality, province, postal code). The **school ID number is gone** from every form and every screen; it is no longer collected.
+
+**Decided by:** Ethan, 2026-09-06 (decision record ADR 0013). Built 2026-09-06.
+
+---
+
+### 9. CRRD records officer appointments and departures
+
+**What it is.** START-SYS is now the org's system of record for who holds which officer position. A new **Officers** screen lists every position in the Constitution for the current term and who sits in it — and CRRD admins can record appointments and departures for **any** position, not only their own department's.
+
+**How it works from the user's side.**
+- **Appoint.** Pick the position, find the person, tick "acting" if it is a temporary designation (for example a deputy standing in for a Chief who left), and write a short note on the basis — at least ten characters, for example "Appointed by the CEO on 2026-09-10 to replace the outgoing CTO."
+- **Record a departure or change of standing.** From a sitting officer's row: on leave, return from leave, suspended, resigned, dismissed (AWOL), impeached, or ended — again with a note. The system only offers the moves the Constitution allows; for example an impeachment is final and cannot be undone.
+- The position a departed officer held simply shows as vacant until someone is appointed.
+
+**What CRRD must do or know.**
+- CRRD **records** the decision; it does not **make** it. Who decides is still whoever the Constitution says — the CEO approves leave and resignations, the Executive Board votes on impeachments, the Deputy COO issues an AWOL notice. Put that basis in the note.
+- Recording an appointment does **not** create the person's login. Creating and removing logins stays with the CTO (this is the current default and still needs a final yes from everyone — see below).
+- Removing someone from a position does not touch their membership. An officer who steps down is still a member.
+- Every change is written to the activity log with who recorded it.
+
+**Decided by:** Ethan, 2026-09-06 — "it's an HR system that will be used by CRRD … any position" (decision record ADR 0012). Built 2026-09-06.
+
+---
+
+## Still open
+
+Decided or defaulted, waiting for a final word or an action:
+
+- **Login creation stays with the CTO** even though CRRD now records appointments. Default; needs a yes from the CTO and the CCDO.
+- **"Approve all" refuses while the period is open.** Default; say if CRRD would rather be able to run it mid-period.
+- **Renewals are approved inside the same batch** as applications. Default; say if renewals should be decided separately.
+- **Gmail app password.** The sending account is a regular Gmail account. Dani creates the app password herself (2-Step Verification → App passwords → name it "START-SYS") and hands it to Ethan privately — never typed into chat or committed to the codebase. Until then the system cannot send real email.
 
 ---
 
@@ -132,9 +199,9 @@ These are decided, not yet built:
 
 | Access level | Who holds it | Can do |
 |---|---|---|
-| **Executive admin** | CEO, COO | Oversee all records; the only ones who can terminate a membership. Today also the only ones who can record who holds an officer position — changing, see "Agreed" above |
+| **Executive admin** | CEO, COO | Oversee all records; the only ones who can terminate a membership; record officer appointments and departures; run "Approve all" |
 | **Technical admin** | CTO, Deputy CTO for Product Development | Configure the system, create and manage everyone's access, open/close the application and renewal periods, run the once-a-year term rollover |
-| **CRRD admin** | CCDO, Deputy CCDO for Community, Deputy CCDO for Development | Manage members, committees and departments; open/close the application and renewal periods; review and decide applications and renewals; compose and send emails and forms; grant Regional Reps permission to send |
+| **CRRD admin** | CCDO, Deputy CCDO for Community, Deputy CCDO for Development | Manage members, committees and departments; open/close the application and renewal periods; review and decide applications and renewals, one by one or with "Approve all"; record officer appointments and departures for any position; compose and send emails and forms; grant Regional Reps permission to send |
 | **Officer** | Every other Chief and Deputy, plus the Special Advisor | View member and committee information only — cannot edit or approve anything |
 | **Regional Representative** | The Regional Representatives (under the Deputy CCDO for Community) | View and (as of this update) contact their own region's scholars only; cannot edit anything |
 | **Member** | Every scholar in the org | No login at all — submits the application and renewal forms only |

@@ -168,6 +168,13 @@ export type Database = {
             foreignKeyName: "applications_person_id_fkey"
             columns: ["person_id"]
             isOneToOne: false
+            referencedRelation: "v_email_merge_fields"
+            referencedColumns: ["person_id"]
+          },
+          {
+            foreignKeyName: "applications_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
             referencedRelation: "v_member_directory"
             referencedColumns: ["person_id"]
           },
@@ -344,6 +351,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "people"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "confidentiality_acknowledgements_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "v_email_merge_fields"
+            referencedColumns: ["person_id"]
           },
           {
             foreignKeyName: "confidentiality_acknowledgements_person_id_fkey"
@@ -567,6 +581,13 @@ export type Database = {
             foreignKeyName: "email_recipients_person_id_fkey"
             columns: ["person_id"]
             isOneToOne: false
+            referencedRelation: "v_email_merge_fields"
+            referencedColumns: ["person_id"]
+          },
+          {
+            foreignKeyName: "email_recipients_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
             referencedRelation: "v_member_directory"
             referencedColumns: ["person_id"]
           },
@@ -671,6 +692,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "people"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "memberships_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "v_email_merge_fields"
+            referencedColumns: ["person_id"]
           },
           {
             foreignKeyName: "memberships_person_id_fkey"
@@ -794,6 +822,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "people"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "officer_assignments_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "v_email_merge_fields"
+            referencedColumns: ["person_id"]
           },
           {
             foreignKeyName: "officer_assignments_person_id_fkey"
@@ -1131,6 +1166,13 @@ export type Database = {
             foreignKeyName: "renewal_submissions_person_id_fkey"
             columns: ["person_id"]
             isOneToOne: false
+            referencedRelation: "v_email_merge_fields"
+            referencedColumns: ["person_id"]
+          },
+          {
+            foreignKeyName: "renewal_submissions_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
             referencedRelation: "v_member_directory"
             referencedColumns: ["person_id"]
           },
@@ -1332,6 +1374,13 @@ export type Database = {
             foreignKeyName: "user_roles_person_id_fkey"
             columns: ["person_id"]
             isOneToOne: true
+            referencedRelation: "v_email_merge_fields"
+            referencedColumns: ["person_id"]
+          },
+          {
+            foreignKeyName: "user_roles_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: true
             referencedRelation: "v_member_directory"
             referencedColumns: ["person_id"]
           },
@@ -1410,20 +1459,6 @@ export type Database = {
           year_level: number | null
         }
         Relationships: [
-          {
-            foreignKeyName: "memberships_person_id_fkey"
-            columns: ["person_id"]
-            isOneToOne: false
-            referencedRelation: "people"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "memberships_person_id_fkey"
-            columns: ["person_id"]
-            isOneToOne: false
-            referencedRelation: "v_member_directory"
-            referencedColumns: ["person_id"]
-          },
           {
             foreignKeyName: "memberships_region_id_fkey"
             columns: ["region_id"]
@@ -1565,6 +1600,14 @@ export type Database = {
         }
         Returns: boolean
       }
+      claim_campaign_batch: {
+        Args: { p_campaign_id: string; p_limit?: number }
+        Returns: {
+          merge: Json
+          recipient_id: string
+          to_email: string
+        }[]
+      }
       col_is_null:
         | {
             Args: {
@@ -1601,14 +1644,6 @@ export type Database = {
             }
             Returns: string
           }
-      claim_campaign_batch: {
-        Args: { p_campaign_id: string; p_limit?: number }
-        Returns: {
-          merge: Json
-          recipient_id: string
-          to_email: string
-        }[]
-      }
       consume_recovery_code: { Args: { p_code: string }; Returns: boolean }
       current_term_id: { Args: never; Returns: string }
       diag:
@@ -1737,9 +1772,6 @@ export type Database = {
         Args: { p_id: string; p_note: string }
         Returns: undefined
       }
-      runtests:
-        | { Args: never; Returns: string[] }
-        | { Args: { "": string }; Returns: string[] }
       resolve_recipients: {
         Args: { p_filter?: Json }
         Returns: {
@@ -1748,6 +1780,9 @@ export type Database = {
           person_id: string
         }[]
       }
+      runtests:
+        | { Args: never; Returns: string[] }
+        | { Args: { "": string }; Returns: string[] }
       search_member_directory: {
         Args: {
           p_committee_ids?: string[]

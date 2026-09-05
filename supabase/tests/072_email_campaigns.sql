@@ -15,7 +15,7 @@
 --          queued, writes ONE CAMPAIGN_QUEUED audit row, and a SECOND call adds nothing
 --   17-19  claim_campaign_batch() leases two, a second claim leases the other two, a third
 --          leases none; finish_recipient() records outcomes and closes the campaign
---   20-22  recipients are readable by the sending tier and by nobody else; no human role
+--   20-23  recipients are readable by the sending tier and by nobody else; no human role
 --          holds INSERT or UPDATE on them; every definer pins search_path
 --
 -- CITATION:  0043; PRD §3 items 20-26, US-G2, US-G3, US-G4, US-I1; ADR 0010;
@@ -27,7 +27,7 @@ begin;
 \ir helpers/auth.psql
 \ir helpers/fixtures.psql
 
-select plan(22);
+select plan(23);
 
 -- ── 1-2 — the meta-invariants, locally ────────────────────────────────────────────
 select ok(
@@ -169,7 +169,7 @@ select is(
   'with nothing left queued the campaign closes as sent, with the counts (PRD item 25)');
 select pg_temp.logout();
 
--- ── 20-22 — who reads the report, who can write the queue ─────────────────────────
+-- ── 20-23 — who reads the report, who can write the queue ─────────────────────────
 select pg_temp.login_as('00000000-0000-4000-a000-000000000001');   -- exec_admin
 select is((select count(*)::int from public.email_recipients), 4,
   'exec_admin reads all four recipient rows — the delivery report is the sending tier''s (PRD item 25)');

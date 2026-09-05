@@ -101,18 +101,64 @@ const columns: ColumnDef<ApplicationListRow>[] = [
   },
 ];
 
+/**
+ * The "Standards" column (ADR 0013 §2) — informational only, "a second look before the
+ * batch commits". A `pending` row cannot normally fail a standard at all: the same
+ * check runs at submission on both forms, so a `✗` here means reference data or the
+ * applicant's membership standing changed AFTER they submitted, not that this screen
+ * caught something submission missed.
+ *
+ * `standardsFailures` is keyed by application id and holds ONLY the failure keys
+ * `check_submission_standards()` returns — never a name, never a payload value — so
+ * this column carries no more PII than the status badge next to it.
+ *
+ * Three distinct renders, not two: `undefined` (no entry for this id — either the
+ * lookup failed entirely, or the row is not `pending`) reads as "—", an empty array
+ * reads as "✓ meets", and a non-empty array lists the failing keys. Collapsing the
+ * first two would report "meets standards" for a row this page simply has no data on.
+ */
+function buildStandardsColumn(
+  standardsFailures: Map<string, string[]>,
+): ColumnDef<ApplicationListRow> {
+  return {
+    id: "standards",
+    header: "Standards",
+    cell: ({ row }) => {
+      if (row.original.status !== "pending") {
+        return <span className="text-sm text-muted-foreground">—</span>;
+      }
+      const failures = standardsFailures.get(row.original.id);
+      if (failures === undefined) {
+        return <span className="text-sm text-muted-foreground">—</span>;
+      }
+      if (failures.length === 0) {
+        return <span className="text-sm text-green-700 dark:text-green-400">✓ meets</span>;
+      }
+      return <span className="text-sm text-destructive">✗ {failures.join(", ")}</span>;
+    },
+  };
+}
+
 export function ApplicationsTable({
   page,
   filters,
   terms,
+  standardsFailures,
 }: {
   page: ApplicationListPage;
   filters: ApplicationListFilters;
   terms: TermOption[];
+  /** From `listPendingStandards()` (ADR 0013 §2) — application id -> failing keys. */
+  standardsFailures: Map<string, string[]>;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+
+  const tableColumns = useMemo<ColumnDef<ApplicationListRow>[]>(
+    () => [...columns, buildStandardsColumn(standardsFailures)],
+    [standardsFailures],
+  );
 
   /** Build the queue URL for a partial filter change, preserving everything else. */
   const buildHref = (patch: Partial<Record<string, string | number | undefined>>): string => {
@@ -131,7 +177,7 @@ export function ApplicationsTable({
 
   const table = useReactTable({
     data: page.rows,
-    columns,
+    columns: tableColumns,
     getCoreRowModel: getCoreRowModel(),
     manualPagination: true,
     manualSorting: true,
@@ -212,7 +258,7 @@ export function ApplicationsTable({
             {table.getRowModel().rows.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={columns.length}
+                  colSpan={tableColumns.length}
                   className="py-10 text-center text-muted-foreground"
                 >
                   {filters.status

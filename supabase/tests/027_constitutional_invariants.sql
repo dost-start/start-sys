@@ -153,7 +153,7 @@ select is(
 select bag_eq(
   $$ select code from public.officer_positions where grants_org_role = 'exec_admin' $$,
   $$ values ('CEO'), ('COO') $$,
-  'exactly CEO and COO grant exec_admin — CBL Art. III §2.1-2.2, and only they may terminate a membership (Art. VII §3.2.3) or record a separation from office (Art. VI)');
+  'exactly CEO and COO grant exec_admin — CBL Art. III §2.1-2.2, and only they may terminate a membership (Art. VII §3.2.3). Recording a separation from office (Art. VI) is no longer exec_admin-exclusive: ADR 0012 (2026-09-06, migration 0046) widens officer_assignments_insert/_update to crrd_admin as well, as a second RECORDER — the CBL decider (the CEO or the Executive Board) is unchanged. See 075_officer_assignments_crrd.sql.');
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════════

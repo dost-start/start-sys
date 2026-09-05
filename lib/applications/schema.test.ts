@@ -2,10 +2,11 @@
 // BUILD_PLAN S3-T13's acceptance, asserted.
 //
 // The load-bearing test in this file is the FIRST one. `approve_application()` reads
-// eleven `payload->>'…'` keys; those strings live in `schema.ts` and in a SQL function
-// and nowhere else. A rename on either side fails no typecheck, no lint and no pgTAP
-// suite — it fails on Day 4 by writing a `people` row full of NULLs for a real
-// scholar. This test is the only thing between those two facts.
+// fifteen `payload->>'…'` keys (0041; four of them — the home address block — restored
+// by ADR 0013, 2026-09-06); those strings live in `schema.ts` and in a SQL function and
+// nowhere else. A rename on either side fails no typecheck, no lint and no pgTAP suite
+// — it fails on Day 4 by writing a `people` row full of NULLs for a real scholar. This
+// test is the only thing between those two facts.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, expect, it } from "vitest";
@@ -32,9 +33,9 @@ import {
 } from "@/lib/applications/schema";
 
 /**
- * The eleven keys, transcribed independently from DATA_MODEL.md §6/0012 rather than
- * imported, so the assertion below compares two sources instead of comparing the
- * module to itself.
+ * The fifteen keys, transcribed independently from
+ * `supabase/migrations/0041_approve_and_record_v2.sql` rather than imported, so the
+ * assertion below compares two sources instead of comparing the module to itself.
  */
 const KEYS_APPROVE_APPLICATION_READS = [
   "birthdate",
@@ -48,6 +49,10 @@ const KEYS_APPROVE_APPLICATION_READS = [
   "award_year",
   "university_id",
   "program_id",
+  "address_line",
+  "city_municipality",
+  "province",
+  "postal_code",
 ];
 
 /** A complete, valid submission. Every rejection case below mutates exactly one field. */
@@ -61,6 +66,10 @@ const VALID = {
   birthdate: "2005-03-14",
   contact_number: "09171234567",
   facebook_account: "https://www.facebook.com/maria.delacruz",
+  address_line: "159 Fixture St.",
+  city_municipality: "Quezon City",
+  province: "Metro Manila",
+  postal_code: "1100",
   scholarship_award: "ra_7687",
   award_year: "2023",
   university_id: "33333333-3333-4333-8333-333333333333",
@@ -84,21 +93,21 @@ function firstIssuePath(input: unknown): string {
 }
 
 describe("payload keys match every key approve_application() reads", () => {
-  it("APPLICATION_PAYLOAD_KEYS is exactly the eleven keys approve_application() reads (0041)", () => {
+  it("APPLICATION_PAYLOAD_KEYS is exactly the fifteen keys approve_application() reads (0041)", () => {
     expect([...APPLICATION_PAYLOAD_KEYS].sort()).toEqual(
       [...KEYS_APPROVE_APPLICATION_READS].sort(),
     );
-    expect(APPLICATION_PAYLOAD_KEYS).toHaveLength(11);
+    expect(APPLICATION_PAYLOAD_KEYS).toHaveLength(15);
   });
 
-  it("every one of those eleven is a field the form actually collects", () => {
+  it("every one of those fifteen is a field the form actually collects", () => {
     const formFields = Object.keys(applicationSubmitSchema.shape);
     for (const key of APPLICATION_PAYLOAD_KEYS) {
       expect(formFields).toContain(key);
     }
   });
 
-  it("buildApplicationPayload emits all eleven with a non-null value", () => {
+  it("buildApplicationPayload emits all fifteen with a non-null value", () => {
     const parsed = applicationSubmitSchema.parse(VALID);
     const payload = buildApplicationPayload(parsed, "2026-09-03T01:00:00.000Z");
 
@@ -117,19 +126,29 @@ describe("payload keys match every key approve_application() reads", () => {
     expect(payload["certified_accuracy_at"]).toBe("2026-09-03T01:00:00.000Z");
   });
 
-  it("no longer carries the address block or the school ID — the SRS form has no such fields", () => {
+  it("carries the home address block again (ADR 0013), but never a school ID", () => {
+    // ADR 0013, 2026-09-06 ("Consequences"): home address returns to the form as four
+    // required keys. school_id_no is removed from every screen and was never a field
+    // this schema collects — it is not asserted absent from the payload as "gone", it
+    // simply never existed on this form to begin with.
     const parsed = applicationSubmitSchema.parse(VALID);
     const payload = buildApplicationPayload(parsed, "2026-09-03T01:00:00.000Z");
-    for (const gone of [
-      "address_line",
-      "city_municipality",
-      "province",
-      "postal_code",
-      "school",
-      "school_id_no",
-    ]) {
+    expect(payload["address_line"]).toBe("159 Fixture St.");
+    expect(payload["city_municipality"]).toBe("Quezon City");
+    expect(payload["province"]).toBe("Metro Manila");
+    expect(payload["postal_code"]).toBe("1100");
+    for (const gone of ["school", "school_id_no"]) {
       expect(Object.keys(payload)).not.toContain(gone);
     }
+  });
+
+  it("requires all four home-address fields, and validates the postal code shape", () => {
+    for (const field of ["address_line", "city_municipality", "province", "postal_code"]) {
+      expect(firstIssuePath({ ...VALID, [field]: "" })).toBe(field);
+    }
+    expect(firstIssuePath({ ...VALID, postal_code: "abcd" })).toBe("postal_code");
+    expect(firstIssuePath({ ...VALID, postal_code: "110" })).toBe("postal_code");
+    expect(applicationSubmitSchema.safeParse({ ...VALID, postal_code: "1100" }).success).toBe(true);
   });
 
   it("never duplicates the applicant's identity columns into the payload", () => {

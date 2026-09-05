@@ -1581,6 +1581,7 @@ export type Database = {
       _temptypes: { Args: { "": string }; Returns: string }
       _todo: { Args: never; Returns: string }
       allocate_member_id: { Args: { p_person_id: string }; Returns: string }
+      approve_all_pending: { Args: never; Returns: Json }
       approve_application: { Args: { p_app_id: string }; Returns: string }
       approve_renewal: { Args: { p_id: string }; Returns: string }
       assert_confidentiality_ack: { Args: never; Returns: undefined }
@@ -1599,6 +1600,10 @@ export type Database = {
           p_window: string
         }
         Returns: boolean
+      }
+      check_submission_standards: {
+        Args: { p_email: string; p_payload: Json }
+        Returns: string[]
       }
       claim_campaign_batch: {
         Args: { p_campaign_id: string; p_limit?: number }
@@ -1718,6 +1723,13 @@ export type Database = {
       is_user_roles_writer: { Args: never; Returns: boolean }
       isnt_empty: { Args: { "": string }; Returns: string }
       issue_recovery_codes: { Args: never; Returns: string[] }
+      list_pending_standards: {
+        Args: { p_term_id?: string }
+        Returns: {
+          application_id: string
+          failures: string[]
+        }[]
+      }
       list_region_member_contacts: {
         Args: { p_university_id?: string }
         Returns: {

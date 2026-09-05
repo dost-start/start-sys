@@ -79,7 +79,11 @@ export function MemberEditForm({ record }: { record: MemberRecord }) {
       province: toDefault(record.province),
       postal_code: toDefault(record.postal_code),
       school: toDefault(record.school),
-      school_id_no: toDefault(record.school_id_no),
+      // School ID number removed from this form (Ethan, 2026-09-06) — UI-only. The
+      // field stays in `MEMBER_PATCHABLE_KEYS` and `memberUpdateSchema` (it is
+      // `.optional()`; absent means "leave alone", CONVENTIONS.md §6), so not
+      // registering it here neither edits nor clears the stored value. Do not add a
+      // `school_id_no` default or input back without checking with Ethan first.
       sex: (record.sex ?? "") as MemberUpdateInput["sex"],
       facebook_account: toDefault(record.facebook_account),
       scholarship_award: (record.scholarship_award ?? "") as MemberUpdateInput["scholarship_award"],
@@ -206,11 +210,6 @@ export function MemberEditForm({ record }: { record: MemberRecord }) {
           <Label htmlFor="school">School</Label>
           <input id="school" className={inputClass} {...register("school")} />
           <FieldError message={errors.school?.message} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="school_id_no">School ID number</Label>
-          <input id="school_id_no" className={inputClass} {...register("school_id_no")} />
-          <FieldError message={errors.school_id_no?.message} />
         </div>
       </div>
 

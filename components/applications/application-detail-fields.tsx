@@ -7,9 +7,13 @@
 // row is gone falls back to the raw id rather than to nothing, so a reviewer always
 // sees what was submitted.
 //
-// Pre-0038 payloads may still carry an address block and a school ID; they are shown
-// under "Legacy fields" only when present, so the review of an old application loses
-// nothing and a new one is not cluttered with empty rows.
+// Home address returned to the form (ADR 0013, 2026-09-06) and is rendered as an
+// ordinary always-visible section below, not as a legacy field — a submission that
+// predates the return simply shows "—" for each. School ID number is removed from
+// every screen (Ethan, 2026-09-06) and is never rendered here, even for an old
+// payload that still carries one. Pre-0038 free-text `school`/`program` values are
+// shown under "Legacy fields" only when present, so the review of an old application
+// loses nothing and a new one is not cluttered with empty rows.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { ReactNode } from "react";
@@ -101,13 +105,10 @@ export function ApplicationDetailFields({
   const regionId = text(payload, "region_id");
   const regionName = lookup(lookups.regions, regionId);
 
+  // school_id_no is intentionally never read here — removed from every screen
+  // (Ethan, 2026-09-06) — even though a pre-existing payload may still carry one.
   const legacy: Array<[string, string | null]> = [
-    ["Street address", text(payload, "address_line")],
-    ["City / municipality", text(payload, "city_municipality")],
-    ["Province", text(payload, "province")],
-    ["Postal code", text(payload, "postal_code")],
     ["School (free text)", text(payload, "school")],
-    ["School ID number", text(payload, "school_id_no")],
     ["Program (free text)", text(payload, "program")],
   ].filter((entry): entry is [string, string] => entry[1] !== null);
 
@@ -127,6 +128,13 @@ export function ApplicationDetailFields({
         <Field label="Email address" value={email} />
         <Field label="Contact number" value={text(payload, "contact_number")} />
         <Field label="Facebook account" value={text(payload, "facebook_account")} />
+      </Section>
+
+      <Section title="Home address">
+        <Field label="Street address" value={text(payload, "address_line")} />
+        <Field label="City / municipality" value={text(payload, "city_municipality")} />
+        <Field label="Province" value={text(payload, "province")} />
+        <Field label="Postal code" value={text(payload, "postal_code")} />
       </Section>
 
       <Section title="Scholarship and academic information">

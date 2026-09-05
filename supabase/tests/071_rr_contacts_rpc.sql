@@ -30,7 +30,7 @@ begin;
 \ir helpers/auth.psql
 \ir helpers/fixtures.psql
 
-select plan(16);
+select plan(17);
 
 -- ── setup: rep_a can sign; P4 (NCR) studies at UP Diliman ─────────────────────────
 update public.user_roles

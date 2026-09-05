@@ -106,9 +106,15 @@ async function seedRecipient(admin: SupabaseClient): Promise<{ personId: string;
 
   const termId = await currentTermId(admin);
 
+  // A member ID the grid can count (other specs collect rows by member ID). Join year 2019
+  // and a 9xxx suffix: no real approval ever allocates in 2019 (join year = the current
+  // term's start year), so this literal can never collide with the allocator's sequence —
+  // the same rule e2e/fixtures/dashboard-seed.ts follows.
+  const memberId = `2019-9${personId.replace(/\D/g, "").slice(0, 3).padStart(3, "0")}`;
   const { error: personError } = await admin.from("people").insert({
     id: personId,
-    join_year: 2025,
+    member_id: memberId,
+    join_year: 2019,
     given_name: "Campaign",
     family_name: `Recipient${personId.slice(0, 4)}`,
     personal_email: email,
@@ -282,10 +288,13 @@ test("US-G3: an unknown merge token is named in the preview and blocks saving", 
 // (d) — sending is not an officer's, at the nav AND at the data layer
 // ═══════════════════════════════════════════════════════════════════════════════
 
-test("SRS: an officer is bounced off /campaigns and resolve_recipients() refuses them with 42501", async ({
+test("SRS: a non-sending tier is bounced off /campaigns and resolve_recipients() refuses an officer with 42501", async ({
   page,
 }) => {
-  await signIn(page, "officer");
+  // tech_admin: enrolled (so the real login completes) and not a sender. The officer
+  // fixture is deliberately unenrolled (US-A3) and parks on the MFA enrolment screen, so
+  // it cannot drive the browser half; it still proves the data-layer half below.
+  await signIn(page, "tech_admin");
   await page.goto("/campaigns");
   await expect(page).not.toHaveURL(/\/campaigns/);
   await expect(page.getByTestId("campaigns-table")).toHaveCount(0);

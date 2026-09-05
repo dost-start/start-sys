@@ -200,22 +200,28 @@ select pg_temp.login_anon();
 do $$ begin
   perform public.start_renewal('2022-002', 'ethan.baltazar@fixture.start-sys.test',
     (select body from fx_payload), (select digest from fx_tok), now() + interval '1 hour');
-  perform public.finalize_renewal(
-    (select id from public.renewal_submissions where person_id = '00000000-0000-4000-b000-000000000002'),
+end $$;
+select pg_temp.logout();
+-- The id is captured OUTSIDE the anon session: anon has no policy on renewal_submissions,
+-- so a subselect run as anon is NULL and finalize_renewal() returns silently (by design).
+create temp table fx_renewal2 on commit drop as
+  select id from public.renewal_submissions
+   where person_id = '00000000-0000-4000-b000-000000000002' and term_id = pg_temp.fx_active_term();
+grant select on fx_renewal2 to public;
+select pg_temp.login_anon();
+do $$ begin
+  perform public.finalize_renewal((select id from fx_renewal2),
     (select plain from fx_tok), 'renewals/cor2.pdf', 'image/jpeg', 100, 'renewals/noa2.pdf', 'image/png', 200);
 end $$;
 select pg_temp.logout();
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000001');   -- exec_admin
 select throws_ok(
-  $$ select public.reject_renewal(
-       (select id from public.renewal_submissions where person_id = '00000000-0000-4000-b000-000000000002'),
-       'too short') $$,
+  $$ select public.reject_renewal((select id from fx_renewal2), 'too short') $$,
   '23514'::char(5), null::text,
   'a rejection needs a written ground of at least 10 characters (US-C2''s shape)');
 do $$ begin
-  perform public.reject_renewal(
-    (select id from public.renewal_submissions where person_id = '00000000-0000-4000-b000-000000000002'),
+  perform public.reject_renewal((select id from fx_renewal2),
     'The registration form is for last semester; please upload the current one.');
 end $$;
 select pg_temp.logout();

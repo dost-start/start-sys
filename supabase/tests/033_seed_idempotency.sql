@@ -67,7 +67,7 @@ select is((select count(*)::int from public.officer_positions), 23,
   'BEFORE: 23 officer positions — CBL Art. III §2 (9), §3 (12), §4.6 (1), §5 (1)');
 
 select is((select count(*)::int from public.officer_positions where is_administrator), 7,
-  'BEFORE: exactly 4 administrators — CEO, COO, CTO, CCDO and nobody else');
+  'BEFORE: exactly 7 administrators — CEO, COO, CTO, DCTO-PD, CCDO, DCCDO-C, DCCDO-D (SRS 2026-09-05, 0036) and nobody else');
 
 select is((select count(*)::int from public.terms), 1,
   'BEFORE: exactly 1 term exists — the bootstrap term, and no fixture term (this file loads no fixtures)');
@@ -101,6 +101,19 @@ select is((select count(*)::int from public.sensitive_column_registry), 18,
 
 \ir helpers/seed-rerun.psql
 
+-- 0036 AMENDED the seed's role grants (CRRD SRS, 2026-09-05): DCTO_PD -> tech_admin,
+-- DCCDO_C / DCCDO_D -> crrd_admin, all three administrators. 0016's ON CONFLICT DO UPDATE
+-- is what lets an amendment land as a re-seed — and it is also why re-running 0016 ALONE
+-- would regress those three rows to the 2026-09-01 values. A real re-seed is 0016 followed
+-- by its amendments, so that is what this file runs: the same three statements as 0036,
+-- verbatim. If a later amendment changes officer_positions again, it belongs here too.
+update public.officer_positions
+   set grants_org_role = 'tech_admin', is_administrator = true
+ where code = 'DCTO_PD';
+update public.officer_positions
+   set grants_org_role = 'crrd_admin', is_administrator = true
+ where code in ('DCCDO_C', 'DCCDO_D');
+
 
 -- ═══════════════════════════════════════════════════════════════════════════════════
 -- 9-18 — AFTER: every count and set unchanged
@@ -113,7 +126,7 @@ select is((select count(*)::int from public.officer_positions), 23,
   'AFTER: still 23 officer positions — ON CONFLICT DO UPDATE re-applied the same values without adding rows');
 
 select is((select count(*)::int from public.officer_positions where is_administrator), 7,
-  'AFTER: still exactly 4 administrators — a re-run cannot create a fifth (and the admin_is_c_suite CHECK would refuse one anyway)');
+  'AFTER: still exactly 7 administrators — a re-run cannot create an eighth (and the admin_is_srs_administrator CHECK would refuse one anyway)');
 
 select is((select count(*)::int from public.terms), 1,
   'AFTER: still exactly 1 term — block 4''s `INSERT ... WHERE NOT EXISTS` is a clean no-op once any term exists');

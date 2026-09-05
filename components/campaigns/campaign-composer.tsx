@@ -18,12 +18,19 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 
+import { AudiencePicker } from "@/components/campaigns/audience-picker";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { createCampaign, previewAudienceAction } from "@/lib/campaigns/actions";
 import { markdownToHtml } from "@/lib/campaigns/markdown";
 import { MERGE_FIELDS, mergeHtml, mergeText, type MergePayload } from "@/lib/campaigns/merge";
-import { AUDIENCE_STATUSES, ISLAND_GROUPS, type AudienceFilter } from "@/lib/campaigns/schema";
+import {
+  AUDIENCE_STATUSES,
+  DAILY_SEND_WARNING_THRESHOLD,
+  ISLAND_GROUPS,
+  YEAR_LEVELS,
+  type AudienceFilter,
+} from "@/lib/campaigns/schema";
 import {
   TEMPLATE_KEYS,
   TEMPLATES,
@@ -71,6 +78,13 @@ const EMPTY_AUDIENCE: AudienceFilter = {
   statuses: ["active"],
   affiliation_ids: [],
   role_codes: [],
+  department_ids: [],
+  committee_ids: [],
+  university_ids: [],
+  year_levels: [],
+  select_all: true,
+  person_ids: [],
+  excluded_person_ids: [],
 };
 
 function isAudienceStatus(value: string): value is AudienceStatus {
@@ -270,6 +284,17 @@ export function CampaignComposer({ options, origin }: CampaignComposerProps) {
             scholars with an email on file for the current term are counted.
           </p>
 
+          {preview !== null && preview.count > DAILY_SEND_WARNING_THRESHOLD ? (
+            <p
+              role="status"
+              data-testid="daily-limit-warning"
+              className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+            >
+              Gmail sends about 500 messages a day. A list this size takes more than one day; the
+              send pauses and resumes on its own.
+            </p>
+          ) : null}
+
           <CheckboxGroup
             legend="Membership status"
             items={AUDIENCE_STATUSES.map((status) => ({
@@ -380,6 +405,72 @@ export function CampaignComposer({ options, origin }: CampaignComposerProps) {
             </p>
           )}
 
+          {options.departments.length > 0 ? (
+            <CheckboxGroup
+              legend="Department"
+              items={options.departments.map((department) => ({
+                value: department.id,
+                label: department.name,
+              }))}
+              selected={audience.department_ids}
+              onToggle={(value, on) =>
+                setAudience((current) => ({
+                  ...current,
+                  department_ids: toggled(current.department_ids, value, on),
+                }))
+              }
+            />
+          ) : null}
+
+          {options.committees.length > 0 ? (
+            <CheckboxGroup
+              legend="Committee"
+              items={options.committees.map((committee) => ({
+                value: committee.id,
+                label: committee.name,
+              }))}
+              selected={audience.committee_ids}
+              onToggle={(value, on) =>
+                setAudience((current) => ({
+                  ...current,
+                  committee_ids: toggled(current.committee_ids, value, on),
+                }))
+              }
+            />
+          ) : null}
+
+          {options.universities.length > 0 ? (
+            <CheckboxGroup
+              legend="University"
+              items={options.universities.map((university) => ({
+                value: university.id,
+                label: university.name,
+              }))}
+              selected={audience.university_ids}
+              onToggle={(value, on) =>
+                setAudience((current) => ({
+                  ...current,
+                  university_ids: toggled(current.university_ids, value, on),
+                }))
+              }
+            />
+          ) : null}
+
+          <CheckboxGroup
+            legend="Year level"
+            items={YEAR_LEVELS.map((level): { value: number; label: string } => ({
+              value: level,
+              label: String(level),
+            }))}
+            selected={audience.year_levels}
+            onToggle={(value, on) =>
+              setAudience((current) => ({
+                ...current,
+                year_levels: toggled(current.year_levels, value, on),
+              }))
+            }
+          />
+
           <FieldErrors messages={audienceErrors} />
 
           {preview !== null && preview.sample.length > 0 ? (
@@ -392,6 +483,15 @@ export function CampaignComposer({ options, origin }: CampaignComposerProps) {
               </ul>
             </div>
           ) : null}
+
+          <div className="space-y-2 border-t pt-4">
+            <h3 className="text-sm font-semibold">Pick people individually</h3>
+            <p className="text-muted-foreground text-xs">
+              Search finds anyone the filters above match. Untick someone to drop them from the
+              send; tick someone to add them even if a filter above would otherwise exclude them.
+            </p>
+            <AudiencePicker audience={audience} onChange={setAudience} />
+          </div>
         </section>
 
         <div className="flex flex-wrap items-center gap-3">

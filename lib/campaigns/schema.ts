@@ -23,8 +23,24 @@ export const AUDIENCE_STATUSES = [
 
 const uuidList = z.array(z.uuid()).max(50).default([]);
 const codeList = z.array(z.string().trim().min(1).max(40)).max(50).default([]);
+/** Hand-picked people. 1,000 is far above the org (~600 members + 70 officers). */
+const personList = z.array(z.uuid()).max(1000).default([]);
 
-/** The five PRD US-G2 axes. Every array is "any of"; empty means "no filter on this axis". */
+export const YEAR_LEVELS = [1, 2, 3, 4, 5] as const;
+
+/**
+ * The audience of a campaign, stored verbatim as `email_campaigns.audience_filter` and
+ * read by `resolve_recipients()` / `list_audience_candidates()` under exactly these keys
+ * (0043, 0047). Two halves:
+ *
+ *   FILTER AXES — every array is "any of"; empty means "no filter on this axis". The five
+ *   PRD US-G2 axes plus department, committee, university and year level (2026-09-06).
+ *
+ *   SELECTION — `select_all` true (the default, and what every pre-0047 campaign means)
+ *   takes everyone the axes match; false takes nobody from the axes. `person_ids` are
+ *   ALWAYS added (a hand-pick survives a filter change); `excluded_person_ids` are ALWAYS
+ *   removed. So: recipients = (select_all ? matches : ∅) ∪ person_ids − excluded_person_ids.
+ */
 export const audienceFilterSchema = z
   .object({
     join_years: z.array(z.coerce.number().int().min(2000).max(2100)).max(30).default([]),
@@ -33,10 +49,33 @@ export const audienceFilterSchema = z
     statuses: z.array(z.enum(AUDIENCE_STATUSES)).max(6).default(["active"]),
     affiliation_ids: uuidList,
     role_codes: codeList,
+    department_ids: uuidList,
+    committee_ids: uuidList,
+    university_ids: uuidList,
+    year_levels: z.array(z.coerce.number().int().min(1).max(5)).max(5).default([]),
+    select_all: z.boolean().default(true),
+    person_ids: personList,
+    excluded_person_ids: personList,
   })
   .strict();
 
 export type AudienceFilter = z.infer<typeof audienceFilterSchema>;
+
+/** One page of the composer's people picker. */
+export const AUDIENCE_PAGE_SIZE = 50;
+
+export const audienceCandidatesQuerySchema = z
+  .object({
+    audience: audienceFilterSchema,
+    q: z.string().trim().max(80).default(""),
+    page: z.coerce.number().int().min(1).max(200).default(1),
+  })
+  .strict();
+
+export type AudienceCandidatesQuery = z.infer<typeof audienceCandidatesQuerySchema>;
+
+/** Gmail sends roughly 500 messages a day (ADR 0010); the composer warns from here on. */
+export const DAILY_SEND_WARNING_THRESHOLD = 400;
 
 export const campaignComposeSchema = z
   .object({

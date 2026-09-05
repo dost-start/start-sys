@@ -81,12 +81,12 @@ outside `lib/documents/` has started reading that column's contents, and that is
 
 1. `/campaigns` → **New campaign**. Pick a template (the three form sends carry the link to this site's public form) or Freeform.
 2. Edit the subject and message. Formatting is Telegram-style (`**bold**`, `_italic_`, `[label](https://…)`, `- ` lists). Merge fields are `{{given_name}}`, `{{family_name}}`, `{{member_id}}`, `{{join_year}}`, `{{region_name}}`, `{{island_group}}`, `{{term_label}}`, `{{year_level}}`, `{{committee_name}}`, `{{department_name}}` — nothing else can be merged, and an unknown token blocks saving.
-3. Choose the audience: status, year of membership, island group, region, role, affiliation. The count shown is the count the send uses — same database function. Only scholars with an email on file in the current term are counted.
+3. Choose the audience: status, year of membership, island group, region, role, affiliation, department, committee, university, year level. The people the filters match appear below as a tick list — name, member ID, region, department, committee, position, **never an email address** — so you can untick anyone the filters over-caught, or search by name or member ID to tick in someone the filters missed. The count shown is the count the send uses — same database function — and past **~400 people** a note explains that Gmail's daily limit means the send will run into a second day and resume on its own (see below).
 4. **Save draft** → the campaign page. **Freeze the recipient list** writes one row per recipient; nothing is sent yet.
 5. **Send now.** Leave the page open; it sends 25 at a time and shows progress. Closing the page mid-way is safe: **Send** again later resumes and never re-sends anyone (each recipient row is marked in the database).
 6. The delivery report at the bottom lists every recipient as sent or failed with the reason.
 
-**If it stops with "sending limit reached":** the Gmail account's daily cap (~500 messages on a consumer account) was hit. The remainder stays queued; come back the next day and click **Send** again. A 600-person blast therefore takes two days on Gmail — plan acceptance emails accordingly, or move to Workspace/Resend (env flip, ADR 0010).
+**If it stops with "sending limit reached":** the Gmail account's daily cap (~500 messages on a consumer account) was hit. The remainder stays queued; come back the next day and click **Resume sending** (the same button, now relabelled, on the same campaign page) and it picks up where it left off without re-sending anyone. A 600-person blast therefore takes two days on Gmail — plan acceptance emails accordingly, or move to Workspace/Resend (env flip, ADR 0010).
 
 **What "Sent" means:** the mail server accepted the message. Gmail SMTP has no bounce reporting; a bounced address shows up as a bounce email in the sending inbox, not in the report.
 

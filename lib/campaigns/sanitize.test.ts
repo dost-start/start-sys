@@ -177,6 +177,11 @@ describe("merge tokens in attributes are refused, not escaped", () => {
     ).toThrow(HtmlBodyError);
   });
 
+  it("refuses a token inside an UNQUOTED attribute (valid HTML5, easy to miss)", () => {
+    expect(() => assertNoTokensInAttributes("<a href={{given_name}}>x</a>")).toThrow(HtmlBodyError);
+    expect(() => sanitizeCampaignHtml("<img src={{member_id}} alt=x />")).toThrow(/attribute/i);
+  });
+
   it("allows a token in visible text", () => {
     expect(() => assertNoTokensInAttributes("<p>Hi {{given_name}}</p>")).not.toThrow();
   });

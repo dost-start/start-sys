@@ -120,9 +120,15 @@ select is(
 -- execute their object instead of ours. That is a privilege-escalation primitive, not a
 -- style rule (CONVENTIONS.md §3.4, "no exceptions").
 --
--- proconfig is matched with LIKE 'search_path=%' rather than compared to a literal, because
--- Postgres normalises `SET search_path = ''` differently across versions.
-
+-- proconfig stores each GUC as `name=value`; Postgres normalises `SET search_path = ''`
+-- differently across versions (`search_path=`, possibly `search_path=""`). So the match is
+-- in two parts, NOT a single `LIKE 'search_path=%'`: the entry must start with
+-- `search_path=` (finds the setting at all) AND the part after the `=`, with surrounding
+-- quotes stripped, must be EMPTY. A bare `LIKE 'search_path=%'` — the predicate this file
+-- used before — passes ANY value, including `search_path=public`, which is the exact
+-- privilege-escalation misconfiguration this assertion exists to catch (found 2026-09-08,
+-- QA review of `main`: the self-test below only ever exercised total absence of the
+-- setting, never a wrong non-empty value, so the loophole had no failing test either).
 select is(
   (
     select coalesce(string_agg(p.proname::text, ', ' order by p.proname), '')
@@ -133,11 +139,13 @@ select is(
       and not exists (
         select 1 from unnest(coalesce(p.proconfig, '{}'::text[])) cfg
         where cfg like 'search_path=%'
+          and btrim(substring(cfg from 13), '"') = ''
       )
   ),
   '',
-  '(c) every SECURITY DEFINER function in public sets search_path — an unpinned one is a '
-  'privilege-escalation primitive, not a style violation (offenders appear as the have-value)'
+  '(c) every SECURITY DEFINER function in public sets search_path TO EMPTY — a missing OR a '
+  'non-empty search_path is a privilege-escalation primitive, not a style violation '
+  '(offenders appear as the have-value)'
 );
 
 -- 5 — non-vacuity: there ARE definer functions to check. If a refactor ever removed them
@@ -153,13 +161,22 @@ select cmp_ok(
   'checking something'
 );
 
--- ── SELF-TEST for (c) ──────────────────────────────────────────────────────────────
--- Create a function that breaks the rule, confirm the predicate names it, drop it. Without
--- this, weakening assertion 4 — say, dropping the `not exists` clause — leaves it green
--- forever, because every real function in the schema is compliant.
+-- ── SELF-TEST for (c) — TWO cases, not one ─────────────────────────────────────────
+-- Case A: no search_path setting at all. Case B: a NON-EMPTY search_path — `set
+-- search_path = 'public'` is exactly the plausible typo the surrounding comment names as
+-- a privilege-escalation primitive, and it is the case a bare `LIKE 'search_path=%'`
+-- predicate silently passed (found 2026-09-08). Without case B here, weakening assertion 4
+-- back to a single-part LIKE match would leave this file green forever, because no
+-- function anywhere in the schema exercises that exact gap.
 create function public._selftest_definer_without_search_path() returns integer
 language sql
 security definer
+as $$ select 1 $$;
+
+create function public._selftest_definer_with_nonempty_search_path() returns integer
+language sql
+security definer
+set search_path = 'public'
 as $$ select 1 $$;
 
 select is(
@@ -169,17 +186,21 @@ select is(
     join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public'
       and p.prosecdef
+      and p.proname like '\_selftest\_definer\_%'
       and not exists (
         select 1 from unnest(coalesce(p.proconfig, '{}'::text[])) cfg
         where cfg like 'search_path=%'
+          and btrim(substring(cfg from 13), '"') = ''
       )
   ),
-  '_selftest_definer_without_search_path',
-  'SELF-TEST: the (c) predicate DOES flag a SECURITY DEFINER function with no search_path — '
-  'so assertion 4''s green means "none exist", not "the predicate is broken"'
+  '_selftest_definer_with_nonempty_search_path, _selftest_definer_without_search_path',
+  'SELF-TEST: the (c) predicate flags BOTH a missing search_path AND a non-empty one '
+  '(e.g. ''public'') — so assertion 4''s green means "neither exists", not just "one of '
+  'them doesn''t"'
 );
 
 drop function public._selftest_definer_without_search_path();
+drop function public._selftest_definer_with_nonempty_search_path();
 
 -- 7 — and the schema is clean again, so nothing leaks into the assertions below.
 select is(

@@ -145,15 +145,41 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   let orphansDeleted = 0;
-  const { data: known, error: knownError } = await admin
-    .from("applications")
-    .select("proof_drive_file_id")
-    .not("proof_drive_file_id", "is", null);
+  // Every column that can hold a live document ref. `applications.noa_drive_file_id`
+  // (0040) and the whole of `renewal_submissions` (0044) were both added after this
+  // reconciliation query was first written, and neither was ever added here — so every
+  // Notice-of-Award file, and every renewal's proof/NOA file, was invisible to
+  // `knownRefs` and got deleted as a false "orphan" on the very next nightly run, live
+  // and approved records included (found 2026-09-08, QA review of `main`). If ANY of the
+  // four reads below fails, `known` is left `null` for that source and the whole pass is
+  // skipped — a partial known-set is more dangerous than skipping a night, because it
+  // would delete real, referenced files.
+  const [appRefs, appNoaRefs, renewalRefs, renewalNoaRefs] = await Promise.all([
+    admin.from("applications").select("proof_drive_file_id").not("proof_drive_file_id", "is", null),
+    admin.from("applications").select("noa_drive_file_id").not("noa_drive_file_id", "is", null),
+    admin
+      .from("renewal_submissions")
+      .select("proof_drive_file_id")
+      .not("proof_drive_file_id", "is", null),
+    admin
+      .from("renewal_submissions")
+      .select("noa_drive_file_id")
+      .not("noa_drive_file_id", "is", null),
+  ]);
 
-  if (!knownError && known) {
-    const knownRefs = known
-      .map((row: { proof_drive_file_id: string | null }) => row.proof_drive_file_id)
-      .filter((ref): ref is string => ref !== null);
+  const knownSources = [
+    { rows: appRefs.data, error: appRefs.error, col: "proof_drive_file_id" as const },
+    { rows: appNoaRefs.data, error: appNoaRefs.error, col: "noa_drive_file_id" as const },
+    { rows: renewalRefs.data, error: renewalRefs.error, col: "proof_drive_file_id" as const },
+    { rows: renewalNoaRefs.data, error: renewalNoaRefs.error, col: "noa_drive_file_id" as const },
+  ];
+
+  if (knownSources.every((s) => !s.error && s.rows)) {
+    const knownRefs = knownSources.flatMap((s) =>
+      (s.rows as Array<Record<string, string | null>>)
+        .map((row) => row[s.col])
+        .filter((ref): ref is string => ref !== null),
+    );
 
     try {
       for (const ref of await store.listOrphans(knownRefs)) {

@@ -23,22 +23,29 @@
 
 import { randomBytes, randomUUID } from "node:crypto";
 
-// ── The one sanctioned service-role import outside lib/server/ ───────────────────────
-// This is a DOCUMENT STORE BACKEND — a job/server-only surface, never request-scoped
-// authorization. Storage admin operations (minting a signed upload URL, reading provider
-// metadata, deleting an object whose bytes contradicted its declared type) act as the
-// SYSTEM, not as a person, and there is no caller whose JWT could carry them: the applicant
-// uploading a Certificate of Registration is anonymous by design.
+// ── Service-role client, narrowed to the three operations that genuinely need it ─────
+// Found 2026-09-08, QA review of `main`: this whole driver used to import the
+// service-role client for EVERY method, including `createUploadSession` — but migration
+// 0021 already grants `anon, authenticated` INSERT on `storage.objects` for this bucket
+// (the direct-PUT path needs exactly that), so minting a signed upload URL never
+// required elevated privilege in the first place. `createUploadSession` now uses the
+// ordinary request-scoped client below and is authorized by that same RLS policy, same
+// as every other write in the system.
 //
-// **This client never makes an authorization decision.** Authorization for reading a
-// document is unchanged and lives where it always has: `GET /api/applications/[id]/proof`
-// does an ordinary RLS-checked SELECT with the caller's own JWT first, and only then calls
-// `streamDocument` here. Same sanctioned exception as `app/api/jobs/**`
-// (lib/server/admin-client.ts, permitted caller 2). If you are reading this because you
-// want a service-role client somewhere else: the answer is almost certainly no — read
-// ARCHITECTURE.md § "If your query returns nothing, read this first."
+// What's LEFT on the service-role client is `verifyUpload`'s post-upload integrity read
+// (list + a ranged signed-URL fetch) and `deleteDocument` — 0021 deliberately grants NO
+// anon/authenticated SELECT or DELETE on this bucket (its own comment: "no role can read
+// the bucket directly; the audited proof proxy is unaffected because it runs as the
+// service role"). These act as the SYSTEM verifying and cleaning up what it just
+// received, not as a person reading a row, and there is no caller JWT that could carry
+// them anyway — the applicant is anonymous by design. This is `lib/server/admin-client.ts`
+// permitted-caller list's actual fourth entry (see that file's header) — authorization
+// for VIEWING a document is unchanged and still runs through the RLS-checked
+// application/renewal row lookup in the proof proxy before `streamDocument` is ever
+// called.
 // eslint-disable-next-line no-restricted-imports
 import { createAdminClient } from "@/lib/server/admin-client";
+import { createServerSupabase } from "@/lib/supabase/server";
 
 import { resolveVerifiedMime, sniffMime } from "./sniff-mime";
 import {
@@ -96,7 +103,14 @@ export const supabaseStorageDocumentStore: DocumentStore = {
     // double-extension vector, and is routinely a scholar's own name.
     const storageRef = `${applicationId}/${randomBytes(8).toString("hex")}.${extensionForMime(mime)}`;
 
-    const { data, error } = await storage().createSignedUploadUrl(storageRef);
+    // The request-scoped client, not the admin one: 0021's `proof_of_enrollment_insert`
+    // policy grants `anon, authenticated` INSERT on `storage.objects` for exactly this,
+    // so minting a signed upload URL is authorized the ordinary way, same as every other
+    // write in the system.
+    const supabase = await createServerSupabase();
+    const { data, error } = await supabase.storage
+      .from(PROOF_BUCKET)
+      .createSignedUploadUrl(storageRef);
     if (error !== null || data === null) {
       throw new DocumentUnavailableError(
         "Supabase Storage document store: could not mint an upload URL",

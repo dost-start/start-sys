@@ -21,7 +21,22 @@
 
 import { randomUUID } from "node:crypto";
 
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+// `supabase-storage-store.ts`'s `createUploadSession` now uses the ordinary
+// request-scoped client (createServerSupabase → next/headers cookies()) instead of the
+// admin one, since migration 0021 already grants anon/authenticated INSERT for exactly
+// this (found + fixed 2026-09-08, QA review of `main`). Outside a real Next.js request
+// — which is what running this file by hand against a live project is — `cookies()`
+// throws unless mocked. An empty jar is the correct fixture: `createUploadSession` is
+// the anonymous-applicant path, so an anon-role client with no session is exactly what
+// production sees too.
+vi.mock("next/headers", () => ({
+  cookies: async () => ({
+    getAll: () => [],
+    set: () => undefined,
+  }),
+}));
 
 import { fakeDocumentStore, fakeStorePut, fakeStoreReset } from "./fake-store";
 import {

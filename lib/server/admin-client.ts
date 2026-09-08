@@ -18,6 +18,18 @@
 //      request-handling code, and act as the system rather than as a person.
 //   3. Test and e2e fixture seeding (`e2e/fixtures/**`, `lib/**/test-support.ts`) —
 //      setup, never anything that ships to a user.
+//   4. The Supabase Storage document-store driver's post-upload integrity check and
+//      cleanup (`lib/documents/supabase-storage-store.ts` — `verifyUpload`'s list/
+//      ranged-fetch and `deleteDocument`). Migration 0021 deliberately grants NO
+//      anon/authenticated SELECT or DELETE on the proof-of-enrollment bucket, so these
+//      two operations act as the SYSTEM verifying and discarding what it just received,
+//      not as a person reading a row — and there is no caller JWT that could carry them
+//      anyway, since the applicant is anonymous by design (added 2026-09-08; that
+//      driver's OWN upload-URL minting does NOT need this client — 0021 already grants
+//      anon/authenticated INSERT for that, so it uses the ordinary request-scoped
+//      client instead). Authorization for VIEWING a document is unchanged: the proof
+//      proxy does an RLS-checked SELECT with the caller's JWT before ever calling
+//      `streamDocument`, which is the same reasoning as caller 2's job endpoints.
 //
 // An ESLint `no-restricted-imports` rule fails the build if anything outside
 // `lib/server/**` imports this module. If you are about to edit that rule to make a

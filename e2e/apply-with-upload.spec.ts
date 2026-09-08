@@ -261,9 +261,17 @@ const pendingOnly = (rows: ApplicationRow[]) => rows.filter((r) => r.status === 
 // "First name", "Last name", "Date of birth", "Street address", "School ID number",
 // "Degree program", "Year level", "Expected year of graduation", "Region". If a label
 // changes, it changes in one place here.
+//
+// THE FORM IS FOUR STEPS (brand restyle, 2026-09-08): Personal → Scholarship & school →
+// Documents → Review & submit, over ONE <form>. Each step renders only its own fields, so
+// the helpers below fill a step, click Next, and assert the stepper actually advanced.
+// The stepper's own buttons ("4 Review & submit") sit OUTSIDE the <form>, which is why the
+// Next and Submit locators are scoped to it — an unscoped /submit/ would match the stepper.
 
 const applyScreens = {
   form: (page: Page) => page.locator("form").first(),
+  /** The four-step progress bar above the form (components/ui/stepper.tsx). */
+  stepper: (page: Page) => page.getByRole("list", { name: /form steps/i }),
 
   givenName: (page: Page) => page.getByLabel(/first name|given name/i),
   middleName: (page: Page) => page.getByLabel(/middle name/i),
@@ -292,9 +300,18 @@ const applyScreens = {
   /** The second document — the Notice of Award (SRS 2026-09-05, 0040). */
   noaInput: (page: Page) => page.locator('input[type="file"]').nth(1),
 
-  /** Advance a multi-section form. Absent when all sections render on one page. */
-  next: (page: Page) => page.getByRole("button", { name: /next|continue/i }),
-  submit: (page: Page) => page.getByRole("button", { name: /submit|send application|apply/i }),
+  /** Advance to the next step. Scoped to the form — see the note above `applyScreens`. */
+  next: (page: Page) =>
+    page
+      .locator("form")
+      .first()
+      .getByRole("button", { name: /next|continue/i }),
+  /** The final step's submit button. Scoped to the form for the same reason. */
+  submit: (page: Page) =>
+    page
+      .locator("form")
+      .first()
+      .getByRole("button", { name: /submit|send application|apply/i }),
 
   /** US-B3: the success + pending screen, rendered IN PLACE — no /apply/{id}. */
   success: (page: Page) => page.getByText(/pending|received|thank you|submitted/i).first(),
@@ -346,6 +363,36 @@ async function selectFirstRealOption(locator: Locator): Promise<boolean> {
   return true;
 }
 
+/** 1-based index of the step the stepper marks `aria-current="step"`; 0 if none. */
+async function currentStep(page: Page): Promise<number> {
+  const items = applyScreens.stepper(page).locator("li");
+  const count = await items.count();
+  for (let i = 0; i < count; i += 1) {
+    if ((await items.nth(i).locator('[aria-current="step"]').count()) > 0) return i + 1;
+  }
+  return 0;
+}
+
+/**
+ * Click Next and wait until the stepper shows the following step. Next runs the step's
+ * own validation first, so a step that did not advance means a field it owns is invalid —
+ * surface that as the failure rather than letting the next fill silently find no inputs.
+ */
+async function nextStep(page: Page): Promise<void> {
+  const before = await currentStep(page);
+  expect(before).toBeGreaterThan(0);
+  await applyScreens.next(page).click();
+  try {
+    await expect.poll(() => currentStep(page), { timeout: 10_000 }).toBe(before + 1);
+  } catch (cause) {
+    const alerts = await page.getByRole("alert").allInnerTexts();
+    throw new Error(
+      `step ${before} did not advance to ${before + 1}. alerts=${JSON.stringify(alerts)}`,
+      { cause },
+    );
+  }
+}
+
 type ApplicantFields = {
   email: string;
   givenName?: string;
@@ -353,73 +400,73 @@ type ApplicantFields = {
 };
 
 /**
- * Fill every section of the form, tolerating both shapes S3-T18 may ship: four stepped
- * sections behind Next buttons, or all four on one scrolling page (the pre-agreed
- * fallback in the S3 risk table). The loop fills whatever is currently rendered, clicks
- * Next if one exists, and repeats — so neither shape needs its own spec.
+ * Fill steps 1 (Personal) and 2 (Scholarship & school) and click Next after each, so the
+ * page is left on step 3 (Documents) for `attachProof`. Every fill goes through
+ * `fillIfPresent`, which dispatches on the tag — `fill()` throws on a <select> — and every
+ * fill is asserted to have found its control: a label that stops matching must fail here,
+ * by name, not three helpers later as "the success screen never appeared".
  */
 async function fillApplicationForm(page: Page, applicant: ApplicantFields): Promise<void> {
-  const values: Array<[Locator, string]> = [];
-  const push = (l: Locator, v: string) => values.push([l, v]);
+  expect(await currentStep(page)).toBe(1);
 
-  for (let section = 0; section < 6; section += 1) {
-    push(applyScreens.givenName(page), applicant.givenName ?? "Applicant");
-    push(applyScreens.middleName(page), "Test");
-    push(applyScreens.familyName(page), applicant.familyName ?? "Fixture");
-    push(applyScreens.email(page), applicant.email);
-    push(applyScreens.birthdate(page), "2004-06-15");
-    push(applyScreens.contactNumber(page), "09171234500");
-    push(applyScreens.facebook(page), "https://facebook.com/e2e.applicant");
-    push(applyScreens.addressLine(page), "159 Fixture St.");
-    push(applyScreens.cityMunicipality(page), "Quezon City");
-    push(applyScreens.province(page), "Metro Manila");
-    push(applyScreens.postalCode(page), "1100");
-    push(applyScreens.yearLevel(page), "2");
-    push(applyScreens.expectedGradYear(page), "2029");
+  // ── Step 1 — Personal (incl. the home address, ADR 0013) ─────────────────
+  const personal: Array<[Locator, string]> = [
+    [applyScreens.givenName(page), applicant.givenName ?? "Applicant"],
+    [applyScreens.middleName(page), "Test"],
+    [applyScreens.familyName(page), applicant.familyName ?? "Fixture"],
+    [applyScreens.email(page), applicant.email],
+    [applyScreens.birthdate(page), "2004-06-15"],
+    [applyScreens.contactNumber(page), "09171234500"],
+    [applyScreens.facebook(page), "https://facebook.com/e2e.applicant"],
+    [applyScreens.addressLine(page), "159 Fixture St."],
+    [applyScreens.cityMunicipality(page), "Quezon City"],
+    [applyScreens.province(page), "Metro Manila"],
+    [applyScreens.postalCode(page), "1100"],
+  ];
+  for (const [locator, value] of personal) {
+    expect(await fillIfPresent(locator, value)).toBe(true);
+  }
+  // The SRS choice list (0038): rows, not code — pick the first real option.
+  expect(await selectFirstRealOption(applyScreens.sex(page))).toBe(true);
+  await nextStep(page);
 
-    for (const [locator, value] of values) {
-      await fillIfPresent(locator, value).catch(() => undefined);
-    }
-    values.length = 0;
+  // ── Step 2 — Scholarship & school, then the region ───────────────────────
+  // The SRS choice lists (0037/0038) and the 18 seeded regions, all populated by
+  // ordinary anon reads — pick the first real option of each.
+  expect(await selectFirstRealOption(applyScreens.scholarshipAward(page))).toBe(true);
+  expect(await selectFirstRealOption(applyScreens.awardYear(page))).toBe(true);
+  expect(await selectFirstRealOption(applyScreens.university(page))).toBe(true);
+  expect(await selectFirstRealOption(applyScreens.program(page))).toBe(true);
+  expect(await fillIfPresent(applyScreens.yearLevel(page), "2")).toBe(true);
+  expect(await fillIfPresent(applyScreens.expectedGradYear(page), "2029")).toBe(true);
+  expect(await selectFirstRealOption(applyScreens.region(page))).toBe(true);
+  await nextStep(page);
 
-    // Region is a select over the 18 seeded regions, populated by an ordinary anon read.
-    await selectFirstRealOption(applyScreens.region(page)).catch(() => undefined);
-    // The SRS choice lists (0037/0038): rows, not code — pick the first real option of each.
-    await selectFirstRealOption(applyScreens.sex(page)).catch(() => undefined);
-    await selectFirstRealOption(applyScreens.scholarshipAward(page)).catch(() => undefined);
-    await selectFirstRealOption(applyScreens.awardYear(page)).catch(() => undefined);
-    await selectFirstRealOption(applyScreens.university(page)).catch(() => undefined);
-    await selectFirstRealOption(applyScreens.program(page)).catch(() => undefined);
+  // ── Step 3 — Documents: the caller attaches the files ────────────────────
+  expect(await currentStep(page)).toBe(3);
+}
 
-    // Consent (RA 10173, captured AT COLLECTION). Every VISIBLE checkbox is ticked; the
-    // honeypot input is hidden by design and is therefore left untouched, which is
-    // exactly the behaviour the honeypot is testing for.
-    const boxes = applyScreens.form(page).locator('input[type="checkbox"]:visible');
-    for (let i = 0; i < (await boxes.count()); i += 1) {
-      await boxes
-        .nth(i)
-        .check()
-        .catch(() => undefined);
-    }
+/**
+ * From step 3 (both files attached) to step 4, and tick the consent boxes there.
+ *
+ * Consent (RA 10173, captured AT COLLECTION). Every VISIBLE checkbox inside the form is
+ * ticked; the honeypot input is hidden by design and is therefore left untouched, which
+ * is exactly the behaviour the honeypot is testing for.
+ */
+async function reviewAndConsent(page: Page): Promise<void> {
+  await nextStep(page);
+  expect(await currentStep(page)).toBe(4);
 
-    const next = applyScreens.next(page);
-    if (
-      (await next.count()) > 0 &&
-      (await next
-        .first()
-        .isVisible()
-        .catch(() => false))
-    ) {
-      await next.first().click();
-      await page.waitForTimeout(150);
-      continue;
-    }
-    break;
+  const boxes = applyScreens.form(page).locator('input[type="checkbox"]:visible');
+  const count = await boxes.count();
+  expect(count).toBeGreaterThanOrEqual(2);
+  for (let i = 0; i < count; i += 1) {
+    await boxes.nth(i).check();
   }
 }
 
 /**
- * Attach the proof file and wait for the direct PUT to finish.
+ * Attach the proof file (on step 3, Documents) and wait for the direct PUT to finish.
  *
  * The progress bar is checked BEST-EFFORT and never gates the test: on a loopback PUT to
  * the fake store a 6MB upload can complete between two polls, and an assertion that
@@ -468,10 +515,12 @@ async function waitOutHoneypotFloor(page: Page): Promise<void> {
 }
 
 /**
- * Submit and wait for the success screen. Generous timeout: this awaits a 6.5MB direct
- * PUT plus the server-side re-verification of the provider's metadata.
+ * From step 3 with both files attached: review, consent, submit, and wait for the success
+ * screen. Generous timeout: this awaits a 6.5MB direct PUT plus the server-side
+ * re-verification of the provider's metadata.
  */
 async function submitAndExpectSuccess(page: Page): Promise<string> {
+  await reviewAndConsent(page);
   await waitOutHoneypotFloor(page);
   await applyScreens.submit(page).first().click();
   try {
@@ -696,10 +745,17 @@ test.describe("Epic B — public application intake", () => {
       await attachProof(page, oversize);
 
       // The form refuses before `startApplication` is ever called, so the applicant can
-      // pick another file without re-entering anything (S3-T19).
-      await expect(page.getByText(/10\s?MB|too large|larger than/i).first()).toBeVisible({
-        timeout: 30_000,
-      });
+      // pick another file without re-entering anything (S3-T19). Asserted on the field's
+      // ALERT: the drop zone itself says "up to 10MB", so a bare text match would pass
+      // with no refusal at all.
+      await expect(
+        page
+          .getByRole("alert")
+          .filter({ hasText: /10\s?MB|too large|larger than/i })
+          .first(),
+      ).toBeVisible({ timeout: 30_000 });
+      // And the refusal keeps the applicant on the Documents step, files still to choose.
+      expect(await currentStep(page)).toBe(3);
 
       // NO ROW. Not a draft, not a pending — nothing was created, no submit token was
       // minted, no upload session was requested and no provider quota was spent.
@@ -736,6 +792,7 @@ test.describe("Epic B — public application intake", () => {
         ),
       );
 
+      await reviewAndConsent(page);
       await waitOutHoneypotFloor(page);
       await applyScreens.submit(page).first().click();
 

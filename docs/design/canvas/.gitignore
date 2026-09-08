@@ -1,0 +1,5 @@
+# Seeded canvas pages are ~2.8 MB each and are regenerated from the .dc.html files;
+# the published artifact is the copy that matters.
+start-sys-interface.html
+preview-*.html
+__pycache__/

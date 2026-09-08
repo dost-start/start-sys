@@ -3,8 +3,16 @@
  * ARCHITECTURE.md §1 locks Tailwind 4.3.x with CSS-first config (@theme in
  * globals.css) and explicitly rejects a tailwind.config.js so a future
  * maintainer has no config archaeology. Do not add one.
- * Tokens below are the standard shadcn/ui "new-york" style, zinc base
- * color, expressed in oklch per Tailwind v4 convention (components.json).
+ *
+ * Brand restyle (2026-09-08): the shadcn "new-york" token names stay — every vendored
+ * component in components/ui reads them — but their values are now the START-DOST
+ * brand: logo blue #0099FF and yellow #FFDD00 (exact, from the org's logo files),
+ * near-black ink, soft grey fields, and the yellow→blue page background the designer's
+ * Figma frames use. Source of the values: docs/design/canvas/lib.py (the approved
+ * design canvas) and ~/.claude/plans/modular-painting-cray.md.
+ *
+ * Light theme only. The .dark block is kept verbatim from the scaffold so nothing
+ * breaks if a `.dark` class ever appears, but no toggle ships.
  */
 @import "tailwindcss";
 @import "tw-animate-css";
@@ -13,25 +21,33 @@
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.141 0.005 285.823);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.141 0.005 285.823);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.141 0.005 285.823);
-  --primary: oklch(0.21 0.006 285.885);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.967 0.001 286.375);
-  --muted-foreground: oklch(0.552 0.016 285.938);
-  --accent: oklch(0.967 0.001 286.375);
-  --accent-foreground: oklch(0.21 0.006 285.885);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.92 0.004 286.32);
-  --input: oklch(0.92 0.004 286.32);
-  --ring: oklch(0.705 0.015 286.067);
+  --background: #ffffff;
+  --foreground: #171717;
+  --card: #fdfdfd;
+  --card-foreground: #171717;
+  --popover: #fdfdfd;
+  --popover-foreground: #171717;
+  --primary: #0099ff;
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f4;
+  --secondary-foreground: #171717;
+  --muted: #f4f4f4;
+  --muted-foreground: #6c6f72;
+  --accent: #eaf4fd;
+  --accent-foreground: #171717;
+  --destructive: #b91c1c;
+  --destructive-foreground: #ffffff;
+  --border: #e6e7e9;
+  --input: #e6e7e9;
+  --ring: #0099ff;
+
+  /* Semantic tones for badges and alerts (success / warning / danger / info). */
+  --success: #15803d;
+  --success-soft: #ecfdf3;
+  --warning: #b45309;
+  --warning-soft: #fffbeb;
+  --info: #0369a1;
+  --info-soft: #eff6ff;
 }
 
 .dark {
@@ -61,6 +77,11 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  /* Hero cards (login, closed/success screens) and form cards, from the Figma frames. */
+  --radius-card: 1.75rem;
+  --radius-form: 1rem;
+
+  --font-sans: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -81,13 +102,137 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+}
+
+/* Brand palette — static values, usable as bg-brand-blue, text-brand-label, etc. */
+@theme {
+  --color-brand-blue: #0099ff;
+  --color-brand-yellow: #ffdd00;
+  --color-brand-slate: #465461;
+  --color-brand-ink: #171717;
+  --color-brand-body: #3c4043;
+  --color-brand-label: #6c6f72;
+  --color-brand-surface: #fdfdfd;
+  --color-brand-field: #f4f4f4;
+  --color-brand-blue-soft: #a6dafd;
+  --color-brand-yellow-soft: #fcf2b3;
+  --color-brand-sun: #f7ed95;
+  --color-brand-sun-deep: #ffec74;
+  --color-brand-sky: #63bbf4;
+  --color-brand-sky-deep: #5dbdfd;
+  --color-brand-haze-warm: #eaf0dc;
+  --color-brand-haze-cool: #e4f0f7;
+  --color-brand-link: #0067b3;
+
+  --shadow-soft: 0 4px 16px rgb(23 23 23 / 0.08);
+  --shadow-card: 0 24px 60px rgb(23 23 23 / 0.14), 0 2px 6px rgb(23 23 23 / 0.06);
+  --shadow-pill: 0 6px 18px rgb(0 153 255 / 0.18), 0 1px 2px rgb(0 0 0 / 0.06);
+  --shadow-field: inset 0 1px 2px rgb(0 0 0 / 0.05), 0 3px 8px rgb(23 23 23 / 0.08);
+}
+
+/* The primary button and active nav pill: light blue to pale yellow. */
+@utility bg-brand-gradient {
+  background-image: linear-gradient(
+    90deg,
+    var(--color-brand-blue-soft) 0%,
+    var(--color-brand-yellow-soft) 100%
+  );
+}
+
+/* Sign out and secondary emphasis: the same gradient, reversed. */
+@utility bg-brand-gradient-reverse {
+  background-image: linear-gradient(
+    90deg,
+    var(--color-brand-yellow-soft) 0%,
+    var(--color-brand-blue-soft) 100%
+  );
+}
+
+/* The START-SYS wordmark: yellow→blue fill with an ink outline (Figma). Text stays
+   real text so it is selectable, translatable and readable by assistive tech. */
+@utility text-brand-gradient {
+  color: var(--color-brand-ink);
+  background-image: linear-gradient(
+    90deg,
+    var(--color-brand-yellow) 0%,
+    var(--color-brand-blue) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  -webkit-text-stroke: 1.5px var(--color-brand-ink);
+  paint-order: stroke fill;
+  filter: drop-shadow(0 2px 0 rgb(23 23 23 / 0.35));
+}
+
+@layer components {
+  /* A surface that carries the brand background. Pair with <BrandBackground /> as the
+     first child; that component paints the gradient, the blurred shapes and the grid at
+     z-index -1, so this class only has to establish the stacking context. */
+  .brand-surface {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+  }
+  .brand-bg-layer {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    overflow: hidden;
+    background-image:
+      repeating-linear-gradient(0deg, rgb(23 23 23 / 0.06) 0 1px, transparent 1px 56px),
+      repeating-linear-gradient(90deg, rgb(23 23 23 / 0.06) 0 1px, transparent 1px 56px),
+      linear-gradient(
+        112deg,
+        #f8eb82 0%,
+        #f4eda8 22%,
+        var(--color-brand-haze-warm) 42%,
+        var(--color-brand-haze-cool) 56%,
+        #94cff8 78%,
+        var(--color-brand-sky-deep) 100%
+      );
+  }
+  .brand-blob {
+    position: absolute;
+    border-radius: 120px;
+    filter: blur(34px);
+    opacity: 0.92;
+  }
+  .brand-ring {
+    position: absolute;
+    border-radius: 9999px;
+    border: 1px solid rgb(23 23 23 / 0.07);
+  }
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    scroll-behavior: smooth;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
   body {
     @apply bg-background text-foreground;
+  }
+  input[type="checkbox"],
+  input[type="radio"] {
+    accent-color: var(--color-brand-blue);
+  }
+  ::placeholder {
+    color: var(--color-brand-label);
+    opacity: 1;
   }
 }

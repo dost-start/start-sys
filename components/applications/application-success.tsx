@@ -10,44 +10,47 @@
 //
 // Purely presentational — the component that renders this clears the submit token
 // and any pending-upload state from its own closures on the same transition, so
-// nothing here needs to.
+// nothing here needs to. Brand edition (2026-09-08): the hero-less centred card from
+// the design canvas (`success_card`), a check in a success disc above the copy.
+import { CheckIcon } from "lucide-react";
+
+import { Card } from "@/components/ui/card";
+
 export function ApplicationSuccess() {
   return (
-    <div className="w-full max-w-lg space-y-4 rounded-lg border border-border bg-card p-6 text-center">
-      <div
+    <Card
+      radius="hero"
+      className="w-full max-w-[560px] items-center gap-4 px-6 py-10 text-center sm:px-12 sm:py-11"
+    >
+      <span
         aria-hidden="true"
-        className="mx-auto flex size-12 items-center justify-center rounded-full bg-green-100 text-green-700"
+        className="bg-success-soft text-success grid size-[52px] place-items-center rounded-full"
       >
-        <svg viewBox="0 0 24 24" fill="none" className="size-6" xmlns="http://www.w3.org/2000/svg">
-          <path
-            d="M5 13l4 4L19 7"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </div>
+        <CheckIcon className="size-6" strokeWidth={2.5} />
+      </span>
 
-      <h1 className="text-xl font-semibold">Application received</h1>
+      <h1 className="text-brand-ink text-xl font-semibold sm:text-[22px]">Application received</h1>
 
-      <p className="text-sm text-muted-foreground">
+      <p className="text-brand-body text-sm">
         Your membership application has been submitted and is now <strong>pending review</strong>.
         You do not need to do anything else right now.
       </p>
 
-      <p className="text-sm text-muted-foreground">
+      <p className="text-brand-body text-sm">
         A decision follows after the application period closes. If you are approved, you will
         receive an email at the address you provided.
       </p>
 
-      <p className="text-sm text-muted-foreground">
+      <p className="text-brand-body text-sm">
         Made a mistake, or need to change something?{" "}
-        <a href="mailto:crrd@start-dost.org" className="font-medium underline underline-offset-4">
+        <a
+          href="mailto:crrd@start-dost.org"
+          className="text-brand-link font-medium underline underline-offset-4"
+        >
           Contact CRRD
         </a>{" "}
         — they can update your application directly.
       </p>
-    </div>
+    </Card>
   );
 }

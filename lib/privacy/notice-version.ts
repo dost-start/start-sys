@@ -1,25 +1,25 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // The published privacy notice's version string, as ONE constant the consent
-// checkbox on `/apply` and the `/privacy` page both read (BUILD_PLAN S3-T20, S7-T21).
+// checkboxes on `/apply` and `/renew` send (BUILD_PLAN S3-T20, S7-T21).
 //
-// Today this is a plain TS constant, not a database row. `applications.payload`
-// stores whatever string a submission agreed to, so "which text did this applicant
-// see" is answerable from this constant plus git history for as long as it stays a
-// constant — which is only good enough for the seven-day build window.
+// Since S7-T22 (migration 0035) the database owns the VALUE: `privacy_notice_versions`
+// is an append-only register, and `enforce_consent_server_values()` overwrites
+// whatever version a client sends with the register's current row — so a client can
+// never backdate a consent or claim agreement to a superseded notice. This constant
+// is therefore the client's copy of the current version (it lands in
+// `applications.payload`, alongside the trigger-stamped column), and the SEED value
+// for the register row that publishes the same text.
 //
-// S7-T22 replaces this with a `privacy_notice_versions` table (immutable rows, no
-// UPDATE/DELETE policy) and a database trigger that overwrites whatever a client
-// sends with the server's own current version — so a client can never backdate a
-// consent or claim agreement to a superseded notice. When that lands, this constant
-// becomes the SEED value for the first row rather than the source of truth, and the
-// consent Server Action starts reading the version from the database instead of
-// importing this file. Until then, bumping this string on any real change to
-// `docs/privacy/PRIVACY_NOTICE.md` / `app/(public)/privacy/page.tsx` is a manual
-// discipline — do both in the same commit.
+// Bumping it is a manual discipline with three parts, all in one commit: rewrite
+// `docs/privacy/PRIVACY_NOTICE.md` (its applicant-facing half must match
+// `app/(public)/privacy/page.tsx` word for word), bump this string and the date, and
+// add a migration inserting the new `privacy_notice_versions` row with the file's
+// sha256 (`shasum -a 256 docs/privacy/PRIVACY_NOTICE.md`). The CI digest guard fails
+// until the third part lands.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** The version an applicant's consent checkbox currently agrees to. Max 32 chars — see `consentShape` in `lib/applications/schema.ts`. */
-export const PRIVACY_NOTICE_VERSION = "v1";
+export const PRIVACY_NOTICE_VERSION = "v2";
 
-/** When this version took effect. Shown on `/privacy`; not otherwise load-bearing yet. */
-export const PRIVACY_NOTICE_EFFECTIVE_DATE = "2026-09-01";
+/** When this version took effect. The 2026-09-08 rewrite of the notice in plain words (brand restyle). */
+export const PRIVACY_NOTICE_EFFECTIVE_DATE = "2026-09-08";

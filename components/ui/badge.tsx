@@ -7,15 +7,25 @@ import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
 
+// Brand edition (2026-09-08): soft-tinted status pills. The four shadcn variant names
+// are kept so no call site changes; their tones now read as status semantics —
+// default = success (Active, Approved, Sent), secondary = neutral, destructive = danger,
+// outline = warning (Renewal pending, Draft). Extra `success/warning/info/danger`
+// aliases exist for new call sites that want to say what they mean.
 const badgeVariants = cva(
-  "inline-flex items-center justify-center rounded-md border px-2 py-0.5 text-xs font-medium w-fit whitespace-nowrap shrink-0 gap-1 [&>svg]:size-3 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] transition-[color,box-shadow] overflow-hidden",
+  "inline-flex h-6 items-center justify-center rounded-full border px-2.5 text-xs font-semibold w-fit whitespace-nowrap shrink-0 gap-1 [&>svg]:size-3 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] transition-[color,box-shadow] overflow-hidden",
   {
     variants: {
       variant: {
-        default: "border-transparent bg-primary text-primary-foreground",
-        secondary: "border-transparent bg-secondary text-secondary-foreground",
-        destructive: "border-transparent bg-destructive text-white",
-        outline: "text-foreground",
+        default: "border-transparent bg-success-soft text-success",
+        secondary: "border-transparent bg-brand-field text-brand-body",
+        destructive: "border-transparent bg-destructive/10 text-destructive",
+        outline: "border-transparent bg-warning-soft text-warning",
+        success: "border-transparent bg-success-soft text-success",
+        warning: "border-transparent bg-warning-soft text-warning",
+        info: "border-transparent bg-info-soft text-info",
+        danger: "border-transparent bg-destructive/10 text-destructive",
+        neutral: "border-transparent bg-brand-field text-brand-body",
       },
     },
     defaultVariants: {

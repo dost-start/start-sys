@@ -156,13 +156,16 @@ jobs:
         # this step is what makes the two move together.
         run: |
           set -uo pipefail
-          want=$(grep -oE "[0-9a-f]{64}" supabase/migrations/0035_application_consent.sql | head -n1)
+          # The NEWEST migration that seeds a privacy_notice_versions row carries the hash
+          # of the current notice (0035 = v1, 0051 = v2, …). A rewrite is a new migration.
+          latest=$(grep -l "insert into public.privacy_notice_versions" supabase/migrations/*.sql | sort | tail -n1)
+          want=$(grep -oE "[0-9a-f]{64}" "$latest" | tail -n1)
           have=$(shasum -a 256 docs/privacy/PRIVACY_NOTICE.md | cut -d' ' -f1)
           if [ "$want" != "$have" ]; then
-            echo "::error::privacy notice digest drift: migration seeds $want but the file hashes to $have. Amending the notice takes a NEW privacy_notice_versions row, not an edit."
+            echo "::error::privacy notice digest drift: $latest seeds $want but the file hashes to $have. Amending the notice takes a NEW privacy_notice_versions row, not an edit."
             exit 1
           fi
-          echo "Privacy notice digest matches."
+          echo "Privacy notice digest matches ($latest)."
 
       - name: Run the pgTAP suite
         run: npx supabase test db

@@ -1,7 +1,7 @@
 "use client";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Academic information — the SRS membership form (2026-09-05), section two.
+// Academic information — the SRS membership form (2026-09-05), step two.
 //
 // The form is hardcoded; the CHOICES come from the database (meeting 2026-09-05: "form
 // is hardcoded but choices are flexible based on the data"). Universities and programs
@@ -14,12 +14,15 @@
 import { useFormContext } from "react-hook-form";
 
 import {
+  Field,
   FieldError,
+  FieldHint,
   FieldLabel,
-  fieldClassName,
   FormSection,
 } from "@/components/applications/form-section";
 import type { RegionOption } from "@/components/applications/membership-section";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
 import {
   SCHOLARSHIP_AWARD_LABELS,
   SCHOLARSHIP_AWARDS,
@@ -82,12 +85,11 @@ export function AcademicSection({
       title="Scholarship and academic information"
       description="From your Notice of Award and current enrollment."
     >
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Field>
           <FieldLabel htmlFor="scholarship_award">DOST scholarship award</FieldLabel>
-          <select
+          <NativeSelect
             id="scholarship_award"
-            className={fieldClassName(Boolean(errors.scholarship_award))}
             aria-invalid={errors.scholarship_award ? "true" : "false"}
             defaultValue=""
             {...register("scholarship_award")}
@@ -100,14 +102,13 @@ export function AcademicSection({
                 {SCHOLARSHIP_AWARD_LABELS[award]}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           <FieldError message={errors.scholarship_award?.message} />
-        </div>
-        <div className="space-y-1.5">
+        </Field>
+        <Field>
           <FieldLabel htmlFor="award_year">Year of award</FieldLabel>
-          <select
+          <NativeSelect
             id="award_year"
-            className={fieldClassName(Boolean(errors.award_year))}
             aria-invalid={errors.award_year ? "true" : "false"}
             defaultValue=""
             {...register("award_year")}
@@ -120,16 +121,15 @@ export function AcademicSection({
                 {year}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           <FieldError message={errors.award_year?.message} />
-        </div>
+        </Field>
       </div>
 
-      <div className="space-y-1.5">
+      <Field>
         <FieldLabel htmlFor="university_id">University</FieldLabel>
-        <select
+        <NativeSelect
           id="university_id"
-          className={fieldClassName(Boolean(errors.university_id))}
           aria-invalid={errors.university_id ? "true" : "false"}
           defaultValue=""
           {...register("university_id")}
@@ -147,25 +147,14 @@ export function AcademicSection({
               ))}
             </optgroup>
           ))}
-        </select>
+        </NativeSelect>
         <FieldError message={errors.university_id?.message} />
-        {universities.length === 0 ? (
-          <p className="text-sm text-destructive">
-            Universities could not be loaded. Reload the page before submitting.
-          </p>
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            Not listed? Choose the nearest campus and tell CRRD in your email — the list is
-            maintained by CRRD and grows as scholars apply.
-          </p>
-        )}
-      </div>
+      </Field>
 
-      <div className="space-y-1.5">
+      <Field>
         <FieldLabel htmlFor="program_id">Program</FieldLabel>
-        <select
+        <NativeSelect
           id="program_id"
-          className={fieldClassName(Boolean(errors.program_id))}
           aria-invalid={errors.program_id ? "true" : "false"}
           defaultValue=""
           {...register("program_id")}
@@ -178,16 +167,15 @@ export function AcademicSection({
               {p.name}
             </option>
           ))}
-        </select>
+        </NativeSelect>
         <FieldError message={errors.program_id?.message} />
-      </div>
+      </Field>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Field>
           <FieldLabel htmlFor="year_level">Year level</FieldLabel>
-          <select
+          <NativeSelect
             id="year_level"
-            className={fieldClassName(Boolean(errors.year_level))}
             aria-invalid={errors.year_level ? "true" : "false"}
             defaultValue=""
             {...register("year_level")}
@@ -200,22 +188,32 @@ export function AcademicSection({
                 {YEAR_LEVEL_LABELS[level]}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           <FieldError message={errors.year_level?.message} />
-        </div>
-        <div className="space-y-1.5">
+        </Field>
+        <Field>
           <FieldLabel htmlFor="expected_grad_year">Expected year of graduation</FieldLabel>
-          <input
+          <Input
             id="expected_grad_year"
             inputMode="numeric"
             placeholder="2028"
-            className={fieldClassName(Boolean(errors.expected_grad_year))}
             aria-invalid={errors.expected_grad_year ? "true" : "false"}
             {...register("expected_grad_year")}
           />
           <FieldError message={errors.expected_grad_year?.message} />
-        </div>
+        </Field>
       </div>
+
+      {universities.length === 0 ? (
+        <p className="text-destructive text-sm">
+          Universities could not be loaded. Reload the page before submitting.
+        </p>
+      ) : (
+        <FieldHint>
+          Not listed? Choose the nearest campus and tell CRRD in your email — the list is maintained
+          by CRRD and grows as scholars apply.
+        </FieldHint>
+      )}
     </FormSection>
   );
 }

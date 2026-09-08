@@ -6,9 +6,17 @@
 // contradict `applications_insert_anon` — the page would show a form the database
 // refuses. `middleware.ts` already excludes this route from its auth matcher; no
 // login is required or checked here.
+//
+// Brand edition (2026-09-08; design canvas `public_page("apply")`): the brand surface,
+// the emblem + wordmark hero with one pill that scrolls to the form card, the four-step
+// card, and the footer strip. The hero is passed INTO the client form so the success
+// screen can render hero-less, as the canvas draws it — one <main>, one <form>.
 import type { Metadata } from "next";
 
 import { ApplicationClosed } from "@/components/applications/application-closed";
+import { BrandBackground } from "@/components/brand/brand-background";
+import { BrandFooter } from "@/components/brand/brand-footer";
+import { BrandHero } from "@/components/brand/brand-hero";
 import { getPublicWindowState } from "@/lib/applications/queries";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -75,8 +83,12 @@ export default async function ApplyPage() {
 
   if (!windowState.open) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center bg-muted/30 p-6">
-        <ApplicationClosed window={windowState} />
+      <main className="brand-surface flex min-h-screen flex-col">
+        <BrandBackground />
+        <div className="flex flex-1 items-center justify-center px-4 py-16 sm:px-10">
+          <ApplicationClosed window={windowState} />
+        </div>
+        <BrandFooter />
       </main>
     );
   }
@@ -88,20 +100,17 @@ export default async function ApplyPage() {
   ]);
 
   return (
-    <main className="flex min-h-screen flex-col items-center bg-muted/30 px-4 py-10 sm:px-6">
-      <div className="w-full max-w-2xl space-y-6">
-        <header className="space-y-1 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            START-DOST Membership Application
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Fill in your details below — this takes about ten minutes. Have your latest registration
-            form and your DOST-SEI Notice of Award ready to upload.
-          </p>
-        </header>
-
-        <ApplicationForm regions={regions} universities={universities} programs={programs} />
-      </div>
+    <main className="brand-surface flex min-h-screen flex-col">
+      <BrandBackground />
+      <ApplicationForm
+        hero={
+          <BrandHero ctaLabel="Become part of the START Community" ctaHref="#application-form" />
+        }
+        regions={regions}
+        universities={universities}
+        programs={programs}
+      />
+      <BrandFooter />
     </main>
   );
 }

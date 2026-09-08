@@ -16,10 +16,12 @@
 // bar is the whole point on a 6MB file over mobile data. `XMLHttpRequest` does.
 "use client";
 
+import { UploadIcon } from "lucide-react";
 import { useId } from "react";
 import type { ChangeEvent } from "react";
 
 import { DECLARED_ALLOWED_MIME, MAX_DECLARED_PROOF_BYTES } from "@/lib/applications/schema";
+import { cn } from "@/lib/utils";
 
 export type ProofUploadStatus = "idle" | "uploading" | "success" | "error";
 
@@ -69,61 +71,76 @@ export function ProofUploadField({
     onFileChange(clientError ? null : picked, clientError);
   }
 
+  const uploading = status === "uploading";
+
   return (
-    <div className="space-y-2">
-      <label htmlFor={inputId} className="text-sm font-medium">
-        Proof of enrollment
+    <div className="flex flex-col gap-2">
+      {/*
+        The drop-zone look from the design canvas (form_card → upload). The real
+        <input type="file"> stays in the DOM, focusable and labelled by this element; it
+        is visually hidden (`sr-only`) so the dashed label IS the control the applicant
+        sees and taps. The e2e specs address it as `input[type="file"]`.
+      */}
+      <label
+        htmlFor={inputId}
+        className={cn(
+          "bg-brand-field flex min-h-16 cursor-pointer items-center gap-3.5 rounded-xl border-[1.5px] border-dashed border-[#c9ccd1] px-4 py-3 transition-colors focus-within:ring-[3px] focus-within:ring-ring/25 hover:border-brand-blue/60",
+          error && "border-destructive",
+          uploading && "cursor-not-allowed opacity-60",
+        )}
+      >
+        <UploadIcon aria-hidden="true" className="text-brand-label size-5 shrink-0" />
+        <span className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-x-2">
+          <span className="text-brand-ink text-sm font-medium">Choose a file</span>
+          <span className="text-muted-foreground text-xs">PDF, JPEG, PNG or HEIC · up to 10MB</span>
+        </span>
+        <input
+          id={inputId}
+          type="file"
+          accept={DECLARED_ALLOWED_MIME.join(",")}
+          onChange={handleChange}
+          disabled={uploading}
+          aria-invalid={error ? "true" : "false"}
+          className="sr-only"
+        />
       </label>
-      <p className="text-sm text-muted-foreground">
-        Your Certificate of Registration, scholar ID, or equivalent. A phone photo is fine — PDF,
-        JPEG, PNG or HEIC, up to 10MB.
-      </p>
-      <input
-        id={inputId}
-        type="file"
-        accept={DECLARED_ALLOWED_MIME.join(",")}
-        onChange={handleChange}
-        disabled={status === "uploading"}
-        aria-invalid={error ? "true" : "false"}
-        className="block w-full text-sm text-foreground file:mr-4 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-2 file:text-sm file:font-medium file:text-secondary-foreground disabled:opacity-50"
-      />
 
       {file ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-muted-foreground text-sm">
           Selected: {file.name} ({Math.max(1, Math.ceil(file.size / 1024))} KB)
         </p>
       ) : null}
 
-      {status === "uploading" ? (
-        <div className="space-y-1">
+      {uploading ? (
+        <div className="flex flex-col gap-1">
           <div
-            className="h-2 w-full overflow-hidden rounded-full bg-muted"
+            className="bg-muted h-2 w-full overflow-hidden rounded-full"
             role="progressbar"
             aria-valuenow={progress}
             aria-valuemin={0}
             aria-valuemax={100}
           >
             <div
-              className="h-full bg-primary transition-[width]"
+              className="bg-brand-blue h-full transition-[width]"
               style={{ width: `${progress}%` }}
             />
           </div>
-          <p className="text-xs text-muted-foreground">Uploading… {progress}%</p>
+          <p className="text-muted-foreground text-xs">Uploading… {progress}%</p>
         </div>
       ) : null}
 
-      {status === "success" ? <p className="text-sm text-green-700">Uploaded.</p> : null}
+      {status === "success" ? <p className="text-success text-sm">Uploaded.</p> : null}
 
       {error ? (
-        <div className="space-y-1.5">
-          <p role="alert" className="text-sm text-destructive">
+        <div className="flex flex-col gap-1.5">
+          <p role="alert" className="text-destructive text-sm">
             {error}
           </p>
           {onRetry && status === "error" ? (
             <button
               type="button"
               onClick={onRetry}
-              className="text-sm font-medium underline underline-offset-4"
+              className="text-brand-link self-start text-sm font-medium underline underline-offset-4"
             >
               Retry upload
             </button>

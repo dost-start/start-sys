@@ -14,10 +14,14 @@
 // Renders no organizational data.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
 import { verifyMfa } from "@/lib/auth/mfa-actions";
 import { safeNextPath } from "@/lib/auth/safe-next";
 
@@ -25,6 +29,13 @@ export type TotpFactorOption = {
   id: string;
   friendlyName: string;
 };
+
+const CARD_CLASS = "mx-auto w-full max-w-[560px] gap-6 px-7 py-9 sm:px-14 sm:py-12";
+
+// The submit button sits in a row beside the sign-out control, which is itself a
+// <form> (a Server Action) — so the button is associated by `form=` rather than
+// nested, because a form inside a form is not valid HTML.
+const FORM_ID = "totp-verify-form";
 
 /**
  * Only a same-origin RELATIVE path is ever followed — an open redirect on the one
@@ -42,12 +53,15 @@ export function TotpVerify({
   homePath,
   heading = "Enter your authentication code",
   description = "Your session needs a second factor before it can continue.",
+  signOut,
 }: {
   factors: TotpFactorOption[];
   next: string | null;
   homePath: string;
   heading?: string;
   description?: string;
+  /** The sign-out control, rendered by the page (a Server Component) and passed in. */
+  signOut?: ReactNode;
 }) {
   const router = useRouter();
   const [factorId, setFactorId] = useState(factors[0]?.id ?? "");
@@ -78,75 +92,80 @@ export function TotpVerify({
 
   if (factors.length === 0) {
     return (
-      <section className="mx-auto w-full max-w-md space-y-3">
-        <h1 className="text-xl font-semibold">No authenticator enrolled</h1>
-        <p className="text-muted-foreground text-sm">
-          This account has no second factor yet. Set one up before continuing.
-        </p>
-        <Button type="button" onClick={() => router.replace("/auth/mfa/enroll")}>
-          Set up two-factor authentication
-        </Button>
-      </section>
+      <Card radius="hero" className={CARD_CLASS}>
+        <div className="flex flex-col gap-2">
+          <h1 className="text-brand-ink text-2xl font-semibold">No authenticator enrolled</h1>
+          <p className="text-muted-foreground text-sm">
+            This account has no second factor yet. Set one up before continuing.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-4">
+          <Button type="button" onClick={() => router.replace("/auth/mfa/enroll")}>
+            Set up two-factor authentication
+          </Button>
+          {signOut}
+        </div>
+      </Card>
     );
   }
 
   return (
-    <section className="mx-auto w-full max-w-md space-y-6" aria-labelledby="verify-heading">
-      <div className="space-y-2">
-        <h1 id="verify-heading" className="text-xl font-semibold">
+    <Card radius="hero" className={CARD_CLASS} aria-labelledby="verify-heading">
+      <div className="flex flex-col gap-2">
+        <h1 id="verify-heading" className="text-brand-ink text-2xl font-semibold">
           {heading}
         </h1>
         <p className="text-muted-foreground text-sm">{description}</p>
       </div>
 
-      <form onSubmit={onSubmit} className="space-y-3">
+      <form id={FORM_ID} onSubmit={onSubmit} className="flex flex-col gap-5">
         {factors.length > 1 ? (
-          <>
-            <label htmlFor="factor" className="block text-sm font-medium">
-              Authenticator
-            </label>
-            <select
+          <Field>
+            <FieldLabel htmlFor="factor">Authenticator</FieldLabel>
+            <NativeSelect
               id="factor"
               name="factor"
               value={factorId}
               onChange={(event) => setFactorId(event.target.value)}
-              className="border-input h-9 w-full rounded-md border px-3 text-sm"
             >
               {factors.map((factor) => (
                 <option key={factor.id} value={factor.id}>
                   {factor.friendlyName}
                 </option>
               ))}
-            </select>
-          </>
+            </NativeSelect>
+          </Field>
         ) : null}
 
-        <label htmlFor="code" className="block text-sm font-medium">
-          6-digit code
-        </label>
-        <input
-          id="code"
-          name="code"
-          inputMode="numeric"
-          autoComplete="one-time-code"
-          maxLength={7}
-          required
-          value={code}
-          onChange={(event) => setCode(event.target.value)}
-          aria-invalid={error !== null}
-          className="border-input h-9 w-40 rounded-md border px-3 font-mono text-sm"
-        />
+        <Field>
+          <FieldLabel htmlFor="code">6-digit code</FieldLabel>
+          <Input
+            id="code"
+            name="code"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={7}
+            required
+            value={code}
+            onChange={(event) => setCode(event.target.value)}
+            aria-invalid={error !== null}
+            className="h-13 w-56 text-center font-mono text-2xl tracking-[0.3em]"
+          />
+        </Field>
+      </form>
 
-        <Button type="submit" disabled={busy}>
+      <div className="flex flex-wrap items-center gap-4">
+        <Button type="submit" form={FORM_ID} className="min-w-[200px]" disabled={busy}>
           {busy ? "Verifying…" : "Verify"}
         </Button>
-      </form>
+        {signOut}
+      </div>
 
       {error !== null ? (
         <p className="text-destructive text-sm" role="alert">
           {error}
         </p>
       ) : null}
-    </section>
+    </Card>
   );
 }

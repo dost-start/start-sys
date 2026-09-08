@@ -114,7 +114,7 @@ The PDF describes the whole system. This section says what ships **first**, and 
 | Financial management | No dues, no budgets, no payments. |
 | General file storage | The **only** files the system handles are proof-of-enrollment documents, and those live in Google Drive, not in the core database. |
 | Advanced analytics | Dashboards show counts and lists. No trend analysis, cohort modelling, forecasting or BI. |
-| Public accessibility | Other than the forms it sends out, the system is not accessible to the general public. |
+| Public accessibility | Other than the forms it sends out, the system is not accessible to the general public. <!-- decision: 2026-09-08 (Ethan, brand restyle) — `/` is a public splash page: the emblem, the START-SYS wordmark, one link to /apply and one to /login. It reads no data, carries the noindex header like every non-form path, and stays out of robots.txt's allow list. The forms remain the only public data paths. --> |
 | Offline operation | An internet connection is required. |
 
 ### Consciously deferred by this PRD (not in the PDF; called out so nobody assumes them)

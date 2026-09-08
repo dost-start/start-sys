@@ -68,28 +68,31 @@ export default async function UserRolesPage() {
     };
   });
 
+  // Brand restyle (2026-09-08, docs/design/canvas/boards_admin.py `user_roles`): the app
+  // shell already renders the one <main>, so this is a plain <div>; the page title lives in
+  // the shell's top bar, so the <h1> is screen-reader-only.
   return (
-    <main className="mx-auto max-w-5xl space-y-6 p-8">
-      <header className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">User roles</h1>
-          <p className="text-muted-foreground max-w-xl text-sm">
-            Public signup is disabled (PRD MVP item 1) — accounts exist only by invitation.
-            Assigning or revoking a role here takes effect on that account&apos;s next request
-            (US-E3); nothing here silently confirms which of &quot;no account&quot; or &quot;no
-            role&quot; produced an empty result.
-          </p>
+    <div className="mx-auto max-w-5xl space-y-6">
+      <header className="flex flex-wrap items-start justify-between gap-4 sm:gap-6">
+        <h1 className="sr-only">User roles</h1>
+        <p className="text-brand-body max-w-3xl text-sm">
+          Public signup is disabled (PRD MVP item 1) — accounts exist only by invitation. Assigning
+          or revoking a role here takes effect on that account&apos;s next request (US-E3); nothing
+          here silently confirms which of &quot;no account&quot; or &quot;no role&quot; produced an
+          empty result.
+        </p>
+        <div className="ml-auto">
+          <InviteUserDialog regions={regions} />
         </div>
-        <InviteUserDialog regions={regions} />
       </header>
 
       <UserRolesTable rows={rows} regions={regions} />
 
-      <p className="text-muted-foreground text-xs">
+      <p className="text-brand-label text-xs">
         Accounts are identified by their <code>auth.users.id</code> above, not by email — PostgREST
         has no read access to <code>auth.users</code>, and granting it would widen the service-role
         boundary this system is built to avoid (ARCHITECTURE.md §5).
       </p>
-    </main>
+    </div>
   );
 }

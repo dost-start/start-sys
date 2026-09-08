@@ -34,7 +34,8 @@
 // the database does not grant.
 //
 // Server-rendered. No `'use client'`, no state, no fetching.
-import { Badge } from "@/components/ui/badge";
+import { MemberStatusBadge } from "@/components/members/member-status-badge";
+import { Card } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -43,7 +44,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { membershipStatusLabel } from "@/lib/dashboard/status-buckets";
 import type { MemberDirectoryRow } from "@/lib/members/types";
 
 export type DirectoryTableProps = {
@@ -54,26 +54,19 @@ export type DirectoryTableProps = {
   showRegion?: boolean;
 };
 
-/** `active` reads as the healthy default; every other status is visually secondary. */
-function statusVariant(status: MemberDirectoryRow["status"]) {
-  if (status === "active") return "default" as const;
-  if (status === "terminated") return "destructive" as const;
-  return "secondary" as const;
-}
-
 export function DirectoryTable({ rows, emptyMessage, showRegion = true }: DirectoryTableProps) {
   if (rows.length === 0) {
     return (
-      <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
-        {emptyMessage}
-      </div>
+      <Card className="border-border border border-dashed p-6 shadow-none">
+        <p className="text-brand-label text-sm">{emptyMessage}</p>
+      </Card>
     );
   }
 
   return (
-    // The table scrolls inside its own container so the page body never scrolls
-    // horizontally at 375px.
-    <div className="overflow-x-auto rounded-md border">
+    // The table scrolls inside its own container (the `Table` primitive's wrapper) so the
+    // page body never scrolls horizontally at 375px; the card clips the rounded corners.
+    <Card className="overflow-hidden p-0">
       <Table>
         <TableHeader>
           <TableRow>
@@ -89,31 +82,27 @@ export function DirectoryTable({ rows, emptyMessage, showRegion = true }: Direct
         <TableBody>
           {rows.map((row) => (
             <TableRow key={row.membership_id}>
-              <TableCell className="font-mono text-xs whitespace-nowrap">{row.member_id}</TableCell>
-              <TableCell className="whitespace-nowrap">
+              <TableCell className="font-mono text-[13px]">{row.member_id}</TableCell>
+              <TableCell className="text-brand-ink font-medium">
                 {row.family_name}, {row.given_name}
               </TableCell>
               <TableCell>
-                <Badge variant={statusVariant(row.status)}>
-                  {membershipStatusLabel(row.status)}
-                </Badge>
+                <MemberStatusBadge status={row.status} />
               </TableCell>
-              {showRegion ? (
-                <TableCell className="whitespace-nowrap">{row.region_name}</TableCell>
-              ) : null}
+              {showRegion ? <TableCell>{row.region_name}</TableCell> : null}
               <TableCell className="tabular-nums">{row.year_level ?? "—"}</TableCell>
               {/* A scholar may sit on more than one committee (CBL Art. III §5), which is
                   why the RPC returns arrays and why the committee panel does not sum. */}
-              <TableCell>
+              <TableCell className="whitespace-normal">
                 {row.committee_names.length > 0 ? row.committee_names.join(", ") : "—"}
               </TableCell>
-              <TableCell>
+              <TableCell className="whitespace-normal">
                 {row.department_names.length > 0 ? row.department_names.join(", ") : "—"}
               </TableCell>
             </TableRow>
           ))}
         </TableBody>
       </Table>
-    </div>
+    </Card>
   );
 }

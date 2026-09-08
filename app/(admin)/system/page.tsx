@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { Card, CardTitle } from "@/components/ui/card";
 import { getSessionContext } from "@/lib/auth/queries";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -10,9 +11,20 @@ import { getSessionContext } from "@/lib/auth/queries";
 //
 // Term/application-window management lives at `/applications/window` (BUILD_PLAN
 // S4-T24, not yet built as of this slice) — linked here rather than duplicated.
+//
+// Brand restyle (2026-09-08, docs/design/canvas/boards_admin.py `system`): the app shell
+// already renders the one <main>, so this page is a plain <div>; the page title lives in
+// the shell's top bar, so the <h1> here is screen-reader-only.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const dynamic = "force-dynamic";
+
+/** The design canvas's `.label`, for the four term facts. */
+const TERM_LABEL_CLASS = "text-brand-label text-xs font-semibold tracking-[0.08em] uppercase";
+
+/** A whole Card as a link — the two navigation tiles. */
+const NAV_CARD_CLASS =
+  "bg-card rounded-form shadow-soft flex flex-col gap-1.5 p-5 no-underline transition-[filter] hover:brightness-[0.98] focus-visible:ring-[3px] focus-visible:ring-ring/25 focus-visible:outline-none sm:p-6";
 
 export default async function SystemIndexPage() {
   // Guaranteed non-null and tech_admin by the layout above; re-resolved here
@@ -29,58 +41,62 @@ export default async function SystemIndexPage() {
     : { data: null };
 
   return (
-    <main className="mx-auto max-w-3xl space-y-8 p-8">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">System</h1>
-        <p className="text-muted-foreground text-sm">
+    <div className="mx-auto max-w-3xl space-y-8">
+      <header>
+        <h1 className="sr-only">System</h1>
+        <p className="text-brand-body max-w-3xl text-sm">
           Configuration and access control — reserved to the Technical Admin (CBL Art. III §2.3; PRD
           §2 &quot;configure the system and control access&quot;).
         </p>
       </header>
 
-      <section className="rounded-lg border p-4">
-        <h2 className="text-sm font-medium">Current term</h2>
+      <Card className="gap-4 p-5 sm:p-6">
+        <CardTitle>Current term</CardTitle>
         {activeTerm ? (
-          <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-4">
-            <dt className="text-muted-foreground">Label</dt>
-            <dd className="col-span-1 sm:col-span-3">{activeTerm.label}</dd>
-            <dt className="text-muted-foreground">Starts</dt>
-            <dd>{activeTerm.starts_on}</dd>
-            <dt className="text-muted-foreground">Ends</dt>
-            <dd>{activeTerm.ends_on}</dd>
-            <dt className="text-muted-foreground">Status</dt>
-            <dd className="uppercase">{activeTerm.status}</dd>
+          <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
+            <div className="flex flex-col gap-0.5">
+              <dt className={TERM_LABEL_CLASS}>Label</dt>
+              <dd className="text-brand-ink font-medium">{activeTerm.label}</dd>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <dt className={TERM_LABEL_CLASS}>Starts</dt>
+              <dd className="text-brand-ink font-medium">{activeTerm.starts_on}</dd>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <dt className={TERM_LABEL_CLASS}>Ends</dt>
+              <dd className="text-brand-ink font-medium">{activeTerm.ends_on}</dd>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <dt className={TERM_LABEL_CLASS}>Status</dt>
+              <dd className="text-brand-ink font-medium uppercase">{activeTerm.status}</dd>
+            </div>
           </dl>
         ) : (
-          <p className="text-muted-foreground mt-2 text-sm">
+          <p className="text-brand-label text-sm">
             No active term. `one_active_term` should make this state unreachable — treat it as an
             incident, not a normal empty state.
           </p>
         )}
-      </section>
+      </Card>
 
-      <nav className="grid gap-3 sm:grid-cols-2">
-        <Link
-          href="/system/user-roles"
-          className="rounded-lg border p-4 text-sm font-medium transition-colors hover:bg-accent"
-        >
-          User roles
-          <p className="text-muted-foreground mt-1 font-normal">
+      <nav className="grid gap-4 sm:grid-cols-2">
+        <Link href="/system/user-roles" className={NAV_CARD_CLASS}>
+          <span className="text-brand-ink text-lg leading-tight font-semibold">User roles</span>
+          <p className="text-brand-label text-sm">
             Invite accounts and assign or revoke the seven access tiers (US-E3).
           </p>
         </Link>
 
-        <Link
-          href="/applications/window"
-          className="rounded-lg border p-4 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent"
-        >
-          Application windows
-          <p className="mt-1 font-normal">
+        <Link href="/applications/window" className={NAV_CARD_CLASS}>
+          <span className="text-brand-ink text-lg leading-tight font-semibold">
+            Application windows
+          </span>
+          <p className="text-brand-label text-sm">
             Open or close the application period (US-B4). Managed on the Applications surface —
             crrd_admin and tech_admin per ADR 0003.
           </p>
         </Link>
       </nav>
-    </main>
+    </div>
   );
 }

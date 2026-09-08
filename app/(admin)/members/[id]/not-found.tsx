@@ -5,16 +5,19 @@
 // text is deliberately generic: it must read the same whether the id is malformed,
 // the person does not exist, or the caller's tier simply cannot see them — "forbidden"
 // would itself disclose that a named scholar has a record.
+import { Card } from "@/components/ui/card";
 import { MEMBERS_PATH } from "@/lib/members/filters";
 
 export default function MemberNotFound() {
   return (
-    <div className="space-y-3 py-12 text-center">
-      <h1 className="text-lg font-semibold">Member not found</h1>
-      <p className="text-sm text-muted-foreground">That record could not be found.</p>
-      <a href={MEMBERS_PATH} className="text-sm underline underline-offset-2">
-        Back to members
-      </a>
+    <div className="flex justify-center py-12">
+      <Card className="w-full max-w-md items-center gap-2 p-6 text-center sm:p-8">
+        <h1 className="text-brand-ink text-lg font-semibold">Member not found</h1>
+        <p className="text-brand-label text-sm">That record could not be found.</p>
+        <a href={MEMBERS_PATH} className="text-brand-link text-sm underline underline-offset-4">
+          Back to members
+        </a>
+      </Card>
     </div>
   );
 }

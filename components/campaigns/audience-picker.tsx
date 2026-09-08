@@ -16,12 +16,19 @@
 // NO EMAIL ADDRESSES, ANYWHERE IN THIS FILE. `AudienceCandidate` carries name, member
 // ID, region, department, committee and position — never an address; an address leaves
 // the database only as a frozen recipient row, at send time (lib/campaigns/types.ts).
+//
+// Brand restyle (2026-09-08): the same controls on the vendored primitives. The row
+// checkboxes stay VISIBLE (never sr-only) — e2e/campaign-send.spec.ts ticks them by their
+// `aria-label`, which is unchanged.
 // ─────────────────────────────────────────────────────────────────────────────
 "use client";
 
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -144,24 +151,22 @@ export function AudiencePicker({ audience, onChange }: AudiencePickerProps) {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="space-y-1">
-          <label htmlFor="audience-search" className="text-sm font-medium">
-            Search by name or member ID
-          </label>
-          <input
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <Field className="w-full sm:w-80">
+          <FieldLabel htmlFor="audience-search">Search by name or member ID</FieldLabel>
+          <Input
             id="audience-search"
             type="text"
             value={q}
             onChange={(event) => setQ(event.target.value)}
             placeholder="e.g. Dela Cruz or 2024-0001"
-            className="border-input bg-background w-64 rounded-md border px-3 py-2 text-sm"
+            className="h-9 text-[13px]"
           />
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <label className="flex items-center gap-1.5 text-sm font-medium">
-            <input
-              type="checkbox"
+        </Field>
+        <div className="flex flex-wrap items-center gap-4">
+          <label className="text-brand-body flex h-9 items-center gap-2 text-sm whitespace-nowrap">
+            <Checkbox
+              className="mt-0"
               checked={audience.select_all}
               onChange={(event) => onChange(setSelectAll(audience, event.target.checked))}
             />
@@ -178,7 +183,7 @@ export function AudiencePicker({ audience, onChange }: AudiencePickerProps) {
         </div>
       </div>
 
-      <p className="text-muted-foreground text-sm" aria-live="polite">
+      <p className="text-brand-label text-sm" aria-live="polite">
         {summary.picked} picked, {summary.excluded} excluded
       </p>
 
@@ -188,7 +193,7 @@ export function AudiencePicker({ audience, onChange }: AudiencePickerProps) {
         </p>
       ) : null}
 
-      <div className="rounded-lg border">
+      <div className="border-border overflow-hidden rounded-xl border">
         <Table data-testid="audience-candidates">
           <TableHeader>
             <TableRow>
@@ -206,7 +211,7 @@ export function AudiencePicker({ audience, onChange }: AudiencePickerProps) {
           <TableBody>
             {rows.length === 0 && !pending ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-muted-foreground text-center">
+                <TableCell colSpan={7} className="text-brand-label text-center">
                   Nobody matches these filters.
                 </TableCell>
               </TableRow>
@@ -214,8 +219,8 @@ export function AudiencePicker({ audience, onChange }: AudiencePickerProps) {
               rows.map((row) => (
                 <TableRow key={row.person_id}>
                   <TableCell>
-                    <input
-                      type="checkbox"
+                    <Checkbox
+                      className="mt-0"
                       aria-label={`Select ${row.family_name}, ${row.given_name}`}
                       checked={isCandidateSelected(audience, row.person_id)}
                       onChange={(event) =>
@@ -223,10 +228,10 @@ export function AudiencePicker({ audience, onChange }: AudiencePickerProps) {
                       }
                     />
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="text-brand-ink font-medium">
                     {row.family_name}, {row.given_name}
                   </TableCell>
-                  <TableCell>{row.member_id ?? "—"}</TableCell>
+                  <TableCell className="font-mono text-[13px]">{row.member_id ?? "—"}</TableCell>
                   <TableCell>{row.region_name}</TableCell>
                   <TableCell>{row.department_name ?? "—"}</TableCell>
                   <TableCell>{row.committee_name ?? "—"}</TableCell>
@@ -239,7 +244,7 @@ export function AudiencePicker({ audience, onChange }: AudiencePickerProps) {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-muted-foreground text-xs">
+        <p className="text-brand-label text-xs">
           {total === 0 ? "Showing 0 of 0" : `Showing ${start}–${end} of ${total}`}
         </p>
         <div className="flex gap-2">

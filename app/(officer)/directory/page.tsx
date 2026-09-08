@@ -30,11 +30,16 @@
 //
 // The admin roles reach this page too (`canAccess`'s officer case). They see the same
 // columns, because the column set is the RPC's, not the page's.
+//
+// Brand edition (2026-09-08): the page title is the shell's top bar ("Directory"), so
+// the `<h1>` here is screen-reader-only; sections follow docs/design/canvas/boards_other.py.
 import { redirect } from "next/navigation";
 
 import { CountBarList, type CountBarRow } from "@/components/dashboard/count-bar-list";
 import { DirectoryTable } from "@/components/dashboard/directory-table";
+import { SectionEyebrow } from "@/components/dashboard/section-eyebrow";
 import { StatTile } from "@/components/dashboard/stat-tile";
+import { Card } from "@/components/ui/card";
 import { getSessionContext } from "@/lib/auth/queries";
 import { homeForRole } from "@/lib/auth/route-access";
 import { regionTileHref, statusTileHref } from "@/lib/dashboard/links";
@@ -96,17 +101,15 @@ export default async function OfficerDirectoryPage({
   }));
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">Directory</h1>
-        <p className="text-sm text-muted-foreground">
-          {termLabel !== null ? `Term ${termLabel}` : "Current term"} · read-only
-        </p>
-      </div>
+    <div className="space-y-7">
+      <h1 className="sr-only">Directory</h1>
+      <p className="text-brand-body text-sm">
+        {termLabel !== null ? `Term ${termLabel}` : "Current term"} · read-only
+      </p>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-medium text-muted-foreground">Members by status</h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <SectionEyebrow>Members by status</SectionEyebrow>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {statusBuckets.map((bucket) => (
             <StatTile
               key={bucket.status}
@@ -118,15 +121,15 @@ export default async function OfficerDirectoryPage({
         </div>
       </section>
 
-      <section className="space-y-3">
-        <h2 className="text-sm font-medium text-muted-foreground">Members by region</h2>
+      <Card className="gap-4 p-5 sm:p-6">
+        <SectionEyebrow>Members by region</SectionEyebrow>
         <CountBarList rows={regionBars} emptyLabel="No regions are configured." />
-      </section>
+      </Card>
 
       <section className="space-y-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-sm font-medium text-muted-foreground">Members</h2>
-          <span className="text-xs text-muted-foreground">
+          <SectionEyebrow>Members</SectionEyebrow>
+          <span className="text-brand-label text-xs">
             {page.total.toLocaleString()} matching · page {page.page}
           </span>
         </div>

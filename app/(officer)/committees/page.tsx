@@ -33,14 +33,19 @@
 //
 // ⚠ NO SENSITIVE COLUMN. Only the six `people` columns 0015 grants to `authenticated`
 // are selected. A `contact_number` here would fail with 42501, not render.
+//
+// Brand edition (2026-09-08): the page title is the shell's top bar ("Committees"), so
+// the `<h1>` here is screen-reader-only; each roster is a full-bleed card with a header
+// row, per docs/design/canvas/boards_other.py.
 import { redirect } from "next/navigation";
 
-import { Badge } from "@/components/ui/badge";
 import { DashboardEmptyState } from "@/components/dashboard/dashboard-empty-state";
+import { MemberStatusBadge } from "@/components/members/member-status-badge";
+import { Card } from "@/components/ui/card";
 import { getSessionContext } from "@/lib/auth/queries";
 import { homeForRole } from "@/lib/auth/route-access";
 import { getCurrentTermId, getTermLabel } from "@/lib/dashboard/queries";
-import { membershipStatusLabel, UNASSIGNED_COMMITTEE_LABEL } from "@/lib/dashboard/status-buckets";
+import { UNASSIGNED_COMMITTEE_LABEL } from "@/lib/dashboard/status-buckets";
 import type { MembershipStatus } from "@/lib/dashboard/types";
 
 export const dynamic = "force-dynamic";
@@ -75,7 +80,7 @@ export default async function OfficerCommitteesPage() {
   if (termId === null) {
     return (
       <div className="space-y-4">
-        <h1 className="text-xl font-semibold tracking-tight">Committees</h1>
+        <h1 className="sr-only">Committees</h1>
         <DashboardEmptyState
           message="No active term."
           detail="Committees are created per term (CBL Art. III §5), so there are none to show."
@@ -166,13 +171,11 @@ export default async function OfficerCommitteesPage() {
   ];
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">Committees</h1>
-        <p className="text-sm text-muted-foreground">
-          {termLabel !== null ? `Term ${termLabel}` : "Current term"} · read-only
-        </p>
-      </div>
+    <div className="space-y-7">
+      <h1 className="sr-only">Committees</h1>
+      <p className="text-brand-body text-sm">
+        {termLabel !== null ? `Term ${termLabel}` : "Current term"} · read-only
+      </p>
 
       {committees.length === 0 ? (
         <DashboardEmptyState
@@ -181,49 +184,48 @@ export default async function OfficerCommitteesPage() {
         />
       ) : null}
 
-      <div className="space-y-6">
+      <div className="space-y-5">
         {allGroups.map((group) => (
-          <section key={group.key} className="space-y-2">
-            <div className="flex flex-wrap items-baseline gap-2">
-              <h2 className="font-medium">{group.name}</h2>
+          <Card key={group.key} className="overflow-hidden p-0">
+            <div className="flex flex-wrap items-baseline gap-3 px-5 pt-5 pb-3">
+              <h2 className="text-brand-ink text-lg font-semibold">{group.name}</h2>
               {group.code !== null ? (
-                <span className="font-mono text-xs text-muted-foreground">{group.code}</span>
+                <span className="text-brand-label font-mono text-xs">{group.code}</span>
               ) : null}
-              <span className="text-sm tabular-nums text-muted-foreground">
+              <span className="text-brand-label ml-auto text-sm tabular-nums">
                 {group.members.length.toLocaleString()}
               </span>
             </div>
 
             {group.members.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No members on this committee.</p>
+              <p className="text-brand-label border-t border-[#eff0f2] px-5 py-3 text-sm">
+                No members on this committee.
+              </p>
             ) : (
-              <ul className="divide-y rounded-md border">
+              <ul>
                 {group.members.map((member) => (
                   <li
                     key={member.membership_id}
-                    className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-3 py-2 text-sm"
+                    className="flex flex-wrap items-center gap-x-3.5 gap-y-1 border-t border-[#eff0f2] px-5 py-3 text-[13.5px]"
                   >
-                    <span className="font-mono text-xs text-muted-foreground">
+                    <span className="text-brand-label font-mono text-[13px]">
                       {member.member_id ?? "—"}
                     </span>
-                    <span>
+                    <span className="text-brand-ink">
                       {member.family_name}, {member.given_name}
                     </span>
-                    <Badge
-                      variant={member.status === "active" ? "default" : "secondary"}
-                      className="ml-auto"
-                    >
-                      {membershipStatusLabel(member.status)}
-                    </Badge>
+                    <span className="ml-auto">
+                      <MemberStatusBadge status={member.status} />
+                    </span>
                   </li>
                 ))}
               </ul>
             )}
-          </section>
+          </Card>
         ))}
       </div>
 
-      <p className="text-xs text-muted-foreground">
+      <p className="text-brand-label text-xs">
         A member may serve on more than one committee (CBL Art. III §5), so these rosters do not add
         up to the term&rsquo;s headcount.
       </p>

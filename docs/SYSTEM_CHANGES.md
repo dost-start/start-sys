@@ -273,6 +273,22 @@ Merge fields work on both tabs, and the same short list as before: first name, l
 
 ---
 
+### 15. The new look, part two — the officer screens
+
+**What it is.** Every screen behind the login now sits in the brand shell the designer drew for the Dashboard frame: a white sidebar on the left with the emblem, the wordmark, one pill per section and SIGN OUT pinned to the bottom; a white top bar with the page name and the signed-in role; and the page itself on the yellow-and-blue background, with every table, filter bar and form inside a rounded white card. Officers, Regional Representatives and administrators all get the same shell with their own sidebar links. On a phone the sidebar becomes a menu button that opens a drawer.
+
+**How it works from the user's side.**
+- Nothing moved and nothing was renamed. Every link, filter, button, form field and message reads the same as before; only the look changed. Dashboard numbers still link through to the filtered member list, filters still live in the address bar so a filtered view is still a shareable link, and every table still scrolls sideways inside its own card on a narrow screen.
+- Status labels use one colour language everywhere: green for active, approved, sent and appointed; amber for pending and renewal pending; red for rejected, failed, terminated and impeached; grey for everything neutral.
+- Filter choices (status, region, committee, department, membership year, position, university) are pills that light up with the brand gradient when chosen. Long university names wrap inside the pill instead of running off a phone screen.
+- The Regional Representative page is now as wide as the admin pages, so the seven-column contact list fits on a laptop without sideways scrolling.
+
+**What CRRD must do or know.** Nothing. The permissions did not change: what each role can read is still decided by the database, not by which links the sidebar shows (ARCHITECTURE.md §5).
+
+**Decided by:** Ethan, 2026-09-08, same canvas approval as part one.
+
+---
+
 ## Still open
 
 Decided or defaulted, waiting for a final word or an action:

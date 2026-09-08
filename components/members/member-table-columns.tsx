@@ -36,7 +36,7 @@ export const memberTableColumns: ColumnDef<MemberDirectoryRow>[] = [
     cell: ({ row }) => (
       <a
         href={`/members/${row.original.person_id}`}
-        className="font-medium underline-offset-2 hover:underline"
+        className="text-brand-ink font-medium no-underline underline-offset-2 hover:underline"
       >
         {row.original.given_name} {row.original.family_name}
       </a>
@@ -45,7 +45,11 @@ export const memberTableColumns: ColumnDef<MemberDirectoryRow>[] = [
   {
     id: "member_id",
     header: "Member ID",
-    cell: ({ row }) => <span className="font-mono text-sm">{row.original.member_id ?? "—"}</span>,
+    cell: ({ row }) => (
+      <span className="font-mono text-[13px] whitespace-nowrap">
+        {row.original.member_id ?? "—"}
+      </span>
+    ),
   },
   {
     id: "status",
@@ -55,23 +59,19 @@ export const memberTableColumns: ColumnDef<MemberDirectoryRow>[] = [
   {
     id: "region_name",
     header: "Region",
-    cell: ({ row }) => <span className="text-sm">{row.original.region_name}</span>,
+    cell: ({ row }) => <span className="text-brand-body">{row.original.region_name}</span>,
   },
   {
     id: "join_year",
     header: "Joined",
-    cell: ({ row }) => (
-      <span className="text-sm text-muted-foreground">{row.original.join_year}</span>
-    ),
+    cell: ({ row }) => <span className="text-brand-label">{row.original.join_year}</span>,
   },
   {
     id: "committee_names",
     header: "Committees",
     enableSorting: false,
     cell: ({ row }) => (
-      <span className="text-sm text-muted-foreground">
-        {joinNames(row.original.committee_names)}
-      </span>
+      <span className="text-brand-label">{joinNames(row.original.committee_names)}</span>
     ),
   },
   {
@@ -79,9 +79,7 @@ export const memberTableColumns: ColumnDef<MemberDirectoryRow>[] = [
     header: "Departments",
     enableSorting: false,
     cell: ({ row }) => (
-      <span className="text-sm text-muted-foreground">
-        {joinNames(row.original.department_names)}
-      </span>
+      <span className="text-brand-label">{joinNames(row.original.department_names)}</span>
     ),
   },
 ];

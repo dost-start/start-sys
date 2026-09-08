@@ -47,7 +47,7 @@ export function AuditEntryDiff({ old_data, new_data }: AuditEntryDiffProps) {
   const after = asRecord(new_data);
 
   if (before === null && after === null) {
-    return <span className="text-xs text-muted-foreground">—</span>;
+    return <span className="text-brand-label text-xs">—</span>;
   }
 
   // INSERT has no `old_data`; DELETE has no `new_data` (and cannot occur — no DELETE
@@ -57,23 +57,23 @@ export function AuditEntryDiff({ old_data, new_data }: AuditEntryDiffProps) {
   const changed = keys.filter((key) => display(before?.[key]) !== display(after?.[key]));
 
   if (changed.length === 0) {
-    return <span className="text-xs text-muted-foreground">No field values changed</span>;
+    return <span className="text-brand-label text-xs">No field values changed</span>;
   }
 
   return (
     <ul className="space-y-0.5">
       {changed.map((key) => (
-        <li key={key} className="text-xs">
-          <span className="font-mono text-muted-foreground">{key}</span>{" "}
+        <li key={key} className="text-brand-body text-xs">
+          <span className="text-brand-label font-mono">{key}</span>{" "}
           {before === null ? (
-            <span className="font-mono break-all">{display(after?.[key])}</span>
+            <span className="text-brand-ink font-mono break-all">{display(after?.[key])}</span>
           ) : (
             <>
               <span className="font-mono break-all line-through opacity-60">
                 {display(before[key])}
               </span>{" "}
               <span aria-hidden="true">→</span>{" "}
-              <span className="font-mono break-all">{display(after?.[key])}</span>
+              <span className="text-brand-ink font-mono break-all">{display(after?.[key])}</span>
             </>
           )}
         </li>

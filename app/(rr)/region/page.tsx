@@ -14,6 +14,10 @@
 // interactive control is a GET filter (university), which is a URL param — a filtered
 // roster is a shareable link (PRD US-I3). `region_id` and `term_id` params are ignored:
 // the RPC scopes by the caller's live role, and RLS would refuse anything else anyway.
+//
+// Brand edition (2026-09-08): the shell's top bar says "Region", so this page keeps a
+// VISIBLE `<h1>` naming the rep's region(s); the tiles are plain (unlinked) cards and
+// the roster sits in a full-bleed card, per docs/design/canvas/boards_other.py.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { redirect } from "next/navigation";
@@ -22,7 +26,13 @@ import { CountBarList, type CountBarRow } from "@/components/dashboard/count-bar
 import { DashboardEmptyState } from "@/components/dashboard/dashboard-empty-state";
 import { DirectoryTable } from "@/components/dashboard/directory-table";
 import { RegionContactsTable } from "@/components/dashboard/region-contacts-table";
+import { SectionEyebrow } from "@/components/dashboard/section-eyebrow";
 import { StatTile } from "@/components/dashboard/stat-tile";
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { NativeSelect } from "@/components/ui/native-select";
 import { getSessionContext } from "@/lib/auth/queries";
 import { homeForRole } from "@/lib/auth/route-access";
 import {
@@ -102,10 +112,10 @@ export default async function RegionDashboardPage({
     regions.length === 0 ? "your region" : regions.map((region) => region.name).join(", ");
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">{regionNames}</h1>
-        <p className="text-sm text-muted-foreground">
+    <div className="space-y-7">
+      <div className="space-y-1">
+        <h1 className="text-brand-ink text-[26px] leading-tight font-semibold">{regionNames}</h1>
+        <p className="text-brand-body text-sm">
           {termLabel !== null ? `Term ${termLabel}` : "Current term"} · read-only
         </p>
       </div>
@@ -118,8 +128,8 @@ export default async function RegionDashboardPage({
       ) : (
         <>
           <section className="space-y-3">
-            <h2 className="text-sm font-medium text-muted-foreground">Scholars by status</h2>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <SectionEyebrow>Scholars by status</SectionEyebrow>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {statusBuckets.map((bucket) => (
                 <StatTile key={bucket.status} label={bucket.label} value={bucket.count} />
               ))}
@@ -127,31 +137,30 @@ export default async function RegionDashboardPage({
           </section>
 
           {regionBuckets.length > 1 ? (
-            <section className="space-y-3">
-              <h2 className="text-sm font-medium text-muted-foreground">By region</h2>
+            <Card className="gap-4 p-5 sm:p-6">
+              <SectionEyebrow>By region</SectionEyebrow>
               <CountBarList rows={regionBars} />
-            </section>
+            </Card>
           ) : null}
 
           <section className="space-y-3">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h2 className="text-sm font-medium text-muted-foreground">
-                Scholars and contact details
-              </h2>
-              <span className="text-xs text-muted-foreground">
+              <SectionEyebrow>Scholars and contact details</SectionEyebrow>
+              <span className="text-brand-label text-xs">
                 {total.toLocaleString()} in {regions.length > 1 ? "your regions" : "your region"}
                 {" · "}every view of this list is logged (CBL Art. VIII §6)
               </span>
             </div>
 
             {/* A GET form: the filter is the URL, so it is shareable and Back works. */}
-            <form method="get" className="flex flex-wrap items-end gap-2">
-              <label className="space-y-1 text-sm">
-                <span className="block text-xs font-medium text-muted-foreground">University</span>
-                <select
+            <form method="get" className="flex flex-wrap items-end gap-3">
+              <Field className="w-full sm:w-80">
+                <FieldLabel htmlFor="university_id">University</FieldLabel>
+                <NativeSelect
+                  id="university_id"
                   name="university_id"
                   defaultValue={universityId ?? ""}
-                  className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  className="h-9 px-3 text-[13px]"
                 >
                   <option value="">All universities</option>
                   {universities.map((u) => (
@@ -159,16 +168,16 @@ export default async function RegionDashboardPage({
                       {u.name}
                     </option>
                   ))}
-                </select>
-              </label>
-              <button
-                type="submit"
-                className="rounded-md border border-input bg-background px-3 py-2 text-sm"
-              >
+                </NativeSelect>
+              </Field>
+              <Button variant="outline" size="sm" type="submit">
                 Filter
-              </button>
+              </Button>
               {universityId ? (
-                <a href="/region" className="text-sm underline underline-offset-4">
+                <a
+                  href="/region"
+                  className="text-brand-link h-9 text-sm leading-9 underline underline-offset-4"
+                >
                   Clear
                 </a>
               ) : null}
@@ -185,22 +194,22 @@ export default async function RegionDashboardPage({
               />
             ) : contacts.denial === "missing_acknowledgement" ? (
               <>
-                <div
-                  role="alert"
-                  className="space-y-1 rounded-lg border border-amber-500/40 bg-amber-50 p-4 text-sm dark:bg-amber-950"
-                >
-                  <p className="font-medium">
-                    Contact details are locked until your confidentiality acknowledgement is on
-                    file.
-                  </p>
-                  <p className="text-muted-foreground">
-                    CBL Art. VIII §7.1 requires every officer — Regional Representatives included —
-                    to sign the Confidentiality Agreement on assuming their role each term. An
-                    Executive Admin records the acknowledgement; once it is on file for the current
-                    term this roster shows names, member IDs, universities, emails, contact numbers
-                    and Facebook links for your region. Headcounts above are unaffected.
-                  </p>
-                </div>
+                <Alert variant="warning" role="alert">
+                  <div className="space-y-1">
+                    <p className="font-semibold">
+                      Contact details are locked until your confidentiality acknowledgement is on
+                      file.
+                    </p>
+                    <p>
+                      CBL Art. VIII §7.1 requires every officer — Regional Representatives included
+                      — to sign the Confidentiality Agreement on assuming their role each term. An
+                      Executive Admin records the acknowledgement; once it is on file for the
+                      current term this roster shows names, member IDs, universities, emails,
+                      contact numbers and Facebook links for your region. Headcounts above are
+                      unaffected.
+                    </p>
+                  </div>
+                </Alert>
                 <DirectoryTable
                   rows={fallbackRows}
                   showRegion={regions.length > 1}

@@ -6,7 +6,8 @@
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { SignOutButton } from "@/components/auth/sign-out-button";
+import { AppShell } from "@/components/layout/app-shell";
+import { RR_NAV_LINKS } from "@/components/layout/nav-links";
 import { getSessionContext } from "@/lib/auth/queries";
 import { canAccess, homeForRole } from "@/lib/auth/route-access";
 
@@ -17,15 +18,8 @@ export default async function RegionalRepLayout({ children }: { children: ReactN
   if (!canAccess(ctx.role, "/region")) redirect(homeForRole(ctx.role));
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b">
-        <div className="mx-auto flex max-w-4xl items-center gap-6 px-6 py-3">
-          <span className="font-semibold tracking-tight">START-SYS</span>
-          <span className="ml-auto text-xs text-muted-foreground">Regional Representative</span>
-          <SignOutButton />
-        </div>
-      </header>
-      <main className="mx-auto max-w-4xl px-6 py-8">{children}</main>
-    </div>
+    <AppShell links={RR_NAV_LINKS} roleLabel="Regional Representative">
+      {children}
+    </AppShell>
   );
 }

@@ -25,11 +25,17 @@
 //
 // All four reads run concurrently: four sequential round trips to Singapore is a third
 // of the 3-second budget spent on a dashboard (PRD Performance NFR, Success Metric 4).
+//
+// Brand edition (2026-09-08): the page title is the shell's top bar ("Dashboard"), so
+// the `<h1>` here is screen-reader-only; the intro row carries the term line and the
+// "All members" link, and the sections follow docs/design/canvas/boards_admin.py.
 import { redirect } from "next/navigation";
 
 import { CountBarList, type CountBarRow } from "@/components/dashboard/count-bar-list";
 import { DashboardEmptyState } from "@/components/dashboard/dashboard-empty-state";
+import { SectionEyebrow } from "@/components/dashboard/section-eyebrow";
 import { StatTile } from "@/components/dashboard/stat-tile";
+import { Card } from "@/components/ui/card";
 import { countPendingApplications } from "@/lib/applications/queries";
 import { getSessionContext } from "@/lib/auth/queries";
 import { homeForRole } from "@/lib/auth/route-access";
@@ -90,7 +96,7 @@ export default async function AdminDashboardPage({
   if (termId === null) {
     return (
       <div className="space-y-4">
-        <h1 className="text-xl font-semibold tracking-tight">Dashboard</h1>
+        <h1 className="sr-only">Dashboard</h1>
         <DashboardEmptyState
           message="No active term."
           detail="A Technical Admin opens a term before any membership record can exist."
@@ -133,26 +139,28 @@ export default async function AdminDashboardPage({
   const isHistorical = requestedTerm !== null;
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Dashboard</h1>
-          {/* The term is always named. "Current term" is ambiguous the week either side
-              of a rollover, which is precisely when someone is looking. */}
-          <p className="text-sm text-muted-foreground">
-            {termLabel !== null ? `Term ${termLabel}` : "Selected term"}
-            {isHistorical ? " · viewing a term you selected" : null}
-          </p>
-        </div>
-        <a href={allMembersHref("admin", termId)} className="text-sm underline">
+    <div className="space-y-7">
+      <h1 className="sr-only">Dashboard</h1>
+
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        {/* The term is always named. "Current term" is ambiguous the week either side
+            of a rollover, which is precisely when someone is looking. */}
+        <p className="text-brand-body max-w-[760px] text-sm">
+          {termLabel !== null ? `Term ${termLabel}` : "Selected term"}
+          {isHistorical ? " · viewing a term you selected" : null}
+        </p>
+        <a
+          href={allMembersHref("admin", termId)}
+          className="text-brand-link text-sm font-medium underline-offset-4 hover:underline"
+        >
           All members ({total.toLocaleString()})
         </a>
       </div>
 
       {/* ── Pending applications ─────────────────────────────────────────────── */}
       <section className="space-y-3">
-        <h2 className="text-sm font-medium text-muted-foreground">Applications</h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <SectionEyebrow>Applications</SectionEyebrow>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <StatTile
             label="Pending review"
             value={pendingCount}
@@ -165,8 +173,8 @@ export default async function AdminDashboardPage({
 
       {/* ── Headcount by status ──────────────────────────────────────────────── */}
       <section className="space-y-3">
-        <h2 className="text-sm font-medium text-muted-foreground">Members by status</h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <SectionEyebrow>Members by status</SectionEyebrow>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {statusBuckets.map((bucket) => (
             <StatTile
               key={bucket.status}
@@ -178,16 +186,16 @@ export default async function AdminDashboardPage({
         </div>
       </section>
 
-      <div className="grid gap-8 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2">
         {/* ── Headcount by region ────────────────────────────────────────────── */}
-        <section className="space-y-3">
-          <h2 className="text-sm font-medium text-muted-foreground">Members by region</h2>
+        <Card className="gap-4 p-5 sm:p-6">
+          <SectionEyebrow>Members by region</SectionEyebrow>
           <CountBarList rows={regionBars} emptyLabel="No regions are configured for this term." />
-        </section>
+        </Card>
 
         {/* ── Headcount by committee ─────────────────────────────────────────── */}
-        <section className="space-y-3">
-          <h2 className="text-sm font-medium text-muted-foreground">Members by committee</h2>
+        <Card className="gap-4 p-5 sm:p-6">
+          <SectionEyebrow>Members by committee</SectionEyebrow>
           <CountBarList
             rows={committeeBars}
             emptyLabel="No committees have been created for this term."
@@ -198,12 +206,12 @@ export default async function AdminDashboardPage({
               headcount. A visible non-sum documents itself; the alternative — picking one
               committee per member — silently understates every roster and produces a page
               where nothing looks wrong (ADR 0007 §4). */}
-          <p className="text-xs text-muted-foreground">
+          <p className="text-brand-label text-xs">
             A member may serve on more than one committee (CBL Art. III §5), so these figures do not
             add up to the term&rsquo;s headcount. &ldquo;No committee&rdquo; counts members with no
             committee seat and is not filterable.
           </p>
-        </section>
+        </Card>
       </div>
     </div>
   );

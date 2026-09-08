@@ -78,14 +78,24 @@ export async function listRecipients(
   ctx: ActionContext,
   campaignId: string,
 ): Promise<RecipientReportRow[]> {
-  const { data, error } = await ctx.supabase
-    .from("email_recipients")
-    .select("id, to_email, merge, status, provider_message_id, error, sent_at")
-    .eq("campaign_id", campaignId)
-    .order("created_at", { ascending: true })
-    .limit(2000);
+  // `get_campaign_recipients()` (0051), not a direct table select: `to_email`/`merge`
+  // are registered sensitive and are no longer in the plain column GRANT — this RPC is
+  // the only path to them now, and it is audited (one VIEW_RECIPIENTS row per call) and
+  // gated on the same CBL Art. VIII §7.1 confidentiality acknowledgement every other
+  // sensitive-column read in this codebase requires.
+  const { data, error } = await ctx.supabase.rpc("get_campaign_recipients", {
+    p_campaign_id: campaignId,
+  });
   if (error || !data) return [];
-  return data.map((row) => {
+
+  // The RPC returns every row for the campaign, unordered. The prior direct-select had
+  // `.order("created_at", { ascending: true }).limit(2000)`; replicate both here so the
+  // report's row order and cap are unchanged for callers.
+  const ordered = [...data]
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+    .slice(0, 2000);
+
+  return ordered.map((row) => {
     const merge = (row.merge ?? {}) as Record<string, unknown>;
     const given = typeof merge.given_name === "string" ? merge.given_name : "";
     const family = typeof merge.family_name === "string" ? merge.family_name : "";

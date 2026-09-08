@@ -247,8 +247,15 @@ const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
   },
 };
 
-/** A `{{token}}` sitting inside an attribute value rather than in text. */
-const TOKEN_IN_ATTRIBUTE = /=\s*("[^"]*\{\{|'[^']*\{\{)/;
+/**
+ * A `{{token}}` sitting inside an attribute value rather than in text.
+ *
+ * Three forms after `=`: quoted-double, quoted-single, and UNQUOTED (`href={{token}}` is
+ * valid HTML5). The unquoted alternative is required — without it, a pasted template
+ * using an unquoted attribute passed this check, then `sanitizeHtml` re-quoted the
+ * attribute on output, and the token reached storage having never been rejected.
+ */
+const TOKEN_IN_ATTRIBUTE = /=\s*("[^"]*\{\{|'[^']*\{\{|(?!["'])[^\s>]*\{\{)/;
 
 /** The one message for that case, shared by the schema (client + action) and this module. */
 export const TOKEN_IN_ATTRIBUTE_MESSAGE =

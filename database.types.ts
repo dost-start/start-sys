@@ -1713,6 +1713,28 @@ export type Database = {
       }
       format_type_string: { Args: { "": string }; Returns: string }
       get_application_detail: { Args: { p_app_id: string }; Returns: Json }
+      get_campaign_recipients: {
+        Args: { p_campaign_id: string }
+        Returns: {
+          campaign_id: string
+          claimed_at: string | null
+          created_at: string
+          error: string | null
+          id: string
+          merge: Json
+          person_id: string
+          provider_message_id: string | null
+          sent_at: string | null
+          status: Database["public"]["Enums"]["recipient_status"]
+          to_email: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "email_recipients"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_member_record: { Args: { p_person_id: string }; Returns: Json }
       get_person_sensitive: { Args: { p_person_id: string }; Returns: Json }
       get_renewal_detail: { Args: { p_id: string }; Returns: Json }

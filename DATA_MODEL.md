@@ -59,7 +59,7 @@ Triggered by the framework rule: *"`DATA_MODEL.md` — schema has >5 entities OR
 | 27 | `audit_log` | event | PRD | Append-only. Who changed what, when. Sensitive values are masked at write time — see §8. |
 | 28 | `sensitive_column_registry` | global | EXT | The RA 10173 classification, **as data**. Drives both audit masking and the 5-year purge, so the two can never disagree. |
 | 30 | `programs` | global | SRS | The thirteen accredited programs (CRRD SRS 2026-09-05, CBL Art. I §4), a closed list — PRD OQ-17 resolved. Rows, not code; `is_active` retires, nothing deletes. (0037) |
-| 31 | `universities` | global | SRS | Institutions by region, a starter list pending the DOST-SEI eligible-institution list. CRRD edits; the RR view filters by it. (0037) |
+| 31 | `universities` | global | SRS | Institutions by region. Seeded as a starter list (0037); since 0048 (2026-09-08) the rows are the DOST-SEI study-placement list — UP, SUCs, private HEIs with a CHED COE/COD or FAAP Level III+ in a priority program (`docs/issues/2026-09-07-dost-sei-eligible-institutions.md`). LUCs deliberately excluded pending the CCDO. CRRD edits; the RR view filters by it. |
 | 29 | `confidentiality_acknowledgements` | **term** | **CBL** | CBL Art. VIII §7.1: *"All elected and appointed officers, committee members, and advisors shall sign a Confidentiality Agreement"* — §7 requires it *"upon assuming their roles."* One row per person per term. Precondition for every sensitive-column read — see §8.4. |
 
 ### 1.1 Requested entities that are deliberately NOT tables

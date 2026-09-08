@@ -195,6 +195,25 @@ Every other failure is highlighted on the exact field. The check runs inside the
 
 ---
 
+### 11. The university list is now the DOST-SEI placement list
+
+**What it is.** The "University" dropdown on the application and renewal forms used to be a starter list of the bigger schools in each region. It is now the list of schools where a DOST-SEI scholar may actually be enrolled, built from DOST-SEI's own placement rule: the University of the Philippines, every State University or College, and private schools that CHED recognises as a Center of Excellence or Center of Development, or that hold FAAP Level III accreditation, in one of the scholarship's priority programs.
+
+**How it works from the user's side.**
+- The dropdown grew from 122 to 280 schools, grouped by region as before. Nothing was removed.
+- Five schools appear under their current names: Pampanga State University (was Don Honorio Ventura State University), Occidental Mindoro State University, North Eastern Mindanao State University (was Surigao del Sur State University), Agusan del Sur State University, and University of the Philippines Tacloban.
+- Basilan State College and Sulu State College now sit under Region IX, where the government files them since Sulu's transfer out of BARMM in 2025.
+- Twenty-five private schools are on the list only because of their teacher-education accreditation — a scholar there can only be taking the science or math teaching degrees. The list cannot show that, so the CRRD reviewer still checks the program on the application.
+
+**What CRRD must do or know.**
+- DOST-SEI does not publish a master list of schools; it told a 2022 FOI requester the list "varies every year." This list was compiled on 2026-09-07 from CHED's, PACUCOA's, PAASCU's and DOST regional offices' published lists. Where CHED publishes its new Centers of Excellence list (a new round opened in 2025), the dropdown should be checked against it — CRRD can add or retire a school from the admin side without a code change.
+- A school is listed under the name it uses today — the name printed on the registration form a scholar uploads. Eight schools have a law converting them into a university that CHED has not yet acted on, so they stay under their present names: Camarines Sur Polytechnic Colleges, Basilan State College, Sulu State College, Ilocos Sur Polytechnic State College, Aurora State College of Technology, Bicol State College of Applied Sciences and Technology, J.H. Cerilles State College and Camarines Norte State College. Each becomes a one-line change when CHED confers, and CRRD can make it from the admin side.
+- Local Universities and Colleges (city- and province-run schools such as Pamantasan ng Lungsod ng Maynila) are **not** on the list, except PLM which was already there. See the question below.
+
+**Decided by:** Ethan, 2026-09-08 ("go, write the migration from the seed-delta files"); LUC and teacher-education points left open.
+
+---
+
 ## Still open
 
 Decided or defaulted, waiting for a final word or an action:
@@ -214,6 +233,8 @@ Decided or defaulted, waiting for a final word or an action:
 4. If someone applies to three departments on one committee application, are those three separate decisions (one department could approve while another rejects), or one decision for the whole application?
 5. What does "COC" mean in the list of documents a committee applicant can upload — Certificate of Candidacy? Certificate of Compliance? Certificate of Completion?
 6. For the booking-form link shown on each department's committee application — is that link the same every time, or does CRRD set a new one for each call for members?
+7. Should city- and province-run schools (Local Universities and Colleges) be on the university dropdown? DOST-SEI's online FAQ says LUC students are eligible; its printed 2026 brochure does not mention them. A cross-checked list of 166 LUCs is ready if the answer is yes.
+8. Should the 26 private schools that qualify only through teacher-education accreditation stay on the dropdown, or be shown only to applicants declaring a science/math teaching program?
 
 ---
 

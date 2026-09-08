@@ -208,7 +208,7 @@ Every other failure is highlighted on the exact field. The check runs inside the
 **What CRRD must do or know.**
 - DOST-SEI does not publish a master list of schools; it told a 2022 FOI requester the list "varies every year." This list was compiled on 2026-09-07 from CHED's, PACUCOA's, PAASCU's and DOST regional offices' published lists. Where CHED publishes its new Centers of Excellence list (a new round opened in 2025), the dropdown should be checked against it — CRRD can add or retire a school from the admin side without a code change.
 - A school is listed under the name it uses today — the name printed on the registration form a scholar uploads. Eight schools have a law converting them into a university that CHED has not yet acted on, so they stay under their present names: Camarines Sur Polytechnic Colleges, Basilan State College, Sulu State College, Ilocos Sur Polytechnic State College, Aurora State College of Technology, Bicol State College of Applied Sciences and Technology, J.H. Cerilles State College and Camarines Norte State College. Each becomes a one-line change when CHED confers, and CRRD can make it from the admin side.
-- Local Universities and Colleges (city- and province-run schools such as Pamantasan ng Lungsod ng Maynila) are **not** on the list, except PLM which was already there. See the question below.
+- Local Universities and Colleges (city- and province-run schools such as Pamantasan ng Lungsod ng Maynila) were **not** on the list at the time of this update, except PLM which was already there. That was settled a day later — see update 13.
 
 **Decided by:** Ethan, 2026-09-08 ("go, write the migration from the seed-delta files"); LUC and teacher-education points left open.
 
@@ -238,6 +238,23 @@ Merge fields work on both tabs, and the same short list as before: first name, l
 
 ---
 
+### 13. City- and province-run colleges are on the university list
+
+**What it is.** The University dropdown now also carries Local Universities and Colleges — the 165 colleges run by a city, municipality or province that CHED lists, on top of the 280 already there. Examples: Quezon City University, University of Makati, City of Malabon University, Pamantasan ng Lungsod ng Valenzuela.
+
+**How it works from the user's side.**
+- The dropdown grew from 280 to 445 schools, still grouped by region. Nothing was removed.
+- Twelve of the new entries are colleges an LGU has created but CHED has not yet issued an institution code for. They are on the list so a scholar attending one can still find their school; each is named in the migration so CRRD can switch it off from the admin side if you would rather not offer it.
+- Region II, the Cordillera and BARMM have no such colleges, which matches CHED's own count.
+
+**What CRRD must do or know.**
+- This settles the question the previous update raised. DOST-SEI's printed 2026 brochure lists only UP, state universities and private schools with CHED or FAAP accreditation; its live online FAQ for the 2027 cycle also names Local Universities and Colleges. The FAQ is the newer text, and the decision was to follow it: a school missing from the list blocks an application outright, while a school that turns out not to qualify is one check the reviewer already makes on the program.
+- Eligibility still depends on the program, not the school. The reviewer checks the program on the application as before.
+
+**Decided by:** Ethan, 2026-09-08 — yes to including the colleges, and yes to keeping the teacher-education schools from the previous update.
+
+---
+
 ## Still open
 
 Decided or defaulted, waiting for a final word or an action:
@@ -251,14 +268,14 @@ Decided or defaulted, waiting for a final word or an action:
 
 ## Questions still waiting for the CCDO
 
+*(The two questions the university list raised — whether to include city- and province-run colleges, and whether to keep the teacher-education-only schools — were both answered yes on 2026-09-08. See update 13.)*
+
 1. Does CRRD alone decide on committee applications, or does the relevant department's chief also get a say?
 2. Should there be an "interview" stage between an application being pending and being approved?
 3. When a committee application is "approved," does that only mark the decision — with CRRD assigning the person to the actual committee as a separate step afterward?
 4. If someone applies to three departments on one committee application, are those three separate decisions (one department could approve while another rejects), or one decision for the whole application?
 5. What does "COC" mean in the list of documents a committee applicant can upload — Certificate of Candidacy? Certificate of Compliance? Certificate of Completion?
 6. For the booking-form link shown on each department's committee application — is that link the same every time, or does CRRD set a new one for each call for members?
-7. Should city- and province-run schools (Local Universities and Colleges) be on the university dropdown? DOST-SEI's online FAQ says LUC students are eligible; its printed 2026 brochure does not mention them. A cross-checked list of 166 LUCs is ready if the answer is yes.
-8. Should the 26 private schools that qualify only through teacher-education accreditation stay on the dropdown, or be shown only to applicants declaring a science/math teaching program?
 
 ---
 

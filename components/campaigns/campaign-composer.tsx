@@ -299,11 +299,7 @@ export function CampaignComposer({ options, origin }: CampaignComposerProps) {
             <label htmlFor="body_markdown" className="text-sm font-medium">
               Message
             </label>
-            <div
-              className="flex gap-1 rounded-md border p-0.5"
-              role="tablist"
-              aria-label="Message format"
-            >
+            <div className="flex gap-1 rounded-md border p-0.5" role="tablist" aria-label="Format">
               {(
                 [
                   ["markdown", "Write it here"],

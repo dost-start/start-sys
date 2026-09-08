@@ -90,7 +90,10 @@ const campaignScreens = {
   // aria-label "Select <family>, <given>" (never an email — see components/campaigns/
   // audience-picker.tsx).
   audienceSearch: (page: Page) => page.getByLabel("Search by name or member ID"),
-  // The 2026-09-07 paste-a-design tab (ADR 0014).
+  // The 2026-09-07 paste-a-design tab (ADR 0014). The tab group's own accessible name is
+  // "Format", NOT "Message format": getByLabel does a case-insensitive SUBSTRING match, so
+  // a group labelled "Message format" also answers to `getByLabel("Message")` and makes
+  // the body textarea ambiguous in every spec above. Caught by CI, not by review.
   formatTab: (page: Page, format: "markdown" | "html") => page.getByTestId(`body-format-${format}`),
   htmlInput: (page: Page) => page.getByTestId("body-html-input"),
   htmlError: (page: Page) => page.getByTestId("html-body-error"),

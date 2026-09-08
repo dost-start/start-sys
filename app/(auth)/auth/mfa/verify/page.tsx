@@ -10,6 +10,7 @@ import { redirect } from "next/navigation";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { TotpVerify, type TotpFactorOption } from "@/components/auth/totp-verify";
+import { BrandBackground } from "@/components/brand/brand-background";
 import { getSessionContext } from "@/lib/auth/queries";
 import { homeForRole, LOGIN_PATH } from "@/lib/auth/route-access";
 
@@ -43,13 +44,12 @@ export default async function MfaVerifyPage({
   if (factors.length === 0) redirect("/auth/mfa/enroll");
 
   return (
-    <main className="px-4 py-10">
-      <TotpVerify factors={factors} next={next} homePath={home} />
+    <main className="brand-surface flex min-h-screen items-center justify-center p-6 sm:p-10">
+      <BrandBackground />
       {/* Same dead-end reasoning as /auth/mfa/enroll: a lost authenticator must not
-          leave the session with nowhere to go but the challenge it cannot answer. */}
-      <div className="mx-auto mt-8 w-full max-w-md">
-        <SignOutButton />
-      </div>
+          leave the session with nowhere to go but the challenge it cannot answer. The
+          sign-out control is passed in as a node so it stays a Server Component. */}
+      <TotpVerify factors={factors} next={next} homePath={home} signOut={<SignOutButton />} />
     </main>
   );
 }

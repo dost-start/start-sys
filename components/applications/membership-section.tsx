@@ -1,4 +1,4 @@
-// Section 3 of the application form: membership information (BUILD_PLAN S3-T18).
+// The region block of the application form (BUILD_PLAN S3-T18) — the tail of step two.
 //
 // `regions` is fetched SERVER-SIDE in `app/(public)/apply/page.tsx` (an anonymous,
 // ordinary `select on public.regions`, granted to `anon` in 0015) and passed down as
@@ -8,12 +8,8 @@
 
 import { useFormContext } from "react-hook-form";
 
-import {
-  FieldError,
-  FieldLabel,
-  fieldClassName,
-  FormSection,
-} from "@/components/applications/form-section";
+import { Field, FieldError, FieldLabel, FormSection } from "@/components/applications/form-section";
+import { NativeSelect } from "@/components/ui/native-select";
 import type { ApplicationSubmitInput } from "@/lib/applications/schema";
 
 export type RegionOption = {
@@ -29,12 +25,11 @@ export function MembershipSection({ regions }: { regions: RegionOption[] }) {
   } = useFormContext<ApplicationSubmitInput>();
 
   return (
-    <FormSection title="Membership information" description="Which region are you applying under?">
-      <div className="space-y-1.5">
+    <FormSection title="Region" description="Which region are you applying under?">
+      <Field>
         <FieldLabel htmlFor="region_id">Region</FieldLabel>
-        <select
+        <NativeSelect
           id="region_id"
-          className={fieldClassName(Boolean(errors.region_id))}
           aria-invalid={errors.region_id ? "true" : "false"}
           defaultValue=""
           {...register("region_id")}
@@ -47,14 +42,14 @@ export function MembershipSection({ regions }: { regions: RegionOption[] }) {
               {region.name}
             </option>
           ))}
-        </select>
+        </NativeSelect>
         <FieldError message={errors.region_id?.message} />
         {regions.length === 0 ? (
-          <p className="text-sm text-destructive">
+          <p className="text-destructive text-sm">
             Regions could not be loaded. Reload the page before submitting.
           </p>
         ) : null}
-      </div>
+      </Field>
     </FormSection>
   );
 }

@@ -39,6 +39,7 @@ import { randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import { fakeDocumentStore, fakeStorePut } from "../../lib/documents/fake-store";
+import { PRIVACY_NOTICE_VERSION } from "../../lib/privacy/notice-version";
 import { FIXTURES, FIXTURE_PASSWORD, loadFixtureState } from "./auth";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -286,7 +287,9 @@ export async function seedPendingApplication(
       middle_name: "Seed",
       suffix: null,
       program: "BS Computer Science",
-      consent_privacy_notice_version: "v1",
+      // The client's copy of the current version, as the real form sends it; the
+      // trigger stamps the DB column from the register regardless (0035).
+      consent_privacy_notice_version: PRIVACY_NOTICE_VERSION,
       consent_given_at: now,
     },
     // `pending_has_proof` makes this NOT NULL for any non-draft row. When there are no

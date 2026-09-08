@@ -131,24 +131,25 @@ select pg_temp.login_anon();
 
 select is(
   (select count(*)::int from public.privacy_notice_versions),
-  1,
-  'anon reads EXACTLY 1 privacy notice version — the published text must be readable '
-  'without an account or consent to it is not informed'
+  2,
+  'anon reads EXACTLY 2 privacy notice versions (v1 from 0035, v2 from 0051) — the '
+  'published text must be readable without an account or consent to it is not informed'
 );
 
 select pg_temp.logout();
 
--- 7 — the digest is the link between the row and the bytes. app/(public)/privacy/page.tsx
--- renders docs/privacy/PRIVACY_NOTICE.md imported at build time, so one source of truth
--- serves the page a scholar reads and the hash recorded here.
+-- 7 — the digest is the link between the row and the bytes. The CURRENT version (v2, 0051)
+-- carries the sha256 of docs/privacy/PRIVACY_NOTICE.md as committed; v1 keeps the digest
+-- of the bytes its applicants agreed to, which the file no longer has.
 --     shasum -a 256 docs/privacy/PRIVACY_NOTICE.md
--- ⚠ EDITING THAT FILE IS SUPPOSED TO BREAK THIS. A changed notice is a new version, in a
---   new migration, with PRIVACY_NOTICE_VERSION bumped in the same commit — because the
---   applicants who consented to v1 consented to *these bytes*.
+-- ⚠ EDITING THAT FILE IS SUPPOSED TO BREAK THIS (the CI digest guard compares the file to
+--   the newest migration's hash). A changed notice is a new version, in a new migration,
+--   with PRIVACY_NOTICE_VERSION bumped in the same commit — because the applicants who
+--   consented to a version consented to *those bytes*.
 select is(
-  (select body_sha256 from public.privacy_notice_versions where version = 'v1'),
-  '4a3bf0841945f4acc0fed1285ca448aa83432ed27dc94047acb181fa9c0d4beb',
-  'the seeded v1 digest is the sha256 of docs/privacy/PRIVACY_NOTICE.md — editing the notice '
+  (select body_sha256 from public.privacy_notice_versions where version = 'v2'),
+  '3818ed79cff8e66d5b933336a1778bb66c571f9d6cd03965ee5f3ce084651c5e',
+  'the seeded v2 digest is the sha256 of docs/privacy/PRIVACY_NOTICE.md — editing the notice '
   'under a stale hash is meant to fail here rather than pass silently'
 );
 
@@ -293,13 +294,14 @@ select is(
   'database''s'
 );
 
--- 16 — ⚠ and 'v0' becomes 'v1' WITHOUT tripping the foreign key, because BEFORE triggers
--- run before constraints are checked. See the header: this is what makes a claim of
--- agreement to a superseded or invented text impossible rather than merely erroneous.
+-- 16 — ⚠ and 'v0' becomes 'v2' (the current version, 0051) WITHOUT tripping the foreign
+-- key, because BEFORE triggers run before constraints are checked. See the header: this
+-- is what makes a claim of agreement to a superseded or invented text impossible rather
+-- than merely erroneous.
 select is(
   (select privacy_notice_version from public.applications
     where id = '00000000-0000-4000-8000-000000000932'),
-  'v1',
+  'v2',
   'a client-supplied version of ''v0'' is OVERWRITTEN with the server''s current version — '
   'and the bogus value never reaches the foreign key, because BEFORE triggers run first'
 );
@@ -398,7 +400,7 @@ select pg_temp.logout();
 select is(
   (select consented_at::text || '|' || privacy_notice_version
      from public.applications where id = '00000000-0000-4000-8000-000000000934'),
-  now()::text || '|v1',
+  now()::text || '|v2',
   'and the anonymous row lands with the SERVER''s clock and the SERVER''s current version, '
   'not the 1999 timestamp and the invented ''v0'' the client sent'
 );

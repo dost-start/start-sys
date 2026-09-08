@@ -1,18 +1,25 @@
 "use client";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// The renewal form (PRD US-G7, US-H5). The application form's sections plus one identity
-// section (member ID), bound to `renewalSubmitSchema` — the same schema module
-// `startRenewal` re-runs (CONVENTIONS §6). The upload flow is the application form's:
-// `startRenewal` verifies the identity, writes the draft and mints two upload sessions;
-// the browser PUTs both files straight to the store; `finalizeRenewal` re-verifies them
-// from provider metadata and flips the draft to pending.
+// The renewal form (PRD US-G7, US-H5) — the application form's four steps plus one
+// identity block (member ID) at the top of step one, bound to `renewalSubmitSchema`,
+// the same schema module `startRenewal` re-runs (CONVENTIONS §6). Brand edition
+// 2026-09-08 (design canvas `form_card("renew")`).
 //
-// The token from `startRenewal` lives in a ref and is never rendered, never in the URL.
+// Step logic mirrors `app/(public)/apply/application-form.tsx`: Next validates the
+// step's own keys (`RENEWAL_STEP_FIELDS`) and advances only when they pass; step 3
+// requires both documents; the stepper only jumps back; a server response with field
+// errors lands the scholar on the lowest step that owns one.
+//
+// The upload flow is the application form's: `startRenewal` verifies the identity,
+// writes the draft and mints two upload sessions; the browser PUTs both files straight
+// to the store; `finalizeRenewal` re-verifies them from provider metadata and flips the
+// draft to pending. The token from `startRenewal` lives in a ref and is never rendered,
+// never in the URL.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRef, useState } from "react";
+import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import type { z } from "zod";
 
@@ -22,7 +29,18 @@ import {
   type UniversityOption,
 } from "@/components/applications/academic-section";
 import { ConsentSection } from "@/components/applications/consent-section";
-import { FormSection } from "@/components/applications/form-section";
+import {
+  APPLICATION_STEP_FIELDS,
+  FIRST_STEP,
+  FORM_STEPS,
+  FormSection,
+  LAST_STEP,
+  type FormStep,
+  isFormStep,
+  lowestStepForFields,
+  nextFormStep,
+  previousFormStep,
+} from "@/components/applications/form-section";
 import { MembershipSection, type RegionOption } from "@/components/applications/membership-section";
 import { PersonalSection } from "@/components/applications/personal-section";
 import {
@@ -33,6 +51,8 @@ import {
 import { RenewalIdentitySection } from "@/components/applications/renewal-identity-section";
 import { RenewalSuccess } from "@/components/applications/renewal-success";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Stepper } from "@/components/ui/stepper";
 import { type ActionError, isErr } from "@/lib/action-result";
 import {
   finalizeRenewal,
@@ -40,7 +60,17 @@ import {
   type StartRenewalResult,
 } from "@/lib/applications/renewal-actions";
 import { renewalSubmitSchema, type RenewalSubmitInput } from "@/lib/applications/renewal-schema";
+import { SCHOLARSHIP_AWARD_LABELS } from "@/lib/applications/schema";
 import { PRIVACY_NOTICE_VERSION } from "@/lib/privacy/notice-version";
+
+/** The card's anchor: the hero pill scrolls here, and so does every step change. */
+const CARD_ID = "application-form";
+
+/** The application's steps, with the member ID owned by step one. */
+const RENEWAL_STEP_FIELDS: Record<FormStep, readonly (keyof RenewalSubmitInput)[]> = {
+  ...APPLICATION_STEP_FIELDS,
+  1: ["member_id", ...APPLICATION_STEP_FIELDS[1]],
+};
 
 const KNOWN_FIELDS = new Set<string>([
   "member_id",
@@ -106,17 +136,28 @@ const IDLE_DOC: DocState = {
 
 type DocKey = "registration" | "noa";
 
+/** A form value as review text: the raw input types include `unknown` (the coerced ints). */
+function text(value: unknown): string {
+  return typeof value === "string" || typeof value === "number" ? String(value).trim() : "";
+}
+
+const AWARD_LABELS: Record<string, string> = SCHOLARSHIP_AWARD_LABELS;
+
 export function RenewalForm({
+  hero,
   regions,
   universities,
   programs,
 }: {
+  /** The page hero, rendered above the card while the form is open and dropped on success. */
+  hero: ReactNode;
   regions: RegionOption[];
   universities: UniversityOption[];
   programs: ProgramOption[];
 }) {
   const [succeeded, setSucceeded] = useState(false);
   const [phase, setPhase] = useState<Phase>("form");
+  const [step, setStep] = useState<FormStep>(FIRST_STEP);
   const [rootError, setRootError] = useState<string | null>(null);
   const [docs, setDocs] = useState<Record<DocKey, DocState>>({
     registration: IDLE_DOC,
@@ -162,6 +203,61 @@ export function RenewalForm({
     setDocs((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
   }
 
+  // ── Steps ──────────────────────────────────────────────────────────────────
+
+  function showStep(next: FormStep) {
+    setStep(next);
+    document.getElementById(CARD_ID)?.scrollIntoView({ block: "start" });
+  }
+
+  /** Both documents picked and neither refused client-side. Sets the field errors otherwise. */
+  function documentsReady(): boolean {
+    const registration = filesRef.current.registration;
+    const noa = filesRef.current.noa;
+    if (!registration && !docs.registration.clientError) {
+      patchDoc("registration", {
+        clientError: "Attach your latest registration form before submitting.",
+      });
+    }
+    if (!noa && !docs.noa.clientError) {
+      patchDoc("noa", { clientError: "Attach your Notice of Award before submitting." });
+    }
+    if (!registration || !noa) return false;
+    if (docs.registration.clientError || docs.noa.clientError) return false;
+    return true;
+  }
+
+  async function goNext() {
+    if (step === LAST_STEP) return;
+    if (step === 3) {
+      if (!documentsReady()) return;
+      showStep(nextFormStep(step));
+      return;
+    }
+    const valid = await form.trigger(RENEWAL_STEP_FIELDS[step], { shouldFocus: true });
+    if (!valid) return;
+    showStep(nextFormStep(step));
+  }
+
+  function goBack() {
+    if (step > FIRST_STEP) showStep(previousFormStep(step));
+  }
+
+  /** The stepper only ever jumps back; forward movement goes through Next's validation. */
+  function goBackTo(target: number) {
+    if (isFormStep(target) && target < step) showStep(target);
+  }
+
+  /** Enter in a text field on steps 1–3 means Next, not "submit the whole form". */
+  function handleKeyDown(event: KeyboardEvent<HTMLFormElement>) {
+    if (event.key !== "Enter" || step === LAST_STEP) return;
+    if (!(event.target instanceof HTMLInputElement)) return;
+    event.preventDefault();
+    void goNext();
+  }
+
+  // ── Server errors ──────────────────────────────────────────────────────────
+
   function applyServerError(error: ActionError) {
     if (!error.fields) {
       setRootError(error.message);
@@ -186,8 +282,15 @@ export function RenewalForm({
         mappedAny = true;
       }
     }
-    if (!mappedAny) setRootError(error.message);
+    if (!mappedAny) {
+      setRootError(error.message);
+      return;
+    }
+    const target = lowestStepForFields(RENEWAL_STEP_FIELDS, Object.keys(error.fields));
+    if (target !== undefined && target !== step) showStep(target);
   }
+
+  // ── Uploads ────────────────────────────────────────────────────────────────
 
   async function uploadOne(key: DocKey, uploadUrl: string, file: File): Promise<boolean> {
     patchDoc(key, { status: "uploading", progress: 0, serverError: null });
@@ -211,6 +314,7 @@ export function RenewalForm({
     const noa = filesRef.current.noa;
     if (!registration || !noa) {
       setPhase("form");
+      showStep(3);
       return;
     }
 
@@ -218,6 +322,7 @@ export function RenewalForm({
       const ok = await uploadOne("registration", pending.uploadUrl, registration);
       if (!ok) {
         setPhase("form");
+        showStep(3);
         return;
       }
     }
@@ -225,6 +330,7 @@ export function RenewalForm({
       const ok = await uploadOne("noa", pending.noaUploadUrl, noa);
       if (!ok) {
         setPhase("form");
+        showStep(3);
         return;
       }
     }
@@ -253,6 +359,8 @@ export function RenewalForm({
         patchDoc("registration", { status: "error", serverError: finalizeResult.error.message });
       }
       setPhase("form");
+      // The document errors render on the Documents step; land the scholar there.
+      showStep(3);
       return;
     }
 
@@ -260,6 +368,8 @@ export function RenewalForm({
     filesRef.current = { registration: null, noa: null };
     setSucceeded(true);
   }
+
+  // ── Submit ─────────────────────────────────────────────────────────────────
 
   async function onValid(values: RenewalSubmitInput) {
     setRootError(null);
@@ -271,18 +381,13 @@ export function RenewalForm({
       return;
     }
 
+    if (!documentsReady()) {
+      showStep(3);
+      return;
+    }
     const registration = filesRef.current.registration;
     const noa = filesRef.current.noa;
-    if (!registration) {
-      patchDoc("registration", {
-        clientError: "Attach your latest registration form before submitting.",
-      });
-    }
-    if (!noa) {
-      patchDoc("noa", { clientError: "Attach your Notice of Award before submitting." });
-    }
     if (!registration || !noa) return;
-    if (docs.registration.clientError || docs.noa.clientError) return;
 
     setPhase("starting");
     const startResult = await startRenewal({
@@ -311,86 +416,235 @@ export function RenewalForm({
     await runUploads(startResult.data);
   }
 
+  /** A field from an earlier step failed the full-schema check: go and show it. */
+  function onInvalid(errors: Record<string, unknown>) {
+    const target = lowestStepForFields(RENEWAL_STEP_FIELDS, Object.keys(errors));
+    if (target !== undefined && target !== step) showStep(target);
+  }
+
   function handleRetryUpload() {
     const pending = pendingRef.current;
     if (!pending) return;
     void runUploads(pending);
   }
 
+  // ── Rendering ──────────────────────────────────────────────────────────────
+
   function fieldFor(key: DocKey, title: string, description: string, testId: string) {
     const state = docs[key];
     return (
-      <FormSection title={title} description={description}>
-        <div data-testid={testId}>
-          <ProofUploadField
-            file={state.file}
-            status={state.status}
-            progress={state.progress}
-            error={state.clientError ?? state.serverError}
-            onFileChange={(picked, clientError) => {
-              filesRef.current = { ...filesRef.current, [key]: picked };
-              patchDoc(key, {
-                file: picked,
-                clientError,
-                serverError: null,
-                status: "idle",
-                progress: 0,
-              });
-            }}
-            onRetry={handleRetryUpload}
-          />
+      <div data-testid={testId} className="flex flex-col gap-3">
+        <div className="flex flex-col gap-1">
+          <h3 className="text-brand-ink text-base font-semibold">{title}</h3>
+          <p className="text-muted-foreground text-sm">{description}</p>
         </div>
-      </FormSection>
+        <ProofUploadField
+          file={state.file}
+          status={state.status}
+          progress={state.progress}
+          error={state.clientError ?? state.serverError}
+          onFileChange={(picked, clientError) => {
+            filesRef.current = { ...filesRef.current, [key]: picked };
+            patchDoc(key, {
+              file: picked,
+              clientError,
+              serverError: null,
+              status: "idle",
+              progress: 0,
+            });
+          }}
+          onRetry={handleRetryUpload}
+        />
+      </div>
     );
   }
 
+  /** The review panel's rows, read from the form at render time (step 4 has no inputs that feed it). */
+  function summaryRows(): Array<{ label: string; value: string }> {
+    const v = form.getValues();
+    const name = [v.applicant_given_name, v.middle_name, v.applicant_family_name, v.suffix]
+      .map(text)
+      .filter(Boolean)
+      .join(" ");
+    const scholarship = [AWARD_LABELS[text(v.scholarship_award)] ?? "", text(v.award_year)]
+      .filter(Boolean)
+      .join(", ");
+    const school = [
+      universities.find((u) => u.id === v.university_id)?.name ?? "",
+      programs.find((p) => p.id === v.program_id)?.name ?? "",
+    ]
+      .filter(Boolean)
+      .join(", ");
+    const region = regions.find((r) => r.id === v.region_id)?.name ?? "";
+    return [
+      { label: "Member ID", value: text(v.member_id) },
+      { label: "Name", value: name },
+      { label: "Email", value: text(v.applicant_email) },
+      { label: "Contact number", value: text(v.contact_number) },
+      { label: "Scholarship", value: scholarship },
+      { label: "School", value: school },
+      { label: "Region", value: region },
+    ];
+  }
+
   if (succeeded) {
-    return <RenewalSuccess />;
+    return (
+      <div className="flex flex-1 items-center justify-center px-4 py-16 sm:px-10">
+        <RenewalSuccess />
+      </div>
+    );
   }
 
   const submitting = phase !== "form";
 
   return (
-    <FormProvider {...form}>
-      <form onSubmit={form.handleSubmit(onValid)} noValidate className="space-y-6">
-        <div
-          aria-hidden="true"
-          className="absolute left-[-9999px] top-auto size-px overflow-hidden"
+    <>
+      {hero}
+      <div className="flex flex-1 justify-center px-4 pb-16 sm:px-10">
+        <Card
+          radius="hero"
+          id={CARD_ID}
+          className="w-full max-w-[1040px] scroll-mt-6 gap-7 px-5 py-8 sm:px-14 sm:py-11"
         >
-          <label htmlFor="website">Leave this field blank</label>
-          <input id="website" type="text" tabIndex={-1} autoComplete="off" ref={honeypotRef} />
-        </div>
+          <div className="flex flex-col items-center gap-4">
+            <h1 className="text-brand-slate text-center text-2xl font-bold tracking-wide uppercase sm:text-[32px]">
+              Membership renewal form
+            </h1>
+            <hr className="border-border w-full border-t" />
+          </div>
 
-        <RenewalIdentitySection />
-        <PersonalSection />
-        <AcademicSection universities={universities} programs={programs} regions={regions} />
-        <MembershipSection regions={regions} />
+          <Stepper steps={FORM_STEPS} current={step} onSelect={submitting ? undefined : goBackTo} />
 
-        {fieldFor(
-          "registration",
-          "Latest registration form",
-          "Your Certificate of Registration (or the enrollment form your school issues each term) for the current term. PDF or a clear photo, up to 10MB.",
-          "upload-registration",
-        )}
-        {fieldFor(
-          "noa",
-          "Notice of Award",
-          "The DOST-SEI Notice of Award for your scholarship. PDF or a clear photo, up to 10MB.",
-          "upload-noa",
-        )}
+          <FormProvider {...form}>
+            <form
+              onSubmit={form.handleSubmit(onValid, onInvalid)}
+              onKeyDown={handleKeyDown}
+              noValidate
+              className="flex flex-col gap-7"
+            >
+              <div
+                aria-hidden="true"
+                className="absolute top-auto left-[-9999px] size-px overflow-hidden"
+              >
+                <label htmlFor="website">Leave this field blank</label>
+                <input
+                  id="website"
+                  type="text"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  ref={honeypotRef}
+                />
+              </div>
 
-        <ConsentSection />
+              {step === 1 ? (
+                <>
+                  <RenewalIdentitySection />
+                  <PersonalSection />
+                </>
+              ) : null}
 
-        {rootError ? (
-          <p role="alert" className="text-sm text-destructive" data-testid="renewal-root-error">
-            {rootError}
-          </p>
-        ) : null}
+              {step === 2 ? (
+                <>
+                  <AcademicSection
+                    universities={universities}
+                    programs={programs}
+                    regions={regions}
+                  />
+                  <MembershipSection regions={regions} />
+                </>
+              ) : null}
 
-        <Button type="submit" className="w-full" disabled={submitting}>
-          {submitLabel(phase)}
-        </Button>
-      </form>
-    </FormProvider>
+              {step === 3 ? (
+                <FormSection
+                  title="Documents"
+                  description="Two files. A clear phone photo or a PDF, up to 10MB each. They go straight to secure storage."
+                >
+                  <div className="grid gap-7 sm:grid-cols-2">
+                    {fieldFor(
+                      "registration",
+                      "Latest registration form",
+                      "Your Certificate of Registration (or the enrollment form your school issues each term) for the current term. PDF or a clear photo, up to 10MB.",
+                      "upload-registration",
+                    )}
+                    {fieldFor(
+                      "noa",
+                      "Notice of Award",
+                      "The DOST-SEI Notice of Award for your scholarship. PDF or a clear photo, up to 10MB.",
+                      "upload-noa",
+                    )}
+                  </div>
+                </FormSection>
+              ) : null}
+
+              {step === 4 ? (
+                <>
+                  <FormSection
+                    title="Review and submit"
+                    description="Check your answers. Use Back to change anything."
+                  >
+                    <dl className="bg-brand-field rounded-form grid gap-x-6 gap-y-4 p-5 sm:grid-cols-3">
+                      {summaryRows().map((row) => (
+                        <div key={row.label} className="flex min-w-0 flex-col gap-0.5">
+                          <dt className="text-brand-label text-xs font-semibold tracking-[0.08em] uppercase">
+                            {row.label}
+                          </dt>
+                          <dd className="text-brand-ink text-sm break-words">{row.value || "—"}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </FormSection>
+                  <ConsentSection />
+                </>
+              ) : null}
+
+              {rootError ? (
+                <p
+                  role="alert"
+                  className="text-destructive text-sm"
+                  data-testid="renewal-root-error"
+                >
+                  {rootError}
+                </p>
+              ) : null}
+
+              <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
+                {step > FIRST_STEP ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    onClick={goBack}
+                    disabled={submitting}
+                  >
+                    Back
+                  </Button>
+                ) : (
+                  <span aria-hidden="true" />
+                )}
+                {step < LAST_STEP ? (
+                  <Button
+                    type="button"
+                    size="lg"
+                    className="sm:min-w-[200px]"
+                    onClick={() => void goNext()}
+                  >
+                    Next
+                  </Button>
+                ) : (
+                  <Button
+                    type="submit"
+                    size="lg"
+                    className="sm:min-w-[240px]"
+                    disabled={submitting}
+                  >
+                    {submitLabel(phase)}
+                  </Button>
+                )}
+              </div>
+            </form>
+          </FormProvider>
+        </Card>
+      </div>
+    </>
   );
 }

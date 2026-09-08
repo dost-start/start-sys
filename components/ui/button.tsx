@@ -7,24 +7,33 @@ import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
 
+// Brand edition (2026-09-08): the primary button is the blue→yellow gradient pill from
+// the Figma frames, labels are uppercase via CSS (the DOM text stays sentence case, so
+// every `getByRole("button", { name })` in e2e/ keeps matching), and `pill` is the
+// large white rounded call-to-action on the landing and form heroes.
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-xs font-semibold uppercase tracking-[0.06em] transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90",
+        default: "bg-brand-gradient text-brand-ink shadow-pill hover:brightness-[1.03]",
+        "brand-reverse":
+          "bg-brand-gradient-reverse text-brand-ink shadow-pill hover:brightness-[1.03]",
         destructive:
-          "bg-destructive text-destructive-foreground shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40",
-        outline: "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground",
+          "bg-destructive text-destructive-foreground shadow-[0_6px_18px_rgb(185_28_28/0.18)] hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40",
+        outline: "bg-card text-foreground shadow-soft hover:bg-accent hover:text-accent-foreground",
         secondary: "bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
+        ghost:
+          "text-brand-body normal-case tracking-normal font-medium hover:bg-accent hover:text-accent-foreground",
+        link: "text-brand-link normal-case tracking-normal font-medium underline-offset-4 hover:underline",
+        pill: "bg-card text-foreground shadow-card rounded-full normal-case tracking-normal font-medium hover:brightness-[1.02]",
       },
       size: {
-        default: "h-9 px-4 py-2 has-[>svg]:px-3",
-        sm: "h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5",
-        lg: "h-10 rounded-md px-6 has-[>svg]:px-4",
-        icon: "size-9",
+        default: "h-11 px-6 has-[>svg]:px-5",
+        sm: "h-9 gap-1.5 px-4 has-[>svg]:px-3",
+        lg: "h-12 px-8 has-[>svg]:px-6",
+        icon: "size-10",
+        pill: "h-12 px-6 text-base sm:h-14 sm:min-w-[320px] sm:px-10 sm:text-lg",
       },
     },
     defaultVariants: {

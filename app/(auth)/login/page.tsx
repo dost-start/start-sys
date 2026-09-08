@@ -6,6 +6,11 @@
 import type { Metadata } from "next";
 
 import { LoginForm } from "@/components/auth/login-form";
+import { BrandBackground } from "@/components/brand/brand-background";
+import { BrandLogo } from "@/components/brand/brand-logo";
+import { BrandWordmark } from "@/components/brand/brand-wordmark";
+import { Card } from "@/components/ui/card";
+import { ORG_SYSTEM_DESCRIPTION } from "@/lib/brand/org";
 
 export const metadata: Metadata = {
   title: "Log in — START-SYS",
@@ -21,16 +26,21 @@ export default async function LoginPage({
   const next = typeof nextRaw === "string" ? nextRaw : undefined;
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-muted/30 p-6">
-      <div className="w-full max-w-sm space-y-6">
-        <div className="space-y-1 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">START-SYS</h1>
-          <p className="text-sm text-muted-foreground">
-            Centralized Membership Information Management System for START-DOST.
-          </p>
+    <main className="brand-surface flex min-h-screen items-center justify-center p-6 sm:p-10">
+      <BrandBackground />
+      <Card
+        radius="hero"
+        className="w-full max-w-[820px] gap-6 px-7 py-9 sm:px-[72px] sm:py-[52px]"
+      >
+        <div className="flex flex-col items-center gap-2.5">
+          <BrandLogo height={84} priority />
+          <h1 className="text-3xl sm:text-[38px]">
+            <BrandWordmark />
+          </h1>
+          <p className="text-muted-foreground text-center text-sm">{ORG_SYSTEM_DESCRIPTION}</p>
         </div>
         <LoginForm next={next} />
-      </div>
+      </Card>
     </main>
   );
 }

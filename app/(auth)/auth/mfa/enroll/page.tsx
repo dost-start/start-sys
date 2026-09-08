@@ -11,6 +11,7 @@ import { redirect } from "next/navigation";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { TotpEnroll } from "@/components/auth/totp-enroll";
+import { BrandBackground } from "@/components/brand/brand-background";
 import { getSessionContext } from "@/lib/auth/queries";
 import { homeForRole, LOGIN_PATH } from "@/lib/auth/route-access";
 
@@ -28,16 +29,16 @@ export default async function MfaEnrollPage() {
   if (alreadyEnrolled) redirect(homeForRole(ctx.role));
 
   return (
-    <main className="px-4 py-10">
-      <TotpEnroll homePath={homeForRole(ctx.role)} />
+    <main className="brand-surface flex min-h-screen items-center justify-center p-6 sm:p-10">
+      <BrandBackground />
       {/*
-        Without this the screen is a dead end: the middleware refuses every other
-        route until a factor exists, so an account that lands here by mistake (wrong
-        login, shared machine) would have no way back out.
+        The sign-out control is passed in as a node (it stays a Server Component) and
+        rendered beside the primary button at each stage. Without it the screen is a
+        dead end: the middleware refuses every other route until a factor exists, so an
+        account that lands here by mistake (wrong login, shared machine) would have no
+        way back out.
       */}
-      <div className="mx-auto mt-8 w-full max-w-md">
-        <SignOutButton />
-      </div>
+      <TotpEnroll homePath={homeForRole(ctx.role)} signOut={<SignOutButton />} />
     </main>
   );
 }

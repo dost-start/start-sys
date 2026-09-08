@@ -61,7 +61,14 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   // 2. No valid session. US-A1: no page other than the public application form is
   //    reachable without logging in, and after login the user lands on the page they
   //    originally requested — hence `next`.
+  //
+  //    The splash page at `/` is the one anonymous exception (brand restyle,
+  //    2026-09-08, PRD §4 decision note): it shows the emblem, the wordmark and two
+  //    links, reads nothing, and carries the noindex header like every non-form path.
+  //    A signed-in visitor still falls through to step 5, where the deny-by-default on
+  //    an ungrouped path sends them home.
   if (!user) {
+    if (pathname === "/") return response;
     return redirectTo(request, LOGIN_PATH, response, `${pathname}${search}`);
   }
 
@@ -140,8 +147,9 @@ export const config = {
   //                        job endpoints check JOB_SHARED_SECRET (CONVENTIONS §4.4).
   //   _next, favicon, any path whose last segment has a dot — static assets.
   //
-  // `/` IS matched: an anonymous visitor is sent to /login, and a signed-in one is
-  // sent home by the `canAccess` deny-by-default on an ungrouped path.
+  // `/` IS matched: an anonymous visitor is let through to the splash page (step 2's
+  // one exception), and a signed-in one is sent home by the `canAccess`
+  // deny-by-default on an ungrouped path.
   matcher: [
     "/((?!apply|renew(?:/|$)|privacy|login|auth|api|_next/static|_next/image|favicon\\.ico|.*\\.[^/]*$).*)",
   ],

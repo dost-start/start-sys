@@ -255,6 +255,24 @@ Merge fields work on both tabs, and the same short list as before: first name, l
 
 ---
 
+### 14. The new look — START-DOST branding on every public page
+
+**What it is.** The system now wears the START-DOST brand the designer drew in Figma: the emblem, the yellow-to-blue START-SYS wordmark, the yellow-and-blue page background with its soft shapes, rounded white cards, grey pill inputs, and gradient buttons. The typeface is Poppins. This first part covers everything a scholar or an officer sees before logging in; the admin screens follow in the next part.
+
+**How it works from the user's side.**
+- A new front page at the site's root shows the emblem, the wordmark, a "Ready for the START?" button that opens the application form, and a small "Officer sign in" link. It reads no data and search engines are told not to index it.
+- The login page is a white card with the emblem, the wordmark and the two fields. There is no "Forgot password?" link: officer accounts are created by invitation and a password is reset by the Technical Admin sending a recovery link.
+- The application and renewal forms are now four short steps — Personal, Scholarship and school, Documents, Review and submit — with a progress bar, Next and Back buttons, and a summary of the answers before the final tick boxes. The fields themselves are unchanged, home address included.
+- The two-factor setup screen was redrawn: the QR code on the left, three numbered steps on the right, a Copy button for the manual key, and a recovery-codes page with Copy and Download.
+- The privacy notice is rewritten in plain words for a college reader. Because the wording changed, applicants from now on agree to version 2 of the notice; earlier applicants' records keep the version they saw.
+- The footer under the forms carries the org tagline from the logo file and the CRRD email. Social-media icons are left out until the org supplies the links.
+
+**What CRRD must do or know.** Read the privacy notice wording on the site and confirm it. Tell Ethan which email address the footer and the notice should show, whether the tagline is "…Advancement **and** Research for Technology" (the logo) or "…Advancement **for** Research and Technology" (the Figma footer), and the social-media links if any.
+
+**Decided by:** Ethan, 2026-09-08, on the editable design canvas he and the designer reviewed ("I love it. Implement this."); the plain-language notice, the step form and the two-factor redesign were his own change requests that day.
+
+---
+
 ## Still open
 
 Decided or defaulted, waiting for a final word or an action:

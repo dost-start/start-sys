@@ -13,7 +13,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { updatePassword } from "@/lib/auth/reset-actions";
+
+const CARD_CLASS = "mx-auto w-full max-w-[560px] gap-6 px-7 py-9 sm:px-14 sm:py-12";
 
 export function ResetPasswordForm({ homePath }: { homePath: string }) {
   const router = useRouter();
@@ -50,27 +55,27 @@ export function ResetPasswordForm({ homePath }: { homePath: string }) {
 
   if (done) {
     return (
-      <p className="text-sm" role="status">
-        Your password has been changed. Redirecting…
-      </p>
+      <Card radius="hero" className={CARD_CLASS}>
+        <p className="text-sm" role="status">
+          Your password has been changed. Redirecting…
+        </p>
+      </Card>
     );
   }
 
   return (
-    <section className="mx-auto w-full max-w-md space-y-6" aria-labelledby="reset-heading">
-      <div className="space-y-2">
-        <h1 id="reset-heading" className="text-xl font-semibold">
+    <Card radius="hero" className={CARD_CLASS} aria-labelledby="reset-heading">
+      <div className="flex flex-col gap-2">
+        <h1 id="reset-heading" className="text-brand-ink text-2xl font-semibold">
           Set a new password
         </h1>
         <p className="text-muted-foreground text-sm">Use at least 12 characters.</p>
       </div>
 
-      <form onSubmit={onSubmit} className="space-y-4">
-        <div className="space-y-1">
-          <label htmlFor="password" className="block text-sm font-medium">
-            New password
-          </label>
-          <input
+      <form onSubmit={onSubmit} className="flex flex-col gap-5">
+        <Field>
+          <FieldLabel htmlFor="password">New password</FieldLabel>
+          <Input
             id="password"
             name="password"
             type="password"
@@ -80,20 +85,17 @@ export function ResetPasswordForm({ homePath }: { homePath: string }) {
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             aria-invalid={fieldErrors["password"] !== undefined}
-            className="border-input h-9 w-full rounded-md border px-3 text-sm"
           />
           {fieldErrors["password"]?.map((message) => (
             <p key={message} className="text-destructive text-sm">
               {message}
             </p>
           ))}
-        </div>
+        </Field>
 
-        <div className="space-y-1">
-          <label htmlFor="confirm" className="block text-sm font-medium">
-            Confirm new password
-          </label>
-          <input
+        <Field>
+          <FieldLabel htmlFor="confirm">Confirm new password</FieldLabel>
+          <Input
             id="confirm"
             name="confirm"
             type="password"
@@ -102,18 +104,19 @@ export function ResetPasswordForm({ homePath }: { homePath: string }) {
             value={confirm}
             onChange={(event) => setConfirm(event.target.value)}
             aria-invalid={fieldErrors["confirm"] !== undefined}
-            className="border-input h-9 w-full rounded-md border px-3 text-sm"
           />
           {fieldErrors["confirm"]?.map((message) => (
             <p key={message} className="text-destructive text-sm">
               {message}
             </p>
           ))}
-        </div>
+        </Field>
 
-        <Button type="submit" disabled={busy}>
-          {busy ? "Saving…" : "Change password"}
-        </Button>
+        <div className="pt-1">
+          <Button type="submit" className="min-w-[220px]" disabled={busy}>
+            {busy ? "Saving…" : "Change password"}
+          </Button>
+        </div>
       </form>
 
       {error !== null ? (
@@ -121,6 +124,6 @@ export function ResetPasswordForm({ homePath }: { homePath: string }) {
           {error}
         </p>
       ) : null}
-    </section>
+    </Card>
   );
 }

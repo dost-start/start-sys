@@ -15,7 +15,9 @@
 import { redirect } from "next/navigation";
 
 import { ResetPasswordForm } from "@/components/auth/reset-password-form";
+import { SignOutButton } from "@/components/auth/sign-out-button";
 import { TotpVerify, type TotpFactorOption } from "@/components/auth/totp-verify";
+import { BrandBackground } from "@/components/brand/brand-background";
 import { getSessionContext } from "@/lib/auth/queries";
 import { homeForRole, LOGIN_PATH, requiresMfa } from "@/lib/auth/route-access";
 
@@ -49,13 +51,15 @@ export default async function ResetPasswordPage() {
       if (factors.length === 0) redirect("/auth/mfa/enroll");
 
       return (
-        <main className="px-4 py-10">
+        <main className="brand-surface flex min-h-screen items-center justify-center p-6 sm:p-10">
+          <BrandBackground />
           <TotpVerify
             factors={factors}
             next={RESET_PATH}
             homePath={home}
             heading="Confirm your identity"
             description="An emailed link is not enough to change the password on an account that can reach member data. Enter the code from your authenticator app to continue."
+            signOut={<SignOutButton />}
           />
         </main>
       );
@@ -63,7 +67,8 @@ export default async function ResetPasswordPage() {
   }
 
   return (
-    <main className="px-4 py-10">
+    <main className="brand-surface flex min-h-screen items-center justify-center p-6 sm:p-10">
+      <BrandBackground />
       <ResetPasswordForm homePath={home} />
     </main>
   );

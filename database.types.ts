@@ -460,6 +460,7 @@ export type Database = {
       email_campaigns: {
         Row: {
           audience_filter: Json
+          body_format: string
           body_html: string
           body_markdown: string
           created_at: string
@@ -478,6 +479,7 @@ export type Database = {
         }
         Insert: {
           audience_filter?: Json
+          body_format?: string
           body_html: string
           body_markdown: string
           created_at?: string
@@ -496,6 +498,7 @@ export type Database = {
         }
         Update: {
           audience_filter?: Json
+          body_format?: string
           body_html?: string
           body_markdown?: string
           created_at?: string

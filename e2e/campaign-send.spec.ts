@@ -90,6 +90,14 @@ const campaignScreens = {
   // aria-label "Select <family>, <given>" (never an email — see components/campaigns/
   // audience-picker.tsx).
   audienceSearch: (page: Page) => page.getByLabel("Search by name or member ID"),
+  // The 2026-09-07 paste-a-design tab (ADR 0014). The tab group's own accessible name is
+  // "Format", NOT "Message format": getByLabel does a case-insensitive SUBSTRING match, so
+  // a group labelled "Message format" also answers to `getByLabel("Message")` and makes
+  // the body textarea ambiguous in every spec above. Caught by CI, not by review.
+  formatTab: (page: Page, format: "markdown" | "html") => page.getByTestId(`body-format-${format}`),
+  htmlInput: (page: Page) => page.getByTestId("body-html-input"),
+  htmlError: (page: Page) => page.getByTestId("html-body-error"),
+  previewFrame: (page: Page) => page.getByTestId("campaign-preview-frame"),
   candidateCheckbox: (page: Page, familyName: string, givenName: string) =>
     page.getByRole("checkbox", { name: `Select ${familyName}, ${givenName}` }),
 };
@@ -347,4 +355,106 @@ test("SRS: a non-sending tier is bounced off /campaigns and resolve_recipients()
   const { data, error } = await officer.rpc("resolve_recipients", { p_filter: {} });
   expect(data).toBeNull();
   expect(error?.code).toBe("42501");
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// (e) — a designed template pasted from an email builder is sanitised SERVER-SIDE,
+//       stored sanitised, and sent (ADR 0014; SRS "send emails with an HTML format")
+//
+// The assertion that matters is not "the screen looked right": it is that the row in
+// `email_campaigns` carries the ALLOWLISTED markup and not the paste. A browser test is
+// the only place that can prove the whole path — the composer's tab, the Server Action's
+// sanitiser, the stored column — is wired together end to end.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+test("ADR 0014: a pasted HTML template is sanitised on the server, stored clean, and sent", async ({
+  page,
+}) => {
+  const admin = adminClient();
+  const recipient = await seedRecipient(admin);
+  const subject = `E2E pasted design ${recipient.personId.slice(0, 8)}`;
+
+  // What a builder exports, with three things that must not survive stapled on: a script,
+  // an inline event handler, and a javascript: link.
+  const pasted = [
+    '<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff">',
+    '<tr><td align="center" style="padding:24px">',
+    '<img src="https://cdn.example.com/banner.png" alt="START DataCamp" width="552" />',
+    '<h1 style="font-size:24px;color:#111827">Congratulations, {{given_name}}!</h1>',
+    '<p onclick="steal()">Your START DataCamp Scholarship is here.</p>',
+    '<a href="https://www.facebook.com/STARTDOST">Go to link</a>',
+    '<a href="javascript:alert(1)">bad link</a>',
+    "</td></tr></table>",
+    '<script>alert("nope")</script>',
+    "<style>@media (max-width:600px){.col{width:100%}}</style>",
+  ].join("");
+
+  await signIn(page, "crrd_admin");
+  await page.goto("/campaigns/new");
+  await expect(campaignScreens.template(page)).toBeVisible();
+  await campaignScreens.subject(page).fill(subject);
+
+  await test.step("switching to the paste tab and pasting shows a sandboxed preview", async () => {
+    await campaignScreens.formatTab(page, "html").click();
+    await campaignScreens.htmlInput(page).fill(pasted);
+    await expect(campaignScreens.previewFrame(page)).toBeVisible();
+    await expect(campaignScreens.htmlError(page)).toHaveCount(0);
+    await expect(campaignScreens.saveDraft(page)).toBeEnabled();
+  });
+
+  await campaignScreens.saveDraft(page).click();
+  await page.waitForURL(CAMPAIGN_URL);
+  const campaignId = CAMPAIGN_URL.exec(page.url())?.[1];
+  if (!campaignId) throw new Error(`no campaign id in ${page.url()}`);
+
+  await test.step("the STORED body is the sanitised one — the paste itself is never persisted", async () => {
+    const { data, error } = await admin
+      .from("email_campaigns")
+      .select("body_format, body_html, body_markdown")
+      .eq("id", campaignId)
+      .single();
+    expect(error).toBeNull();
+    const row = data as { body_format: string; body_html: string; body_markdown: string };
+
+    expect(row.body_format).toBe("html");
+    // Kept: the layout, the hosted image, the real link, the merge token.
+    expect(row.body_html).toContain("<table");
+    expect(row.body_html).toContain("https://cdn.example.com/banner.png");
+    expect(row.body_html).toContain("https://www.facebook.com/STARTDOST");
+    expect(row.body_html).toContain("{{given_name}}");
+    // Gone: every executable or navigational thing, and the CSS block.
+    expect(row.body_html).not.toContain("<script");
+    expect(row.body_html).not.toContain("onclick");
+    expect(row.body_html).not.toContain("javascript:");
+    expect(row.body_html).not.toContain("@media");
+    // The raw paste is kept as the SOURCE so the CRRD can edit it — that column is never sent.
+    expect(row.body_markdown).toContain("<script");
+  });
+
+  await test.step("it freezes and sends like any other campaign", async () => {
+    await campaignScreens.freeze(page).click();
+    await expect(campaignScreens.sendMessage(page)).toContainText(/queued/);
+    await campaignScreens.send(page).click();
+    await expect(campaignScreens.sendMessage(page)).toContainText(/^Done/, { timeout: 60_000 });
+
+    const rows = await recipientRows(admin, campaignId);
+    expect(rows.length).toBeGreaterThanOrEqual(1);
+    expect(rows.every((r) => r.status === "sent")).toBe(true);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// (f) — the merge-token guard, on the spelling other tools use
+// ═══════════════════════════════════════════════════════════════════════════════
+
+test("US-G3: {{First Name}} is caught as an unknown token rather than shipped as literal text", async ({
+  page,
+}) => {
+  await signIn(page, "crrd_admin");
+  await page.goto("/campaigns/new");
+  await expect(campaignScreens.template(page)).toBeVisible();
+  await campaignScreens.subject(page).fill("Spaced token");
+  await campaignScreens.body(page).fill("Congratulations, {{First Name}}!");
+  await expect(campaignScreens.mergeTokenError(page)).toContainText("First Name");
+  await expect(campaignScreens.saveDraft(page)).toBeDisabled();
 });

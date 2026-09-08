@@ -24,9 +24,10 @@ import { err, mapDbError, ok, validationFailure, type ActionResult } from "@/lib
 import { withRole } from "@/lib/auth/with-role";
 import { getMailTransport } from "@/lib/mail";
 
-import { markdownToHtml, markdownToText, wrapEmailHtml } from "./markdown";
+import { markdownToHtml, markdownToText, wrapEmailHtml, wrapPastedEmailHtml } from "./markdown";
 import { assertMergeTokensKnown, mergeHtml, mergeText, type MergePayload } from "./merge";
 import { listAudienceCandidates, previewAudience } from "./queries";
+import { byteLength, htmlToText, HtmlBodyError, sanitizeCampaignHtml } from "./sanitize";
 import { CAMPAIGN_ROLES } from "./roles";
 import {
   audienceCandidatesQuerySchema,
@@ -34,6 +35,7 @@ import {
   campaignComposeSchema,
   campaignIdSchema,
   DRAIN_BATCH_SIZE,
+  htmlPreviewSchema,
 } from "./schema";
 import { TEMPLATES } from "./templates";
 import type { AudienceCandidatePage, AudiencePreview } from "./types";
@@ -66,6 +68,35 @@ export const listAudienceCandidatesAction = withRole<unknown, AudienceCandidateP
   },
 );
 
+/**
+ * The composer's preview of a PASTED HTML body (ADR 0014).
+ *
+ * Why this is a Server Action and not a client-side render: the sanitiser is the whole
+ * of the safety story for the html path, and it must be the SAME code that runs before
+ * the body is stored. Sanitising in the browser would be a second implementation to
+ * drift, and a browser-side result cannot be trusted anyway. The composer renders what
+ * comes back here inside a sandboxed iframe, so the CCDO sees exactly the markup that
+ * will be stored — including anything the allowlist removed.
+ */
+export type HtmlPreview = { html: string; bytes: number };
+
+export const previewHtmlBodyAction = withRole<unknown, HtmlPreview>(
+  CAMPAIGN_ROLES,
+  async (_ctx, input) => {
+    const parsed = htmlPreviewSchema.safeParse(input);
+    if (!parsed.success) return validationFailure<HtmlPreview>(parsed.error);
+    try {
+      const html = sanitizeCampaignHtml(parsed.data.body_html);
+      return ok({ html, bytes: byteLength(html) });
+    } catch (caught) {
+      if (caught instanceof HtmlBodyError) {
+        return err<HtmlPreview>("validation", caught.message);
+      }
+      throw caught;
+    }
+  },
+);
+
 export type CreateCampaignResult = { id: string };
 
 export const createCampaign = withRole<unknown, CreateCampaignResult>(
@@ -73,7 +104,7 @@ export const createCampaign = withRole<unknown, CreateCampaignResult>(
   async (ctx, input) => {
     const parsed = campaignComposeSchema.safeParse(input);
     if (!parsed.success) return validationFailure<CreateCampaignResult>(parsed.error);
-    const { template_key, subject, body_markdown, audience } = parsed.data;
+    const { template_key, subject, body_format, body_markdown, audience } = parsed.data;
 
     // The schema already refused unknown tokens; this is the belt to that brace.
     try {
@@ -88,7 +119,26 @@ export const createCampaign = withRole<unknown, CreateCampaignResult>(
 
     // Rendered ONCE, stored, and merged per recipient at send. The stored html carries the
     // merge tokens verbatim; every value is escaped when merged (lib/campaigns/merge.ts).
-    const bodyHtml = wrapEmailHtml(markdownToHtml(body_markdown), subject);
+    //
+    // THE SANITISER RUNS HERE, ON THE SERVER, AND ITS OUTPUT IS WHAT IS STORED (ADR 0014).
+    // The raw paste is never persisted and never sent: `body_html` is the sanitised text,
+    // so a campaign row cannot carry markup the allowlist would have rejected — not even
+    // if this action were reached by a client that skipped the composer entirely.
+    let bodyHtml: string;
+    if (body_format === "html") {
+      try {
+        bodyHtml = wrapPastedEmailHtml(sanitizeCampaignHtml(body_markdown), subject);
+      } catch (caught) {
+        if (caught instanceof HtmlBodyError) {
+          return err<CreateCampaignResult>("validation", caught.message, {
+            body_markdown: [caught.message],
+          });
+        }
+        throw caught;
+      }
+    } else {
+      bodyHtml = wrapEmailHtml(markdownToHtml(body_markdown), subject);
+    }
 
     const { data, error } = await ctx.supabase
       .from("email_campaigns")
@@ -97,6 +147,7 @@ export const createCampaign = withRole<unknown, CreateCampaignResult>(
         form_kind: TEMPLATES[template_key].formKind,
         template_key,
         subject,
+        body_format,
         body_markdown,
         body_html: bodyHtml,
         audience_filter: audience,
@@ -145,7 +196,7 @@ export const drainCampaign = withRole<unknown, DrainCampaignResult>(
 
     const { data: campaign, error: campaignError } = await ctx.supabase
       .from("email_campaigns")
-      .select("subject, body_html, body_markdown, status")
+      .select("subject, body_html, body_markdown, body_format, status")
       .eq("id", campaignId)
       .maybeSingle();
     if (campaignError || !campaign) return err<DrainCampaignResult>("not_found");
@@ -160,7 +211,13 @@ export const drainCampaign = withRole<unknown, DrainCampaignResult>(
     if (claimError) return { ok: false, error: mapDbError(claimError) };
 
     const transport = getMailTransport();
-    const textTemplate = markdownToText(campaign.body_markdown);
+    // The plain-text alternative every message carries (ADR 0010: spam filters penalise
+    // HTML-only mail from a gmail.com sender). For a pasted template the source is not
+    // markdown, so it is derived from the SANITISED html rather than from the paste.
+    const textTemplate =
+      campaign.body_format === "html"
+        ? htmlToText(campaign.body_html)
+        : markdownToText(campaign.body_markdown);
     let sent = 0;
     let failed = 0;
     let halted: DrainCampaignResult["halted"] = null;

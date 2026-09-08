@@ -61,3 +61,34 @@ describe("merge tokens", () => {
     expect(mergeText("Committee: {{committee_name}}.", PAYLOAD)).toBe("Committee: .");
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Regression, found 2026-09-07 while looking at the template the CCDO pasted into
+// Gmail, which used `{{First Name}}`. Before the fix, a token with a space in it
+// matched no pattern at all: it was not substituted AND not reported, so it went out
+// to the recipient as literal text — the exact outcome US-G3 forbids.
+// ─────────────────────────────────────────────────────────────────────────────
+describe("a token that is brace-shaped but not a field is UNKNOWN, never literal text", () => {
+  it("catches {{First Name}} — the spelling other mail-merge tools use", () => {
+    expect(unknownMergeTokens("Congratulations, {{First Name}}!")).toEqual(["First Name"]);
+    expect(() => assertMergeTokensKnown("Congratulations, {{First Name}}!")).toThrow(
+      UnknownMergeTokenError,
+    );
+    expect(() => mergeText("Hi {{First Name}}", PAYLOAD)).toThrow(/First Name/);
+    expect(() => mergeHtml("<p>Hi {{First Name}}</p>", PAYLOAD)).toThrow(/First Name/);
+  });
+
+  it("catches the other shapes a person reasonably tries", () => {
+    expect(unknownMergeTokens("{{first name}} {{Given Name}} {{name}} {{}}")).toEqual([
+      "first name",
+      "Given Name",
+      "name",
+      "",
+    ]);
+  });
+
+  it("still treats inner whitespace around a REAL field as the same token", () => {
+    expect(unknownMergeTokens("{{ given_name }}")).toEqual([]);
+    expect(mergeText("{{ given_name }}", PAYLOAD)).toBe("María <Ana>");
+  });
+});

@@ -4,7 +4,10 @@ import {
   audienceCandidatesQuerySchema,
   audienceFilterSchema,
   AUDIENCE_PAGE_SIZE,
+  campaignComposeSchema,
   campaignIdSchema,
+  HTML_BODY_MAX_BYTES,
+  MARKDOWN_BODY_MAX_CHARS,
   YEAR_LEVELS,
 } from "./schema";
 
@@ -162,5 +165,99 @@ describe("campaignIdSchema", () => {
   it("refuses a non-uuid id", () => {
     const result = campaignIdSchema.safeParse({ id: "not-a-uuid" });
     expect(result.success).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// body_format — the pasted-HTML tab (ADR 0014, 2026-09-07)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const COMPOSE_BASE = {
+  template_key: "freeform" as const,
+  subject: "Hello",
+  audience: {},
+};
+
+describe("campaignComposeSchema — body_format", () => {
+  it("defaults to markdown, so every pre-2026-09-07 caller keeps working", () => {
+    const parsed = campaignComposeSchema.parse({ ...COMPOSE_BASE, body_markdown: "Hi" });
+    expect(parsed.body_format).toBe("markdown");
+  });
+
+  it("refuses a format that is neither markdown nor html", () => {
+    expect(
+      campaignComposeSchema.safeParse({ ...COMPOSE_BASE, body_format: "mjml", body_markdown: "x" })
+        .success,
+    ).toBe(false);
+  });
+
+  it("holds markdown to 20,000 characters", () => {
+    const ok = campaignComposeSchema.safeParse({
+      ...COMPOSE_BASE,
+      body_format: "markdown",
+      body_markdown: "x".repeat(MARKDOWN_BODY_MAX_CHARS),
+    });
+    expect(ok.success).toBe(true);
+    const tooLong = campaignComposeSchema.safeParse({
+      ...COMPOSE_BASE,
+      body_format: "markdown",
+      body_markdown: "x".repeat(MARKDOWN_BODY_MAX_CHARS + 1),
+    });
+    expect(tooLong.success).toBe(false);
+  });
+
+  it("lets an HTML body run past the markdown cap, up to 200 KB", () => {
+    const designed = `<p>${"x".repeat(MARKDOWN_BODY_MAX_CHARS + 5000)}</p>`;
+    expect(
+      campaignComposeSchema.safeParse({
+        ...COMPOSE_BASE,
+        body_format: "html",
+        body_markdown: designed,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("refuses an HTML body over 200 KB, counted in bytes", () => {
+    const huge = `<p>${"x".repeat(HTML_BODY_MAX_BYTES)}</p>`;
+    const result = campaignComposeSchema.safeParse({
+      ...COMPOSE_BASE,
+      body_format: "html",
+      body_markdown: huge,
+    });
+    expect(result.success).toBe(false);
+    expect(JSON.stringify(result.error?.issues)).toContain("200 KB");
+  });
+
+  it("refuses a merge token inside an HTML attribute, on the field", () => {
+    const result = campaignComposeSchema.safeParse({
+      ...COMPOSE_BASE,
+      body_format: "html",
+      body_markdown: '<a href="https://x.example/{{member_id}}">x</a>',
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.path).toEqual(["body_markdown"]);
+    expect(JSON.stringify(result.error?.issues)).toContain("attribute");
+  });
+
+  it("refuses an unknown merge token in either format, including the spaced spelling", () => {
+    for (const body_format of ["markdown", "html"] as const) {
+      const result = campaignComposeSchema.safeParse({
+        ...COMPOSE_BASE,
+        body_format,
+        body_markdown: "Hi {{First Name}}",
+      });
+      expect(result.success).toBe(false);
+      expect(result.error?.issues[0]?.path).toEqual(["body_markdown"]);
+    }
+  });
+
+  it("refuses an unknown merge token in the subject", () => {
+    expect(
+      campaignComposeSchema.safeParse({
+        ...COMPOSE_BASE,
+        subject: "Hi {{First Name}}",
+        body_markdown: "x",
+      }).success,
+    ).toBe(false);
   });
 });

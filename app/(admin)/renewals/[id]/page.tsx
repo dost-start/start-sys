@@ -2,6 +2,10 @@
 // and the decision (PRD US-G7, US-H5). Opening this page calls `get_renewal_detail()`,
 // which asserts the confidentiality acknowledgement and writes the VIEW audit row — the
 // RA 10173 access record is a consequence of rendering, not a separate step.
+//
+// Brand edition (2026-09-08): the `renewal_detail` board of the design canvas — the same
+// treatment as the application detail page, plus the "unchanged by renewal" member-ID
+// line under the title. Every string, test id and audit read is unchanged.
 import { notFound, redirect } from "next/navigation";
 
 import { ApplicationDetailFields } from "@/components/applications/application-detail-fields";
@@ -9,6 +13,8 @@ import { ApplicationStatusBadge } from "@/components/applications/application-st
 import { ApproveRenewalDialog } from "@/components/applications/approve-renewal-dialog";
 import { ProofDocumentViewer } from "@/components/applications/proof-document-viewer";
 import { RejectRenewalDialog } from "@/components/applications/reject-renewal-dialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Card } from "@/components/ui/card";
 import type { Database } from "@/database.types";
 import { getRenewalDetail } from "@/lib/applications/renewal-queries";
 import { getSessionContext } from "@/lib/auth/queries";
@@ -70,78 +76,92 @@ export default async function RenewalDetailPage({ params }: { params: Promise<{ 
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <a href="/renewals" className="text-sm text-muted-foreground hover:underline">
-            ← Back to renewals
-          </a>
-          <h1
-            className="mt-1 text-xl font-semibold tracking-tight"
-            data-testid="renewal-member-name"
-          >
-            {memberName}
-          </h1>
-          <p className="text-sm text-muted-foreground" data-testid="renewal-member-id">
-            Member ID {memberId ?? "—"} — unchanged by renewal
-          </p>
-          <div className="mt-1 flex items-center gap-2">
-            <ApplicationStatusBadge status={status} />
-            {reviewedAt ? (
-              <span className="text-xs text-muted-foreground">
-                Decided{" "}
-                {new Intl.DateTimeFormat("en-PH", {
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                  timeZone: "Asia/Manila",
-                }).format(new Date(reviewedAt))}
-              </span>
-            ) : null}
+      <div>
+        <a href="/renewals" className="text-brand-label text-xs hover:underline">
+          ← Back to renewals
+        </a>
+        <div className="mt-2.5 flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 space-y-1">
+            <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2">
+              <h1
+                className="text-brand-ink text-[26px] leading-tight font-semibold break-words"
+                data-testid="renewal-member-name"
+              >
+                {memberName}
+              </h1>
+              <ApplicationStatusBadge status={status} />
+              {reviewedAt ? (
+                <span className="text-brand-label text-xs">
+                  Decided{" "}
+                  {new Intl.DateTimeFormat("en-PH", {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                    timeZone: "Asia/Manila",
+                  }).format(new Date(reviewedAt))}
+                </span>
+              ) : null}
+            </div>
+            <p className="text-brand-label text-sm" data-testid="renewal-member-id">
+              Member ID {memberId ?? "—"} — unchanged by renewal
+            </p>
           </div>
-        </div>
 
-        {status === "pending" ? (
-          <div className="flex gap-2">
-            <ApproveRenewalDialog renewalId={id} memberName={memberName} />
-            <RejectRenewalDialog renewalId={id} memberName={memberName} />
-          </div>
-        ) : null}
+          {status === "pending" ? (
+            <div className="flex flex-wrap gap-2.5">
+              <ApproveRenewalDialog renewalId={id} memberName={memberName} />
+              <RejectRenewalDialog renewalId={id} memberName={memberName} />
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {status === "approved" ? (
-        <div className="rounded-md border border-green-600/30 bg-green-50 px-4 py-3 text-sm font-medium text-green-800 dark:bg-green-950 dark:text-green-300">
+        <Alert variant="success" className="font-medium">
           Renewed — active membership for the current term, member ID {memberId ?? "—"}
-        </div>
+        </Alert>
       ) : null}
 
       {status === "rejected" && reviewNote ? (
-        <div className="space-y-1 rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm">
-          <p className="font-medium text-destructive">Rejected</p>
-          <p className="text-muted-foreground">{reviewNote}</p>
-          <p className="text-muted-foreground text-xs">
-            The member may submit the form again while the renewal period is open.
-          </p>
-        </div>
+        <Alert variant="danger">
+          <div className="space-y-1">
+            <AlertTitle>Rejected</AlertTitle>
+            <AlertDescription>
+              <p>{reviewNote}</p>
+              <p className="text-xs">
+                The member may submit the form again while the renewal period is open.
+              </p>
+            </AlertDescription>
+          </div>
+        </Alert>
       ) : null}
 
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold">Notice of Award</h2>
-        <ProofDocumentViewer
-          applicationId={id}
-          mimeType={noaMimeType}
-          doc="noa"
-          proxyBasePath="/api/renewals"
-        />
-      </section>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <section className="space-y-2.5">
+          <h2 className="text-brand-ink text-lg leading-tight font-semibold">Notice of Award</h2>
+          <Card className="overflow-hidden p-0">
+            <ProofDocumentViewer
+              applicationId={id}
+              mimeType={noaMimeType}
+              doc="noa"
+              proxyBasePath="/api/renewals"
+            />
+          </Card>
+        </section>
 
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold">Latest registration form</h2>
-        <ProofDocumentViewer
-          applicationId={id}
-          mimeType={proofMimeType}
-          doc="registration"
-          proxyBasePath="/api/renewals"
-        />
-      </section>
+        <section className="space-y-2.5">
+          <h2 className="text-brand-ink text-lg leading-tight font-semibold">
+            Latest registration form
+          </h2>
+          <Card className="overflow-hidden p-0">
+            <ProofDocumentViewer
+              applicationId={id}
+              mimeType={proofMimeType}
+              doc="registration"
+              proxyBasePath="/api/renewals"
+            />
+          </Card>
+        </section>
+      </div>
 
       <ApplicationDetailFields detail={fieldsDetail} lookups={lookups} />
     </div>

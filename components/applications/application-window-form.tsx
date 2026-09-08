@@ -25,6 +25,8 @@ import {
   type WindowFormKind,
 } from "@/lib/applications/window-schema";
 import { Button } from "@/components/ui/button";
+import { Field, FieldError, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 
 export type ApplicationWindowFormProps = {
   /** Which public form's period this instance controls. Defaults to the application form. */
@@ -68,7 +70,7 @@ export function ApplicationWindowForm({
 
   if (!canWrite) {
     return (
-      <p className="text-muted-foreground text-sm" data-testid={`window-read-only-${formKind}`}>
+      <p className="text-brand-label text-sm" data-testid={`window-read-only-${formKind}`}>
         You can see the schedule but not change it. Opening and closing the application period is
         the CCDO&apos;s or the CTO&apos;s to do (ADR 0003) — and the database refuses the write
         independently of what this page renders.
@@ -125,41 +127,40 @@ export function ApplicationWindowForm({
     });
   };
 
+  const opensAtError = fieldErrors["opens_at"]?.join(" ");
+  const closesAtError = fieldErrors["closes_at"]?.join(" ");
+
   return (
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-1">
-          <label htmlFor="opens_at" className="text-sm font-medium">
-            Applications open
-          </label>
-          <input
+        <Field>
+          <FieldLabel htmlFor="opens_at">Applications open</FieldLabel>
+          <Input
             id="opens_at"
             name="opens_at"
             type="datetime-local"
             value={opensAt}
             onChange={(event) => setOpensAt(event.target.value)}
-            className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+            aria-invalid={opensAtError ? "true" : undefined}
           />
-          <FieldErrors messages={fieldErrors["opens_at"]} />
-        </div>
+          <FieldError message={opensAtError} />
+        </Field>
 
-        <div className="space-y-1">
-          <label htmlFor="closes_at" className="text-sm font-medium">
-            Applications close
-          </label>
-          <input
+        <Field>
+          <FieldLabel htmlFor="closes_at">Applications close</FieldLabel>
+          <Input
             id="closes_at"
             name="closes_at"
             type="datetime-local"
             value={closesAt}
             onChange={(event) => setClosesAt(event.target.value)}
-            className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+            aria-invalid={closesAtError ? "true" : undefined}
           />
-          <FieldErrors messages={fieldErrors["closes_at"]} />
-        </div>
+          <FieldError message={closesAtError} />
+        </Field>
       </div>
 
-      <p className="text-muted-foreground text-xs">
+      <p className="text-brand-label text-xs">
         Times are entered and shown in your own timezone and stored as absolute instants.
       </p>
 
@@ -184,19 +185,10 @@ export function ApplicationWindowForm({
       </div>
 
       {message === null ? null : (
-        <p role="alert" className="text-sm">
+        <p role="alert" className="text-brand-body text-sm">
           {message}
         </p>
       )}
     </div>
-  );
-}
-
-function FieldErrors({ messages }: { messages?: string[] }) {
-  if (!messages || messages.length === 0) return null;
-  return (
-    <p role="alert" className="text-destructive text-sm">
-      {messages.join(" ")}
-    </p>
   );
 }

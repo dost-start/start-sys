@@ -3,22 +3,24 @@
 // (lib/members/transitions.ts), so a new status added to `0002_enums.sql` fails
 // typecheck here rather than rendering as a blank badge.
 //
-// `terminated` gets its own `destructive` treatment, distinct from the other three
-// terminal statuses — it is the CBL Art. VII §3 outcome, not a quiet non-renewal, and
-// the badge should read differently at a glance (PRD US-D5).
+// Tones follow `STATUS_TONE` in the design canvas (docs/design/canvas/boards_admin.py):
+// pending is a warning, active is a success, graduated is informational, the two quiet
+// exits are neutral. `terminated` gets its own `danger` treatment, distinct from the
+// other three terminal statuses — it is the CBL Art. VII §3 outcome, not a quiet
+// non-renewal, and the badge should read differently at a glance (PRD US-D5).
 import { Badge } from "@/components/ui/badge";
 import { MEMBERSHIP_STATUS_LABELS, type MembershipStatus } from "@/lib/members/transitions";
 
 const STATUS_VARIANT: Record<
   MembershipStatus,
-  "default" | "secondary" | "destructive" | "outline"
+  "success" | "warning" | "info" | "neutral" | "danger"
 > = {
-  renewal_pending: "outline",
-  active: "default",
-  graduated: "secondary",
-  resigned: "secondary",
-  left: "secondary",
-  terminated: "destructive",
+  renewal_pending: "warning",
+  active: "success",
+  graduated: "info",
+  resigned: "neutral",
+  left: "neutral",
+  terminated: "danger",
 };
 
 export function MemberStatusBadge({ status }: { status: MembershipStatus }) {

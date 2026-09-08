@@ -14,6 +14,12 @@
 // Plain `<a>` rather than `next/link`: these are cross-route-group navigations that
 // should re-run the layout gate on the server, and there is no prefetch worth the
 // complexity on a page with twenty of them.
+//
+// Brand edition (2026-09-08): the `.panel.stat` card from the design canvas — an
+// eyebrow caption, a 32px bold figure, an optional hint. The linked variant is the same
+// card rendered as an `<a>` (`cardVariants` gives it the panel surface without a
+// wrapping div), so the whole tile is the click target.
+import { Card, cardVariants } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 export type StatTileProps = {
@@ -32,29 +38,31 @@ export type StatTileProps = {
 export function StatTile({ label, value, href = null, hint, emphasis = false }: StatTileProps) {
   const body = (
     <>
-      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className="text-brand-label text-[12px] font-semibold tracking-[0.12em] uppercase">
+        {label}
+      </span>
       {/* `toLocaleString` so 1,204 is readable; `0` still renders as "0". */}
-      <span className="text-3xl font-semibold tabular-nums tracking-tight">
+      <span className="text-brand-ink text-[32px] leading-none font-bold tabular-nums">
         {value.toLocaleString()}
       </span>
-      {hint !== undefined ? <span className="text-xs text-muted-foreground">{hint}</span> : null}
+      {hint !== undefined ? <span className="text-brand-label text-xs">{hint}</span> : null}
     </>
   );
 
   const className = cn(
-    "flex min-w-0 flex-col gap-1 rounded-lg border p-4",
-    emphasis ? "border-primary/40 bg-primary/5" : "bg-card",
+    "flex min-w-0 flex-col gap-1.5 p-5 no-underline",
+    emphasis ? "ring-brand-blue/30 ring-2" : null,
     href !== null
-      ? "transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      ? "transition-[box-shadow,transform] hover:-translate-y-px hover:shadow-[0_8px_24px_rgb(23_23_23/0.12)] focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none"
       : null,
   );
 
   if (href === null) {
-    return <div className={className}>{body}</div>;
+    return <Card className={className}>{body}</Card>;
   }
 
   return (
-    <a href={href} className={className}>
+    <a href={href} className={cn(cardVariants({ radius: "form" }), className)}>
       {body}
     </a>
   );

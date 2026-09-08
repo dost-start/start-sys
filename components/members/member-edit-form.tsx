@@ -18,8 +18,12 @@ import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, type Resolver } from "react-hook-form";
 
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
+import { Card, CardTitle } from "@/components/ui/card";
+import { Field, FieldError, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
 import { updateMemberRecord } from "@/lib/members/actions";
 import { memberUpdateSchema, type MemberUpdateInput } from "@/lib/members/schema";
 import type { MemberRecord } from "@/lib/members/types";
@@ -33,18 +37,6 @@ import {
 function toDefault(value: string | null): string {
   return value ?? "";
 }
-
-function FieldError({ message }: { message?: string }) {
-  if (!message) return null;
-  return (
-    <p role="alert" className="text-sm text-destructive">
-      {message}
-    </p>
-  );
-}
-
-const inputClass =
-  "w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50";
 
 export function MemberEditForm({ record }: { record: MemberRecord }) {
   const [conflict, setConflict] = useState(false);
@@ -120,152 +112,136 @@ export function MemberEditForm({ record }: { record: MemberRecord }) {
   });
 
   return (
-    <form
-      onSubmit={onSubmit}
-      className="space-y-4 rounded-lg border border-border bg-card p-4 sm:p-6"
-    >
-      <input type="hidden" {...register("person_id")} />
-      <input type="hidden" {...register("expected_updated_at")} />
+    <Card className="p-5 sm:p-6">
+      <form onSubmit={onSubmit} className="space-y-5">
+        <CardTitle>Edit record</CardTitle>
 
-      {conflict ? (
-        <div
-          role="alert"
-          className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm"
-        >
-          This record was changed by someone else since you opened it. Reload the page to see the
-          current values before saving again.
-        </div>
-      ) : null}
+        <input type="hidden" {...register("person_id")} />
+        <input type="hidden" {...register("expected_updated_at")} />
 
-      {formError ? (
-        <p role="alert" className="text-sm text-destructive">
-          {formError}
-        </p>
-      ) : null}
+        {conflict ? (
+          <Alert variant="danger" role="alert">
+            This record was changed by someone else since you opened it. Reload the page to see the
+            current values before saving again.
+          </Alert>
+        ) : null}
 
-      {saved ? <p className="text-sm text-green-700 dark:text-green-400">Saved.</p> : null}
+        {formError ? (
+          <p role="alert" className="text-destructive text-sm">
+            {formError}
+          </p>
+        ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label htmlFor="given_name">First name</Label>
-          <input id="given_name" className={inputClass} {...register("given_name")} />
-          <FieldError message={errors.given_name?.message} />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field>
+            <FieldLabel htmlFor="given_name">First name</FieldLabel>
+            <Input id="given_name" {...register("given_name")} />
+            <FieldError message={errors.given_name?.message} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="middle_name">Middle name</FieldLabel>
+            <Input id="middle_name" {...register("middle_name")} />
+            <FieldError message={errors.middle_name?.message} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="family_name">Last name</FieldLabel>
+            <Input id="family_name" {...register("family_name")} />
+            <FieldError message={errors.family_name?.message} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="suffix">Suffix</FieldLabel>
+            <Input id="suffix" {...register("suffix")} />
+            <FieldError message={errors.suffix?.message} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="birthdate">Date of birth</FieldLabel>
+            <Input id="birthdate" type="date" {...register("birthdate")} />
+            <FieldError message={errors.birthdate?.message} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="contact_number">Contact number</FieldLabel>
+            <Input id="contact_number" {...register("contact_number")} />
+            <FieldError message={errors.contact_number?.message} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="personal_email">Personal email</FieldLabel>
+            <Input id="personal_email" type="email" {...register("personal_email")} />
+            <FieldError message={errors.personal_email?.message} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="address_line">Street address</FieldLabel>
+            <Input id="address_line" {...register("address_line")} />
+            <FieldError message={errors.address_line?.message} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="city_municipality">City / municipality</FieldLabel>
+            <Input id="city_municipality" {...register("city_municipality")} />
+            <FieldError message={errors.city_municipality?.message} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="province">Province</FieldLabel>
+            <Input id="province" {...register("province")} />
+            <FieldError message={errors.province?.message} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="postal_code">Postal code</FieldLabel>
+            <Input id="postal_code" {...register("postal_code")} />
+            <FieldError message={errors.postal_code?.message} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="school">School</FieldLabel>
+            <Input id="school" {...register("school")} />
+            <FieldError message={errors.school?.message} />
+          </Field>
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="middle_name">Middle name</Label>
-          <input id="middle_name" className={inputClass} {...register("middle_name")} />
-          <FieldError message={errors.middle_name?.message} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="family_name">Last name</Label>
-          <input id="family_name" className={inputClass} {...register("family_name")} />
-          <FieldError message={errors.family_name?.message} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="suffix">Suffix</Label>
-          <input id="suffix" className={inputClass} {...register("suffix")} />
-          <FieldError message={errors.suffix?.message} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="birthdate">Date of birth</Label>
-          <input id="birthdate" type="date" className={inputClass} {...register("birthdate")} />
-          <FieldError message={errors.birthdate?.message} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="contact_number">Contact number</Label>
-          <input id="contact_number" className={inputClass} {...register("contact_number")} />
-          <FieldError message={errors.contact_number?.message} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="personal_email">Personal email</Label>
-          <input
-            id="personal_email"
-            type="email"
-            className={inputClass}
-            {...register("personal_email")}
-          />
-          <FieldError message={errors.personal_email?.message} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="address_line">Street address</Label>
-          <input id="address_line" className={inputClass} {...register("address_line")} />
-          <FieldError message={errors.address_line?.message} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="city_municipality">City / municipality</Label>
-          <input id="city_municipality" className={inputClass} {...register("city_municipality")} />
-          <FieldError message={errors.city_municipality?.message} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="province">Province</Label>
-          <input id="province" className={inputClass} {...register("province")} />
-          <FieldError message={errors.province?.message} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="postal_code">Postal code</Label>
-          <input id="postal_code" className={inputClass} {...register("postal_code")} />
-          <FieldError message={errors.postal_code?.message} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="school">School</Label>
-          <input id="school" className={inputClass} {...register("school")} />
-          <FieldError message={errors.school?.message} />
-        </div>
-      </div>
 
-      {/* SRS 2026-09-05 profile fields (0038). University and program are chosen from the
-          reference tables on the application form and corrected here by id is not a
-          reviewer's job — they stay read-only in the panel above. */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label htmlFor="sex">Sex</Label>
-          <select id="sex" className={inputClass} {...register("sex")}>
-            <option value="">—</option>
-            {SEX_OPTIONS.map((option) => (
-              <option key={option} value={option}>
-                {SEX_LABELS[option]}
-              </option>
-            ))}
-          </select>
-          <FieldError message={errors.sex?.message} />
+        {/* SRS 2026-09-05 profile fields (0038). University and program are chosen from the
+            reference tables on the application form and corrected here by id is not a
+            reviewer's job — they stay read-only in the panel above. */}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field>
+            <FieldLabel htmlFor="sex">Sex</FieldLabel>
+            <NativeSelect id="sex" {...register("sex")}>
+              <option value="">—</option>
+              {SEX_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {SEX_LABELS[option]}
+                </option>
+              ))}
+            </NativeSelect>
+            <FieldError message={errors.sex?.message} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="facebook_account">Facebook account link</FieldLabel>
+            <Input id="facebook_account" type="url" {...register("facebook_account")} />
+            <FieldError message={errors.facebook_account?.message} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="scholarship_award">DOST scholarship award</FieldLabel>
+            <NativeSelect id="scholarship_award" {...register("scholarship_award")}>
+              <option value="">—</option>
+              {SCHOLARSHIP_AWARDS.map((award) => (
+                <option key={award} value={award}>
+                  {SCHOLARSHIP_AWARD_LABELS[award]}
+                </option>
+              ))}
+            </NativeSelect>
+            <FieldError message={errors.scholarship_award?.message} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="award_year">Year of award</FieldLabel>
+            <Input id="award_year" inputMode="numeric" {...register("award_year")} />
+            <FieldError message={errors.award_year?.message} />
+          </Field>
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="facebook_account">Facebook account link</Label>
-          <input
-            id="facebook_account"
-            type="url"
-            className={inputClass}
-            {...register("facebook_account")}
-          />
-          <FieldError message={errors.facebook_account?.message} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="scholarship_award">DOST scholarship award</Label>
-          <select id="scholarship_award" className={inputClass} {...register("scholarship_award")}>
-            <option value="">—</option>
-            {SCHOLARSHIP_AWARDS.map((award) => (
-              <option key={award} value={award}>
-                {SCHOLARSHIP_AWARD_LABELS[award]}
-              </option>
-            ))}
-          </select>
-          <FieldError message={errors.scholarship_award?.message} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="award_year">Year of award</Label>
-          <input
-            id="award_year"
-            inputMode="numeric"
-            className={inputClass}
-            {...register("award_year")}
-          />
-          <FieldError message={errors.award_year?.message} />
-        </div>
-      </div>
 
-      <Button type="submit" disabled={isSubmitting}>
-        {isSubmitting ? "Saving…" : "Save changes"}
-      </Button>
-    </form>
+        <div className="flex flex-wrap items-center gap-4">
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? "Saving…" : "Save changes"}
+          </Button>
+          {saved ? <p className="text-success text-sm">Saved.</p> : null}
+        </div>
+      </form>
+    </Card>
   );
 }

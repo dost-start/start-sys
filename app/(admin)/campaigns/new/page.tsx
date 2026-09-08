@@ -6,6 +6,10 @@
 // the form templates link to, then hands both to the client composer. The live count
 // and the save go back through Server Actions that re-check the role and re-parse the
 // schema; RLS refuses anyone else regardless.
+//
+// Brand restyle (2026-09-08, docs/design/canvas/boards_admin.py `campaign_new`): the
+// shell's top bar reads "New campaign" (a title override in app/(admin)/layout.tsx), so
+// the <h1> here is screen-reader-only.
 // ─────────────────────────────────────────────────────────────────────────────
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -41,10 +45,10 @@ export default async function NewCampaignPage() {
   const [options, origin] = await Promise.all([listAudienceOptions(ctx), requestOrigin()]);
 
   return (
-    <div className="space-y-8">
-      <header className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">New campaign</h1>
-        <p className="text-muted-foreground max-w-2xl text-sm">
+    <div className="space-y-6">
+      <header>
+        <h1 className="sr-only">New campaign</h1>
+        <p className="text-brand-body max-w-3xl text-sm">
           Write the message once; each recipient gets it with their own name and details merged in.
           Messages go out through <code>{mailTransportName()}</code>.
         </p>

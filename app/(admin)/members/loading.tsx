@@ -5,20 +5,22 @@
 // (BUILD_PLAN S1's "boring beats clever").
 import { DEFAULT_MEMBERS_PER_PAGE } from "@/lib/members/filters";
 
+const block = "bg-brand-field animate-pulse rounded-form";
+
 export default function MembersLoading() {
   const rows = Array.from({ length: DEFAULT_MEMBERS_PER_PAGE }, (_, index) => index);
 
   return (
-    <div className="space-y-6" aria-busy="true" aria-live="polite">
-      <div className="space-y-2">
-        <div className="h-6 w-32 animate-pulse rounded bg-muted" />
-        <div className="h-4 w-64 animate-pulse rounded bg-muted" />
+    <div className="space-y-5" aria-busy="true" aria-live="polite">
+      <div className={`${block} h-5 w-64`} />
+      <div className="space-y-4">
+        <div className={`${block} h-11 w-full max-w-sm`} />
+        <div className={`${block} h-40 w-full`} />
       </div>
-      <div className="h-10 w-full max-w-sm animate-pulse rounded-md bg-muted" />
-      <div className="h-40 w-full animate-pulse rounded-lg border bg-muted/40" />
-      <div className="overflow-hidden rounded-md border">
+      <div className="bg-card rounded-form shadow-soft overflow-hidden">
+        <div className="bg-brand-field/60 h-11 border-b border-[#eff0f2]" />
         {rows.map((row) => (
-          <div key={row} className="h-10 border-b bg-muted/30 last:border-b-0" />
+          <div key={row} className="h-12 border-b border-[#eff0f2] last:border-b-0" />
         ))}
       </div>
     </div>

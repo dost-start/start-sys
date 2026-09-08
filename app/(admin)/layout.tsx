@@ -12,21 +12,20 @@
 // is `canAccess`'s job at the PAGE level (and at `middleware.ts`), not this layout's —
 // this layout only confirms the visitor belongs to the admin group at all, using
 // `/dashboard` as the group's representative path.
+//
+// The chrome is `AppShell` (brand restyle, 2026-09-08); it receives only the link set
+// and the role string, never the session object.
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { SignOutButton } from "@/components/auth/sign-out-button";
+import { AppShell } from "@/components/layout/app-shell";
+import { ADMIN_NAV_LINKS, TECH_ADMIN_NAV_LINKS } from "@/components/layout/nav-links";
 import { getSessionContext } from "@/lib/auth/queries";
-import { ADMIN_SYSTEM_PREFIX, canAccess, homeForRole } from "@/lib/auth/route-access";
+import { canAccess, homeForRole } from "@/lib/auth/route-access";
 
-const NAV_LINKS: ReadonlyArray<{ href: string; label: string }> = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/members", label: "Members" },
-  { href: "/applications", label: "Applications" },
-  { href: "/renewals", label: "Renewals" },
-  { href: "/campaigns", label: "Campaigns" },
-  { href: "/officers", label: "Officers" },
-  { href: "/audit", label: "Audit log" },
+const TITLE_OVERRIDES = [
+  { href: "/applications/window", label: "Application period" },
+  { href: "/campaigns/new", label: "New campaign" },
 ];
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
@@ -38,35 +37,11 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   // tech_admin's day-to-day surface is system configuration, not the records
   // dashboards (BUILD_PLAN S6-T13) — the nav reflects that rather than showing links
   // to a screen whose `memberships` policy does not name this role.
-  const links =
-    ctx.role === "tech_admin"
-      ? [
-          { href: ADMIN_SYSTEM_PREFIX, label: "System" },
-          { href: "/system/user-roles", label: "User roles" },
-        ]
-      : NAV_LINKS;
+  const links = ctx.role === "tech_admin" ? TECH_ADMIN_NAV_LINKS : ADMIN_NAV_LINKS;
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b">
-        <div className="mx-auto flex max-w-6xl items-center gap-6 px-6 py-3">
-          <span className="font-semibold tracking-tight">START-SYS</span>
-          <nav className="flex gap-4 text-sm">
-            {links.map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                {link.label}
-              </a>
-            ))}
-          </nav>
-          <span className="ml-auto text-xs text-muted-foreground">{ctx.role}</span>
-          <SignOutButton />
-        </div>
-      </header>
-      <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
-    </div>
+    <AppShell links={links} roleLabel={ctx.role} titleOverrides={TITLE_OVERRIDES}>
+      {children}
+    </AppShell>
   );
 }

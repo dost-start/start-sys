@@ -6,7 +6,8 @@
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { SignOutButton } from "@/components/auth/sign-out-button";
+import { AppShell } from "@/components/layout/app-shell";
+import { OFFICER_NAV_LINKS } from "@/components/layout/nav-links";
 import { getSessionContext } from "@/lib/auth/queries";
 import { canAccess, homeForRole } from "@/lib/auth/route-access";
 
@@ -17,23 +18,8 @@ export default async function OfficerLayout({ children }: { children: ReactNode 
   if (!canAccess(ctx.role, "/directory")) redirect(homeForRole(ctx.role));
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b">
-        <div className="mx-auto flex max-w-6xl items-center gap-6 px-6 py-3">
-          <span className="font-semibold tracking-tight">START-SYS</span>
-          <nav className="flex gap-4 text-sm">
-            <a href="/directory" className="text-muted-foreground hover:text-foreground">
-              Directory
-            </a>
-            <a href="/committees" className="text-muted-foreground hover:text-foreground">
-              Committees
-            </a>
-          </nav>
-          <span className="ml-auto text-xs text-muted-foreground">{ctx.role}</span>
-          <SignOutButton />
-        </div>
-      </header>
-      <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
-    </div>
+    <AppShell links={OFFICER_NAV_LINKS} roleLabel={ctx.role}>
+      {children}
+    </AppShell>
   );
 }

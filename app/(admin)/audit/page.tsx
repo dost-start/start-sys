@@ -18,6 +18,10 @@
 // shareable and Back works (CONVENTIONS.md §2 — no `useState`, no client state library).
 //
 // ⚠ NO EXPORT AND NO DELETE CONTROL anywhere on this page. See the component headers.
+//
+// Brand restyle (2026-09-08, docs/design/canvas/boards_admin.py `audit_log`): the filter
+// values are chips, still plain <a> links to the same hrefs; the page title lives in the
+// shell's top bar, so the <h1> here is screen-reader-only.
 import { notFound, redirect } from "next/navigation";
 
 import { AuditLogTable } from "@/components/audit/audit-log-table";
@@ -60,6 +64,17 @@ function parseAuditFilters(params: Record<string, string | string[] | undefined>
     cursor: cursor !== null && Number.isSafeInteger(cursor) ? cursor : null,
   };
 }
+
+/** The design canvas's `.chip` / `.chip.on`, as a link: the active value is the gradient pill. */
+function chipClass(active: boolean): string {
+  return active
+    ? "bg-brand-gradient text-brand-ink inline-flex h-8 items-center rounded-full border border-transparent px-3 text-[13px] font-semibold no-underline"
+    : "border-border bg-card text-brand-body hover:bg-brand-field inline-flex h-8 items-center rounded-full border px-3 text-[13px] no-underline transition-colors";
+}
+
+/** The design canvas's `.label`, for the word that names a filter row. */
+const FILTER_LABEL_CLASS =
+  "text-brand-label w-14 shrink-0 text-xs font-semibold tracking-[0.08em] uppercase";
 
 /** Canonical link, defaults omitted — the same discipline as the member contract. */
 function auditHref(filters: Partial<AuditFilters>): string {
@@ -111,49 +126,41 @@ export default async function AuditPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">Audit log</h1>
-        <p className="text-sm text-muted-foreground">
+      <header>
+        <h1 className="sr-only">Audit log</h1>
+        <p className="text-brand-body max-w-3xl text-sm">
           Append-only. Sensitive values were masked before each entry was written, and there is no
           path to reveal them.
         </p>
-      </div>
+      </header>
 
-      <div className="space-y-2">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">Action</span>
-          <a
-            href={withOperation(null)}
-            className={filters.operation === null ? "text-xs underline" : "text-xs opacity-70"}
-          >
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={FILTER_LABEL_CLASS}>Action</span>
+          <a href={withOperation(null)} className={chipClass(filters.operation === null)}>
             All
           </a>
           {facets.operations.map((operation) => (
             <a
               key={operation}
               href={withOperation(operation)}
-              className={
-                filters.operation === operation ? "text-xs underline" : "text-xs opacity-70"
-              }
+              className={chipClass(filters.operation === operation)}
             >
               {operation}
             </a>
           ))}
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">Table</span>
-          <a
-            href={withTable(null)}
-            className={filters.table_name === null ? "text-xs underline" : "text-xs opacity-70"}
-          >
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={FILTER_LABEL_CLASS}>Table</span>
+          <a href={withTable(null)} className={chipClass(filters.table_name === null)}>
             All
           </a>
           {facets.tables.map((table) => (
             <a
               key={table}
               href={withTable(table)}
-              className={filters.table_name === table ? "text-xs underline" : "text-xs opacity-70"}
+              className={chipClass(filters.table_name === table)}
             >
               {table}
             </a>
@@ -161,12 +168,12 @@ export default async function AuditPage({
         </div>
 
         {filters.actor_user_id !== null ? (
-          <div className="flex flex-wrap items-center gap-1.5 text-xs">
-            <span className="text-muted-foreground">Actor</span>
-            <span className="font-mono break-all">{filters.actor_user_id}</span>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className={FILTER_LABEL_CLASS}>Actor</span>
+            <span className="text-brand-body font-mono break-all">{filters.actor_user_id}</span>
             <a
               href={auditHref({ ...filters, actor_user_id: null, cursor: null })}
-              className="underline"
+              className="text-brand-link underline underline-offset-2"
             >
               clear
             </a>
@@ -174,7 +181,10 @@ export default async function AuditPage({
         ) : null}
 
         {hasFilters ? (
-          <a href={AUDIT_PATH} className="inline-block text-xs underline">
+          <a
+            href={AUDIT_PATH}
+            className="text-brand-link inline-block text-xs underline underline-offset-2"
+          >
             Clear all filters
           </a>
         ) : null}
@@ -187,7 +197,7 @@ export default async function AuditPage({
       {page.nextCursor !== null ? (
         <a
           href={auditHref({ ...filters, cursor: page.nextCursor })}
-          className="inline-block text-sm underline"
+          className="text-brand-link inline-block text-sm font-medium underline-offset-2 hover:underline"
         >
           Older entries →
         </a>

@@ -11,7 +11,12 @@
 // the caller, and it has a one-INSERT fix — sending a newly appointed CCDO to a plain
 // 404 would hide that. Every OTHER denial renders as `notFound()`, never a distinct
 // "forbidden" message (CONVENTIONS.md §4.3).
+//
+// Brand edition (2026-09-08): a detail page keeps a VISIBLE `<h1>` (the member's name)
+// under the shell's "Members" top bar; the summary card, status row and panels follow
+// docs/design/canvas/boards_admin.py `member_detail`.
 import { notFound, redirect } from "next/navigation";
+import type { ReactNode } from "react";
 
 import { MemberAuditTrail } from "@/components/members/member-audit-trail";
 import { MemberEditForm } from "@/components/members/member-edit-form";
@@ -19,6 +24,8 @@ import { MemberSensitivePanel } from "@/components/members/member-sensitive-pane
 import { MemberStatusBadge } from "@/components/members/member-status-badge";
 import { MemberTermHistory } from "@/components/members/member-term-history";
 import { MembershipStatusEditor } from "@/components/members/membership-status-editor";
+import { Alert } from "@/components/ui/alert";
+import { Card } from "@/components/ui/card";
 import { MEMBERS_PATH } from "@/lib/members/filters";
 import { getSessionContext } from "@/lib/auth/queries";
 import {
@@ -29,6 +36,21 @@ import {
 } from "@/lib/members/queries";
 
 export const dynamic = "force-dynamic";
+
+const backLinkClassName = "text-brand-label text-sm no-underline hover:underline";
+
+// One cell of the summary card: the uppercase field-label style on a <dt>, the value
+// on a <dd>. Not a <label> element — nothing here is a form control.
+function SummaryItem({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <dt className="text-brand-label text-xs leading-none font-semibold tracking-[0.08em] uppercase">
+        {label}
+      </dt>
+      <dd className="text-brand-ink text-sm">{children}</dd>
+    </div>
+  );
+}
 
 export default async function MemberDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const ctx = await getSessionContext();
@@ -55,15 +77,12 @@ export default async function MemberDetailPage({ params }: { params: Promise<{ i
     if (isMissingAcknowledgement(result.error)) {
       return (
         <div className="space-y-4">
-          <a href={MEMBERS_PATH} className="text-sm text-muted-foreground hover:underline">
+          <a href={MEMBERS_PATH} className={backLinkClassName}>
             ← Back to members
           </a>
-          <div
-            role="alert"
-            className="rounded-md border border-amber-500/30 bg-amber-50 p-4 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200"
-          >
+          <Alert variant="warning" role="alert">
             {result.error.message}
-          </div>
+          </Alert>
         </div>
       );
     }
@@ -110,43 +129,36 @@ export default async function MemberDetailPage({ params }: { params: Promise<{ i
   const fullName = `${record.given_name} ${record.family_name}`.trim();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div>
-        <a href={MEMBERS_PATH} className="text-sm text-muted-foreground hover:underline">
+        <a href={MEMBERS_PATH} className={backLinkClassName}>
           ← Back to members
         </a>
-        <div className="mt-1 flex flex-wrap items-center gap-3">
-          <h1 className="text-xl font-semibold tracking-tight">{fullName || "Member"}</h1>
-          <span className="font-mono text-sm text-muted-foreground">{record.member_id ?? "—"}</span>
+        <div className="mt-2.5 flex flex-wrap items-center gap-3.5">
+          <h1 className="text-brand-ink text-[26px] leading-tight font-semibold">
+            {fullName || "Member"}
+          </h1>
+          <span className="text-brand-label font-mono text-[13px]">{record.member_id ?? "—"}</span>
           {current ? <MemberStatusBadge status={current.status} /> : null}
         </div>
       </div>
 
       {current ? (
-        <section className="grid gap-3 rounded-lg border border-border bg-card p-4 text-sm sm:grid-cols-5 sm:p-6">
-          <div>
-            <dt className="text-xs font-medium text-muted-foreground">Status</dt>
-            <dd>
+        <Card className="p-5 sm:p-6">
+          <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            <SummaryItem label="Status">
               <MemberStatusBadge status={current.status} />
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs font-medium text-muted-foreground">Region</dt>
-            <dd>{current.region_name}</dd>
-          </div>
-          <div>
-            <dt className="text-xs font-medium text-muted-foreground">Year level</dt>
-            <dd>{current.year_level ?? "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-xs font-medium text-muted-foreground">Department</dt>
-            <dd>{departmentNames.length > 0 ? departmentNames.join(", ") : "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-xs font-medium text-muted-foreground">Committee</dt>
-            <dd>{committeeNames.length > 0 ? committeeNames.join(", ") : "—"}</dd>
-          </div>
-        </section>
+            </SummaryItem>
+            <SummaryItem label="Region">{current.region_name}</SummaryItem>
+            <SummaryItem label="Year level">{current.year_level ?? "—"}</SummaryItem>
+            <SummaryItem label="Department">
+              {departmentNames.length > 0 ? departmentNames.join(", ") : "—"}
+            </SummaryItem>
+            <SummaryItem label="Committee">
+              {committeeNames.length > 0 ? committeeNames.join(", ") : "—"}
+            </SummaryItem>
+          </dl>
+        </Card>
       ) : null}
 
       {current ? (

@@ -25,8 +25,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { FieldError } from "@/components/applications/form-section";
-import { Label } from "@/components/ui/label";
+import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import {
   applicationRejectSchema,
@@ -109,10 +108,10 @@ export function RejectApplicationDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={onSubmit} className="space-y-3">
+        <form onSubmit={onSubmit} className="space-y-4">
           <input type="hidden" {...register("id")} />
-          <div className="space-y-1.5">
-            <Label htmlFor="review_note">Reason</Label>
+          <Field>
+            <FieldLabel htmlFor="review_note">Reason</FieldLabel>
             <Textarea
               id="review_note"
               rows={4}
@@ -120,16 +119,16 @@ export function RejectApplicationDialog({
               aria-invalid={errors.review_note ? "true" : "false"}
               {...register("review_note")}
             />
-            <div className="flex items-center justify-between">
+            <div className="flex items-start justify-between gap-3">
               <FieldError message={errors.review_note?.message} />
-              <span className="text-xs text-muted-foreground">
+              <span className="text-brand-label ml-auto text-xs tabular-nums">
                 {reasonLength}/{REJECT_REASON_MAX_LENGTH}
               </span>
             </div>
-          </div>
+          </Field>
 
           {conflictMessage ? (
-            <p role="alert" className="text-sm text-destructive">
+            <p role="alert" className="text-destructive text-sm">
               {conflictMessage}
             </p>
           ) : null}

@@ -14,10 +14,17 @@
 // payload that still carries one. Pre-0038 free-text `school`/`program` values are
 // shown under "Legacy fields" only when present, so the review of an old application
 // loses nothing and a new one is not cluttered with empty rows.
+//
+// Brand edition (2026-09-08): each section is a white panel with an 18px heading and a
+// two-column grid of uppercase label + ink value (design canvas `detail_cards`). The
+// <dl>/<dt>/<dd> structure is kept — a <dt> styled like the field label, not a <label>
+// element, because nothing here is a form control. Section names, field labels and
+// field order are unchanged.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { ReactNode } from "react";
 
+import { Card, CardTitle } from "@/components/ui/card";
 import {
   SCHOLARSHIP_AWARD_LABELS,
   SEX_LABELS,
@@ -71,19 +78,23 @@ function ageFrom(birthdate: string | null): string | null {
 
 function Field({ label, value }: { label: string; value: string | number | null }) {
   return (
-    <div className="space-y-0.5">
-      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
-      <dd className="text-sm">{value === null || value === "" ? "—" : value}</dd>
+    <div className="flex flex-col gap-1">
+      <dt className="text-brand-label text-xs font-semibold tracking-[0.08em] uppercase">
+        {label}
+      </dt>
+      <dd className="text-brand-ink text-sm break-words">
+        {value === null || value === "" ? "—" : value}
+      </dd>
     </div>
   );
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="space-y-3 rounded-lg border border-border bg-card p-4 sm:p-6">
-      <h2 className="text-sm font-semibold">{title}</h2>
-      <dl className="grid gap-3 sm:grid-cols-2">{children}</dl>
-    </section>
+    <Card className="gap-4 p-5 sm:p-6">
+      <CardTitle>{title}</CardTitle>
+      <dl className="grid gap-x-8 gap-y-3.5 sm:grid-cols-2">{children}</dl>
+    </Card>
   );
 }
 
@@ -113,7 +124,7 @@ export function ApplicationDetailFields({
   ].filter((entry): entry is [string, string] => entry[1] !== null);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <Section title="Personal information">
         <Field label="First name" value={givenName} />
         <Field label="Middle name" value={text(payload, "middle_name")} />

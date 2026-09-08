@@ -22,11 +22,9 @@ import {
 export function MemberEmptyState({ filters }: { filters: MemberFilters }) {
   if (hasActiveMemberFilters(filters)) {
     return (
-      <div className="space-y-2 text-center">
-        <p className="text-sm font-medium">No members match these filters.</p>
-        <p className="text-sm text-muted-foreground">
-          Try removing a filter or widening your search.
-        </p>
+      <div className="space-y-3 text-center whitespace-normal">
+        <p className="text-brand-ink text-sm font-medium">No members match these filters.</p>
+        <p className="text-brand-label text-sm">Try removing a filter or widening your search.</p>
         <Button asChild variant="outline" size="sm">
           <Link href={membersHref(DEFAULT_MEMBER_FILTERS, MEMBERS_PATH)}>Clear all filters</Link>
         </Button>
@@ -35,9 +33,9 @@ export function MemberEmptyState({ filters }: { filters: MemberFilters }) {
   }
 
   return (
-    <div className="space-y-1 text-center">
-      <p className="text-sm font-medium">No member records yet.</p>
-      <p className="text-sm text-muted-foreground">
+    <div className="space-y-1 text-center whitespace-normal">
+      <p className="text-brand-ink text-sm font-medium">No member records yet.</p>
+      <p className="text-brand-label text-sm">
         Approved applications create a member record for the current term.
       </p>
     </div>

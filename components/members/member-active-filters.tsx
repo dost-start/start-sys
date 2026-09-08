@@ -91,7 +91,7 @@ export function MemberActiveFilters({
   return (
     <div className="flex flex-wrap items-center gap-2" data-testid="active-filters">
       {chips.map((chip) => (
-        <Badge key={chip.key} variant="secondary" className="gap-1.5">
+        <Badge key={chip.key} variant="neutral" className="gap-1.5">
           {chip.label}
           <button
             type="button"

@@ -8,6 +8,7 @@
 //
 // Every value in `old_data`/`new_data` already arrived masked — see
 // lib/members/types.ts. There is no un-masking path here.
+import { Card, CardTitle } from "@/components/ui/card";
 import type { MemberAuditEntry } from "@/lib/members/types";
 
 function formatTimestamp(value: string): string {
@@ -32,26 +33,27 @@ export function MemberAuditTrail({ entries }: { entries: MemberAuditEntry[] }) {
   if (entries.length === 0) return null;
 
   return (
-    <section className="space-y-3 rounded-lg border border-border bg-card p-4 sm:p-6">
-      <h2 className="text-sm font-semibold">Audit trail</h2>
-      <ul className="space-y-2">
+    <Card className="gap-3 p-5 sm:p-6">
+      <CardTitle>Audit trail</CardTitle>
+      <ul>
         {entries.map((entry) => (
-          <li key={entry.id} className="border-b pb-2 text-sm last:border-b-0 last:pb-0">
+          <li
+            key={entry.id}
+            className="space-y-0.5 border-b border-[#eff0f2] py-2.5 text-sm last:border-b-0 last:pb-0"
+          >
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="font-medium">
+              <span className="text-brand-ink font-medium">
                 {entry.operation} — {entry.table_name}
               </span>
-              <span className="text-xs text-muted-foreground">
-                {formatTimestamp(entry.created_at)}
-              </span>
+              <span className="text-brand-label text-xs">{formatTimestamp(entry.created_at)}</span>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-brand-label text-xs">
               By {entry.actor_role} · changed: {summarizeDiff(entry)}
               {entry.note ? ` · ${entry.note}` : ""}
             </p>
           </li>
         ))}
       </ul>
-    </section>
+    </Card>
   );
 }

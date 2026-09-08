@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════════════
--- 0051_privacy_notice_v2.sql
+-- 0052_privacy_notice_v2.sql
 --
 -- WHAT:      A second row in public.privacy_notice_versions — 'v2', the plain-language
 --            rewrite of docs/privacy/PRIVACY_NOTICE.md (no version line, no lawyer note,

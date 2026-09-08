@@ -132,13 +132,13 @@ select pg_temp.login_anon();
 select is(
   (select count(*)::int from public.privacy_notice_versions),
   2,
-  'anon reads EXACTLY 2 privacy notice versions (v1 from 0035, v2 from 0051) — the '
+  'anon reads EXACTLY 2 privacy notice versions (v1 from 0035, v2 from 0052) — the '
   'published text must be readable without an account or consent to it is not informed'
 );
 
 select pg_temp.logout();
 
--- 7 — the digest is the link between the row and the bytes. The CURRENT version (v2, 0051)
+-- 7 — the digest is the link between the row and the bytes. The CURRENT version (v2, 0052)
 -- carries the sha256 of docs/privacy/PRIVACY_NOTICE.md as committed; v1 keeps the digest
 -- of the bytes its applicants agreed to, which the file no longer has.
 --     shasum -a 256 docs/privacy/PRIVACY_NOTICE.md
@@ -294,7 +294,7 @@ select is(
   'database''s'
 );
 
--- 16 — ⚠ and 'v0' becomes 'v2' (the current version, 0051) WITHOUT tripping the foreign
+-- 16 — ⚠ and 'v0' becomes 'v2' (the current version, 0052) WITHOUT tripping the foreign
 -- key, because BEFORE triggers run before constraints are checked. See the header: this
 -- is what makes a claim of agreement to a superseded or invented text impossible rather
 -- than merely erroneous.

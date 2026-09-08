@@ -29,7 +29,22 @@ export type MergeField = (typeof MERGE_FIELDS)[number];
 
 export type MergePayload = Partial<Record<MergeField, string | number | null>>;
 
+/** What a substitutable token looks like: a whitelist field name, whitespace tolerated. */
 const TOKEN_RE = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
+
+/**
+ * What a token ATTEMPT looks like: any `{{…}}` at all.
+ *
+ * Both patterns exist because the strict one alone was a hole. `{{First Name}}` — the
+ * spelling every other mail-merge tool uses, and the one on the template the CCDO
+ * pasted on 2026-09-07 — does not match `TOKEN_RE` (the space breaks it), so it was
+ * neither substituted nor reported: it went out to the recipient as the literal text
+ * `{{First Name}}`. That is precisely the failure US-G3 exists to prevent
+ * ("an unrecognized merge token fails the send with a clear error rather than shipping
+ * literal placeholder text to recipients"). Anything brace-wrapped that is not a
+ * whitelist field is now an unknown token.
+ */
+const TOKEN_ATTEMPT_RE = /\{\{([^{}]*)\}\}/g;
 
 export class UnknownMergeTokenError extends Error {
   readonly name = "UnknownMergeTokenError";
@@ -47,12 +62,16 @@ function isMergeField(value: string): value is MergeField {
   return (MERGE_FIELDS as readonly string[]).includes(value);
 }
 
-/** Every distinct token in a template, in order of first appearance. */
+/**
+ * Every distinct token ATTEMPT in a template, trimmed, in order of first appearance.
+ * `{{ given_name }}` and `{{given_name}}` are one token; `{{First Name}}` is a token
+ * too — an unknown one — rather than invisible text.
+ */
 export function findMergeTokens(template: string): string[] {
   const seen = new Set<string>();
-  for (const match of template.matchAll(TOKEN_RE)) {
+  for (const match of template.matchAll(TOKEN_ATTEMPT_RE)) {
     const token = match[1];
-    if (token !== undefined) seen.add(token);
+    if (token !== undefined) seen.add(token.trim());
   }
   return [...seen];
 }

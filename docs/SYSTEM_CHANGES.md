@@ -214,6 +214,30 @@ Every other failure is highlighted on the exact field. The check runs inside the
 
 ---
 
+### 12. Sending a designed email — paste the HTML, the way you already do in Gmail
+
+**What it is.** Until now the campaign composer accepted only simple typed formatting — bold, italics, links, lists. The CCDO's actual practice is to build a designed email (banner image, coloured heading, a button) in an email template builder and paste the finished HTML into Gmail using a browser extension. That kind of email could not be sent from START-SYS at all: pasted in, the design arrived at the recipient as a wall of code. So every designed send had to happen outside the system, which also meant it could not use the recipient filters, the person picker, the merge fields or the delivery report.
+
+**How it works from the user's side.** The message box now has two tabs, and switching between them keeps both drafts.
+
+- **Write it here** — the same typing as before, plus more: headings, images, numbered lists, quotes and dividers. Enough for a clean announcement without touching a builder.
+- **Paste a design** — paste the HTML your builder exports, exactly the code you would paste into Gmail. Up to 200 KB, which is roughly three times the size of a normal designed template. The preview beside it shows the finished email as the recipient will see it.
+
+Merge fields work on both tabs, and the same short list as before: first name, last name, member ID, year joined, region, island group, term, year level, committee, department. Nothing sensitive, on either tab.
+
+**What CRRD must do or know.**
+
+- **The pasted design is checked by the system before it is saved.** Anything that could run code, open a form, load a page inside the email, or reach a non-secure address is removed. The preview shows what survived, so if part of a template disappears you see it before you save, not after the send.
+- **Two things a builder may include are deliberately removed.** First, `<style>` blocks — the small piece of a template that rearranges columns on a phone. A single-column design (banner, text, button — the shape of the DataCamp announcement) is unaffected. A multi-column design will show its desktop layout on a phone, shrunk to fit, rather than stacking. If that becomes a problem on a real template, say so and it can be added; it was left out for now because it is the one part of a pasted template the system cannot inspect line by line. Second, images that are not on a secure (`https`) address.
+- **Images need to stay wherever your builder hosts them.** START-DOST has no image host of its own yet, so keep using the links your builder gives you and do not delete the template from the builder afterwards, or the images will stop loading in emails already sent.
+- **Very large designs still send.** Gmail shows a "Message clipped — view entire message" link past about 100 KB. The email is fine; the reader clicks through. The system does not warn about it because there is nothing to fix.
+
+**One bug found and fixed while building this.** The template shown on 2026-09-07 used `{{First Name}}` for the recipient's name. START-SYS uses `{{given_name}}`. The system was supposed to refuse any merge field it does not recognise — but a field with a **space** in it slipped past the check entirely: it would not have been filled in, and it would not have raised an error either, so recipients would have received the literal text `{{First Name}}` in their email. That is now caught: any `{{…}}` that is not one of the ten allowed fields blocks the send with a message naming it. When adapting a template built elsewhere, change its placeholders to the START-SYS spellings listed above.
+
+**Decided by:** Ethan, 2026-09-07, after the CCDO showed how designed emails are sent today (decision record ADR 0014).
+
+---
+
 ## Still open
 
 Decided or defaulted, waiting for a final word or an action:

@@ -1,9 +1,17 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // The campaign composer (PRD US-G1, US-G2, US-G3; SRS "Email Sending" / "Form Sending").
 //
-// One screen: pick a template, edit the subject and the Telegram-style markdown body with
-// a live rendered preview, choose the audience on the five PRD axes, watch the live
-// recipient count, save the draft. The count comes from `previewAudienceAction`, which
+// One screen: pick a template, write the message — either in the Telegram-style markdown
+// subset or by pasting a designed template exported from an email builder (ADR 0014) —
+// with a live rendered preview, choose the audience on the five PRD axes, watch the live
+// recipient count, save the draft.
+//
+// THE TWO BODY TABS ARE PREVIEWED DIFFERENTLY, ON PURPOSE. Markdown is escaped before it
+// is rendered, so the preview below is our own HTML and is safe to inject inline. A
+// pasted template is not ours: it is sent to `previewHtmlBodyAction`, sanitised by the
+// SAME server-side allowlist that runs before it is stored, and shown in a sandboxed
+// iframe. What the CCDO sees in that frame is exactly what will be saved, so anything
+// the allowlist stripped is visibly gone before they commit to it. The count comes from `previewAudienceAction`, which
 // calls the SAME `resolve_recipients()` the send freezes from — so the number shown here
 // is the number the send uses (PRD US-G2), by construction rather than by care.
 //
@@ -21,15 +29,22 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { AudiencePicker } from "@/components/campaigns/audience-picker";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { createCampaign, previewAudienceAction } from "@/lib/campaigns/actions";
+import {
+  createCampaign,
+  previewAudienceAction,
+  previewHtmlBodyAction,
+} from "@/lib/campaigns/actions";
 import { markdownToHtml } from "@/lib/campaigns/markdown";
 import { MERGE_FIELDS, mergeHtml, mergeText, type MergePayload } from "@/lib/campaigns/merge";
 import {
   AUDIENCE_STATUSES,
   DAILY_SEND_WARNING_THRESHOLD,
+  HTML_BODY_MAX_BYTES,
   ISLAND_GROUPS,
+  MARKDOWN_BODY_MAX_CHARS,
   YEAR_LEVELS,
   type AudienceFilter,
+  type BodyFormat,
 } from "@/lib/campaigns/schema";
 import {
   TEMPLATE_KEYS,
@@ -100,7 +115,13 @@ export function CampaignComposer({ options, origin }: CampaignComposerProps) {
   const router = useRouter();
   const [templateKey, setTemplateKey] = useState<TemplateKey>("freeform");
   const [subject, setSubject] = useState<string>(TEMPLATES.freeform.subject);
-  const [body, setBody] = useState<string>(TEMPLATES.freeform.body(null));
+  // Two independent drafts, so switching tabs to look at the other one never destroys work.
+  const [bodyFormat, setBodyFormat] = useState<BodyFormat>("markdown");
+  const [markdownBody, setMarkdownBody] = useState<string>(TEMPLATES.freeform.body(null));
+  const [htmlBody, setHtmlBody] = useState<string>("");
+  const [htmlPreview, setHtmlPreview] = useState<{ html: string; bytes: number } | null>(null);
+  const [htmlError, setHtmlError] = useState<string | null>(null);
+  const [htmlPending, setHtmlPending] = useState(false);
   const [audience, setAudience] = useState<AudienceFilter>(EMPTY_AUDIENCE);
   const [preview, setPreview] = useState<AudiencePreview | null>(null);
   const [previewPending, setPreviewPending] = useState(false);
@@ -108,6 +129,8 @@ export function CampaignComposer({ options, origin }: CampaignComposerProps) {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  const body = bodyFormat === "html" ? htmlBody : markdownBody;
 
   // The live count, debounced. Every change to the audience re-resolves it server-side.
   useEffect(() => {
@@ -135,22 +158,56 @@ export function CampaignComposer({ options, origin }: CampaignComposerProps) {
   // The rendered preview, merged with sample values so an unknown token shows up as an
   // error HERE, before anything is saved — never as a literal `{{frist_name}}` in a mailbox.
   const rendered = useMemo(() => {
+    const source = bodyFormat === "html" ? (htmlPreview?.html ?? "") : markdownToHtml(markdownBody);
     try {
       return {
         subject: mergeText(subject, SAMPLE_MERGE),
-        html: mergeHtml(markdownToHtml(body), SAMPLE_MERGE),
+        html: mergeHtml(source, SAMPLE_MERGE),
         error: null as string | null,
       };
     } catch (caught) {
-      return { subject, html: markdownToHtml(body), error: (caught as Error).message };
+      return { subject, html: source, error: (caught as Error).message };
     }
-  }, [subject, body]);
+  }, [subject, bodyFormat, markdownBody, htmlPreview]);
+
+  // The pasted body goes to the server to be sanitised — see the header note. Debounced,
+  // and skipped entirely while the markdown tab is open so a stale paste costs nothing.
+  useEffect(() => {
+    if (bodyFormat !== "html") return;
+    if (htmlBody.trim() === "") {
+      setHtmlPreview(null);
+      setHtmlError(null);
+      return;
+    }
+    let cancelled = false;
+    setHtmlPending(true);
+    const handle = setTimeout(() => {
+      void previewHtmlBodyAction({ body_html: htmlBody }).then((result) => {
+        if (cancelled) return;
+        setHtmlPending(false);
+        if (result.ok) {
+          setHtmlPreview(result.data);
+          setHtmlError(null);
+        } else {
+          setHtmlPreview(null);
+          setHtmlError(result.error.message);
+        }
+      });
+    }, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [bodyFormat, htmlBody]);
 
   const applyTemplate = (key: TemplateKey) => {
     const template = TEMPLATES[key];
     setTemplateKey(key);
     setSubject(template.subject);
-    setBody(template.body(templateFormUrl(template, origin)));
+    // The four templates are written in markdown, so choosing one moves to that tab. The
+    // pasted draft is kept, not cleared — switching back finds it where it was left.
+    setMarkdownBody(template.body(templateFormUrl(template, origin)));
+    setBodyFormat("markdown");
     setAudience((current) => ({
       ...current,
       statuses: template.defaultStatuses.filter(isAudienceStatus),
@@ -164,6 +221,7 @@ export function CampaignComposer({ options, origin }: CampaignComposerProps) {
       const result = await createCampaign({
         template_key: templateKey,
         subject,
+        body_format: bodyFormat,
         body_markdown: body,
         audience,
       });
@@ -237,23 +295,96 @@ export function CampaignComposer({ options, origin }: CampaignComposerProps) {
 
         {/* ── body ── */}
         <section className="space-y-2">
-          <label htmlFor="body_markdown" className="text-sm font-medium">
-            Message
-          </label>
-          <Textarea
-            id="body_markdown"
-            name="body_markdown"
-            rows={16}
-            value={body}
-            onChange={(event) => setBody(event.target.value)}
-            className="font-mono text-sm"
-          />
-          <FieldErrors messages={fieldErrors["body_markdown"]} />
-          <p className="text-muted-foreground text-xs">
-            Formatting: <code>**bold**</code>, <code>__underline__</code>, <code>_italic_</code>,{" "}
-            <code>~~strike~~</code>, <code>`code`</code>, <code>[label](https://link)</code>, lines
-            starting with <code>- </code> for a list, a blank line for a new paragraph.
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <label htmlFor="body_markdown" className="text-sm font-medium">
+              Message
+            </label>
+            <div
+              className="flex gap-1 rounded-md border p-0.5"
+              role="tablist"
+              aria-label="Message format"
+            >
+              {(
+                [
+                  ["markdown", "Write it here"],
+                  ["html", "Paste a design"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="tab"
+                  aria-selected={bodyFormat === value}
+                  data-testid={`body-format-${value}`}
+                  onClick={() => setBodyFormat(value)}
+                  className={
+                    bodyFormat === value
+                      ? "bg-primary text-primary-foreground rounded px-3 py-1 text-xs font-medium"
+                      : "text-muted-foreground hover:text-foreground rounded px-3 py-1 text-xs"
+                  }
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {bodyFormat === "markdown" ? (
+            <>
+              <Textarea
+                id="body_markdown"
+                name="body_markdown"
+                rows={16}
+                value={markdownBody}
+                onChange={(event) => setMarkdownBody(event.target.value)}
+                className="font-mono text-sm"
+              />
+              <FieldErrors messages={fieldErrors["body_markdown"]} />
+              <p className="text-muted-foreground text-xs">
+                Formatting: <code>**bold**</code>, <code>__underline__</code>, <code>_italic_</code>
+                , <code>~~strike~~</code>, <code>`code`</code>, <code>[label](https://link)</code>,{" "}
+                <code>![alt](https://image)</code>, lines starting with <code>- </code> or{" "}
+                <code>1. </code> for a list, <code>&gt; </code> for a quote, <code>#</code> to{" "}
+                <code>###</code> for a heading, <code>---</code> for a divider, a blank line for a
+                new paragraph. Up to {MARKDOWN_BODY_MAX_CHARS.toLocaleString("en")} characters.
+              </p>
+            </>
+          ) : (
+            <>
+              <Textarea
+                id="body_markdown"
+                name="body_markdown"
+                rows={16}
+                value={htmlBody}
+                onChange={(event) => setHtmlBody(event.target.value)}
+                placeholder="Paste the HTML your email builder exports…"
+                className="font-mono text-xs"
+                data-testid="body-html-input"
+              />
+              <FieldErrors messages={fieldErrors["body_markdown"]} />
+              {htmlError === null ? null : (
+                <p role="alert" className="text-destructive text-sm" data-testid="html-body-error">
+                  {htmlError}
+                </p>
+              )}
+              <p className="text-muted-foreground text-xs">
+                Paste the HTML from your email builder — the same code you would paste into Gmail.
+                It is checked on the server before it is saved: anything that could run code, load a
+                page, or reach a non-secure address is removed, and the preview shows you what
+                survived. Up to {Math.round(HTML_BODY_MAX_BYTES / 1024)} KB
+                {htmlPreview === null
+                  ? ""
+                  : ` — this one is ${Math.max(1, Math.round(htmlPreview.bytes / 1024))} KB`}
+                .
+              </p>
+              <p className="text-muted-foreground text-xs">
+                Two things are dropped that a builder may include: <code>&lt;style&gt;</code> blocks
+                (phone-only layout tweaks — a design that relies on them shows its desktop layout on
+                a phone, scaled to fit) and images that are not on an <code>https</code> address.
+                Host images where your builder puts them and paste the link it gives you.
+              </p>
+            </>
+          )}
           <p className="text-muted-foreground text-xs">
             Merge fields:{" "}
             {MERGE_FIELDS.map((field, index) => (
@@ -495,7 +626,15 @@ export function CampaignComposer({ options, origin }: CampaignComposerProps) {
         </section>
 
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="button" onClick={submit} disabled={pending || rendered.error !== null}>
+          <Button
+            type="button"
+            onClick={submit}
+            disabled={
+              pending ||
+              rendered.error !== null ||
+              (bodyFormat === "html" && (htmlError !== null || htmlPreview === null))
+            }
+          >
             Save draft
           </Button>
           <p className="text-muted-foreground text-xs">
@@ -526,14 +665,31 @@ export function CampaignComposer({ options, origin }: CampaignComposerProps) {
             <span className="text-muted-foreground">Subject: </span>
             <span className="font-medium">{rendered.subject || "(no subject)"}</span>
           </div>
-          {/* The renderer escapes the input FIRST and emits only its own tags
-              (lib/campaigns/markdown.ts), so this is our HTML, not the CRRD's. */}
-          <div
-            className="prose prose-sm max-w-none px-4 py-3 text-sm"
-            data-testid="campaign-preview"
-            dangerouslySetInnerHTML={{ __html: rendered.html }}
-          />
+          {bodyFormat === "markdown" ? (
+            /* The renderer escapes the input FIRST and emits only its own tags
+               (lib/campaigns/markdown.ts), so this is our HTML, not the CRRD's. */
+            <div
+              className="prose prose-sm max-w-none px-4 py-3 text-sm"
+              data-testid="campaign-preview"
+              dangerouslySetInnerHTML={{ __html: rendered.html }}
+            />
+          ) : (
+            /* A pasted template is NOT ours, so it is never injected into this page.
+               `rendered.html` here is what the server-side allowlist returned, shown in a
+               sandboxed frame — no scripts, no forms, no navigation, same as the campaign
+               page's frame. */
+            <iframe
+              title="Rendered message"
+              srcDoc={rendered.html}
+              sandbox=""
+              className="h-[32rem] w-full rounded-b-lg bg-white"
+              data-testid="campaign-preview-frame"
+            />
+          )}
         </div>
+        {bodyFormat === "html" && htmlPending ? (
+          <p className="text-muted-foreground text-xs">Checking the pasted HTML…</p>
+        ) : null}
       </aside>
     </div>
   );

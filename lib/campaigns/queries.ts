@@ -83,17 +83,9 @@ export async function listRecipients(
   // the only path to them now, and it is audited (one VIEW_RECIPIENTS row per call) and
   // gated on the same CBL Art. VIII §7.1 confidentiality acknowledgement every other
   // sensitive-column read in this codebase requires.
-  //
-  // `as never` on the name/args: `database.types.ts` has not been regenerated against a
-  // live project since 0051 was written (no Supabase instance was available in this
-  // environment). `pnpm db:types` must run before this merges — CI's `types-drift` job
-  // will refuse it otherwise, which is the intended backstop.
-  const { data, error } = (await ctx.supabase.rpc(
-    "get_campaign_recipients" as never,
-    {
-      p_campaign_id: campaignId,
-    } as never,
-  )) as unknown as { data: RecipientRow[] | null; error: { message: string } | null };
+  const { data, error } = await ctx.supabase.rpc("get_campaign_recipients", {
+    p_campaign_id: campaignId,
+  });
   if (error || !data) return [];
 
   // The RPC returns every row for the campaign, unordered. The prior direct-select had

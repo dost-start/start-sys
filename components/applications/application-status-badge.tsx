@@ -5,6 +5,10 @@
 // `draft` is rendered defensively even though the review queue never requests it
 // (`APPLICATION_QUEUE_STATUSES` in `lib/applications/schema.ts` omits it) — a stray
 // direct link to a draft row must not crash this component.
+//
+// Brand edition (2026-09-08): the tones follow `STATUS_TONE` in the design canvas —
+// pending is a decision still owed (warning), approved is done (success), rejected is
+// a refusal (danger), draft is nothing yet (neutral). Labels are unchanged.
 import { Badge } from "@/components/ui/badge";
 import type { Database } from "@/database.types";
 
@@ -17,15 +21,13 @@ const STATUS_LABEL: Record<ApplicationStatusValue, string> = {
   rejected: "Rejected",
 };
 
-const STATUS_VARIANT: Record<
-  ApplicationStatusValue,
-  "default" | "secondary" | "destructive" | "outline"
-> = {
-  draft: "outline",
-  pending: "secondary",
-  approved: "default",
-  rejected: "destructive",
-};
+const STATUS_VARIANT: Record<ApplicationStatusValue, "neutral" | "warning" | "success" | "danger"> =
+  {
+    draft: "neutral",
+    pending: "warning",
+    approved: "success",
+    rejected: "danger",
+  };
 
 export function ApplicationStatusBadge({ status }: { status: ApplicationStatusValue }) {
   return <Badge variant={STATUS_VARIANT[status]}>{STATUS_LABEL[status]}</Badge>;

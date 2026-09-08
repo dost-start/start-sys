@@ -121,7 +121,7 @@ export function CampaignSendPanel({
     <div className="space-y-4">
       {status === "draft" ? (
         <>
-          <p className="text-sm">
+          <p className="text-brand-body text-sm">
             This is a draft. Freezing the recipient list resolves the audience once and writes it
             down; the send is a second step.
           </p>
@@ -133,17 +133,21 @@ export function CampaignSendPanel({
 
       {status === "queued" || status === "sending" ? (
         <>
-          <div className="space-y-1">
+          <div className="space-y-2">
+            {/* The design canvas's `.bar`: a soft-grey track, a light-blue→brand-blue fill. */}
             <div
-              className="bg-muted h-2 w-full overflow-hidden rounded"
+              className="bg-brand-field h-2 w-full overflow-hidden rounded-full"
               role="progressbar"
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={done}
             >
-              <div className="bg-primary h-full transition-[width]" style={{ width: `${done}%` }} />
+              <div
+                className="from-brand-blue-soft to-brand-blue h-full rounded-full bg-gradient-to-r transition-[width]"
+                style={{ width: `${done}%` }}
+              />
             </div>
-            <p className="text-muted-foreground text-xs" data-testid="send-progress">
+            <p className="text-brand-body text-xs" data-testid="send-progress">
               {progress.sent} sent · {progress.failed} failed · {progress.remaining} to go
             </p>
           </div>
@@ -163,7 +167,7 @@ export function CampaignSendPanel({
               </Button>
             ) : null}
           </div>
-          <p className="text-muted-foreground text-xs">
+          <p className="text-brand-label text-xs">
             Sends through <code>{transportName}</code>, 25 messages per step, and keeps going until
             the queue is empty. Leave this page open; if it is closed mid-way, Send again later
             resumes without re-sending anyone.
@@ -172,14 +176,14 @@ export function CampaignSendPanel({
       ) : null}
 
       {status === "sent" || status === "failed" ? (
-        <p className="text-sm" data-testid="send-summary">
+        <p className="text-brand-body text-sm" data-testid="send-summary">
           {status === "sent" ? "Sent" : "Failed"} — {sentCount} delivered to the mail server,{" "}
           {failedCount} failed, of {recipientCount}.
         </p>
       ) : null}
 
       {message === null ? null : (
-        <p role="alert" className="text-sm" data-testid="send-message">
+        <p role="alert" className="text-brand-body text-sm" data-testid="send-message">
           {message}
         </p>
       )}

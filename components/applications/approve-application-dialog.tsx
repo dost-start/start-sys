@@ -24,6 +24,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { approveApplication } from "@/lib/applications/review-actions";
 
@@ -56,12 +57,9 @@ export function ApproveApplicationDialog({
 
   if (approvedMemberId) {
     return (
-      <div
-        role="status"
-        className="rounded-md border border-green-600/30 bg-green-50 px-4 py-3 text-sm font-medium text-green-800 dark:bg-green-950 dark:text-green-300"
-      >
+      <Alert variant="success" role="status" className="font-medium">
         Approved — member ID {approvedMemberId}
-      </div>
+      </Alert>
     );
   }
 
@@ -80,7 +78,7 @@ export function ApproveApplicationDialog({
           </AlertDialogDescription>
         </AlertDialogHeader>
         {errorMessage ? (
-          <p role="alert" className="text-sm text-destructive">
+          <p role="alert" className="text-destructive text-sm">
             {errorMessage}
           </p>
         ) : null}

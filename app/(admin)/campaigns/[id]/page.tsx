@@ -10,12 +10,24 @@
 //
 // The rendered body is shown in a sandboxed iframe from `body_html`, which our own
 // renderer produced from escaped input (lib/campaigns/markdown.ts).
+//
+// Brand restyle (2026-09-08, docs/design/canvas/boards_admin.py `campaign_detail`): a
+// detail page keeps a VISIBLE <h1> — the subject — under a "Campaigns /" breadcrumb.
 // ─────────────────────────────────────────────────────────────────────────────
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { CampaignSendPanel } from "@/components/campaigns/campaign-send-panel";
 import { CampaignStatusBadge } from "@/components/campaigns/campaign-status-badge";
+import { Card, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { getSessionContext } from "@/lib/auth/queries";
 import { homeForRole, LOGIN_PATH } from "@/lib/auth/route-access";
 import { getCampaign, listAudienceOptions, listRecipients } from "@/lib/campaigns/queries";
@@ -102,21 +114,24 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
     : [{ label: "Filter", value: "unreadable — the stored filter does not match the schema" }];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <header className="space-y-2">
-        <p className="text-muted-foreground text-sm">
-          <Link href="/campaigns" className="hover:underline">
+        <p className="text-brand-label text-sm">
+          <Link href="/campaigns" className="text-brand-link hover:underline">
             Campaigns
           </Link>{" "}
           /
         </p>
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight" data-testid="campaign-subject">
+          <h1
+            className="text-brand-ink text-[26px] leading-tight font-semibold"
+            data-testid="campaign-subject"
+          >
             {campaign.subject}
           </h1>
           <CampaignStatusBadge status={campaign.status} />
         </div>
-        <p className="text-muted-foreground text-sm">
+        <p className="text-brand-label text-sm">
           {isTemplateKey(campaign.template_key)
             ? TEMPLATES[campaign.template_key].label
             : campaign.template_key}{" "}
@@ -126,41 +141,45 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
         </p>
       </header>
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start">
         <section className="space-y-3">
-          <h2 className="text-base font-semibold">Message</h2>
-          <iframe
-            title="Rendered message"
-            srcDoc={campaign.body_html}
-            sandbox=""
-            className="h-[28rem] w-full rounded-lg border bg-white"
-            data-testid="campaign-body-frame"
-          />
-          <p className="text-muted-foreground text-xs">
+          <h2 className="text-brand-ink text-lg leading-tight font-semibold">Message</h2>
+          <Card className="overflow-hidden p-0">
+            <iframe
+              title="Rendered message"
+              srcDoc={campaign.body_html}
+              sandbox=""
+              className="h-[28rem] w-full bg-white"
+              data-testid="campaign-body-frame"
+            />
+          </Card>
+          <p className="text-brand-label text-xs">
             Merge fields appear as written here and are filled in per recipient at send.
           </p>
         </section>
 
-        <div className="space-y-8">
-          <section className="space-y-3 rounded-lg border p-4">
-            <h2 className="text-base font-semibold">Recipients</h2>
-            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+        <div className="space-y-6">
+          <Card className="gap-4 p-5 sm:p-6">
+            <CardTitle>Recipients</CardTitle>
+            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-[13.5px]">
               {audienceLines.map((line) => (
                 <div key={line.label} className="contents">
-                  <dt className="text-muted-foreground">{line.label}</dt>
-                  <dd>{line.value}</dd>
+                  <dt className="text-brand-label pt-0.5 text-xs font-semibold tracking-[0.06em] uppercase">
+                    {line.label}
+                  </dt>
+                  <dd className="text-brand-ink">{line.value}</dd>
                 </div>
               ))}
             </dl>
-            <p className="text-sm" data-testid="campaign-recipient-count">
+            <p className="text-brand-ink text-sm" data-testid="campaign-recipient-count">
               {campaign.status === "draft"
                 ? "The list is resolved when it is frozen."
                 : `${campaign.recipient_count} recipient${campaign.recipient_count === 1 ? "" : "s"} frozen.`}
             </p>
-          </section>
+          </Card>
 
-          <section className="space-y-3 rounded-lg border p-4">
-            <h2 className="text-base font-semibold">Send</h2>
+          <Card className="gap-4 p-5 sm:p-6">
+            <CardTitle>Send</CardTitle>
             <CampaignSendPanel
               campaignId={campaign.id}
               status={campaign.status}
@@ -169,58 +188,47 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
               failedCount={campaign.failed_count}
               transportName={mailTransportName()}
             />
-          </section>
+          </Card>
         </div>
       </div>
 
       <section className="space-y-3">
-        <h2 className="text-base font-semibold">Delivery report</h2>
+        <h2 className="text-brand-ink text-lg leading-tight font-semibold">Delivery report</h2>
         {recipients.length === 0 ? (
-          <p className="text-muted-foreground text-sm" data-testid="recipients-empty">
-            No recipient rows yet — the list has not been frozen.
-          </p>
+          <Card className="border-border border border-dashed p-6 shadow-none">
+            <p className="text-brand-label text-sm" data-testid="recipients-empty">
+              No recipient rows yet — the list has not been frozen.
+            </p>
+          </Card>
         ) : (
-          <div className="overflow-x-auto rounded-lg border">
-            <table
-              className="w-full min-w-[40rem] text-left text-sm"
-              data-testid="recipients-table"
-            >
-              <thead className="text-muted-foreground">
-                <tr>
-                  <th scope="col" className="px-4 py-2 font-medium">
-                    Name
-                  </th>
-                  <th scope="col" className="px-4 py-2 font-medium">
-                    Email
-                  </th>
-                  <th scope="col" className="px-4 py-2 font-medium">
-                    Status
-                  </th>
-                  <th scope="col" className="px-4 py-2 font-medium">
-                    Sent
-                  </th>
-                  <th scope="col" className="px-4 py-2 font-medium">
-                    Error
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
+          <Card className="overflow-hidden p-0">
+            <Table className="min-w-[40rem]" data-testid="recipients-table">
+              <TableHeader>
+                <TableRow>
+                  <TableHead scope="col">Name</TableHead>
+                  <TableHead scope="col">Email</TableHead>
+                  <TableHead scope="col">Status</TableHead>
+                  <TableHead scope="col">Sent</TableHead>
+                  <TableHead scope="col">Error</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {recipients.map((row) => (
-                  <tr key={row.id} className="border-t" data-testid={`recipient-${row.status}`}>
-                    <td className="px-4 py-2">{row.name}</td>
-                    <td className="px-4 py-2">{row.to_email}</td>
-                    <td className="px-4 py-2">
-                      {RECIPIENT_STATUS_LABEL[row.status] ?? row.status}
-                    </td>
-                    <td className="px-4 py-2">{formatInstant(row.sent_at)}</td>
-                    <td className="text-muted-foreground px-4 py-2">{row.error ?? ""}</td>
-                  </tr>
+                  <TableRow key={row.id} data-testid={`recipient-${row.status}`}>
+                    <TableCell className="text-brand-ink font-medium">{row.name}</TableCell>
+                    <TableCell>{row.to_email}</TableCell>
+                    <TableCell>{RECIPIENT_STATUS_LABEL[row.status] ?? row.status}</TableCell>
+                    <TableCell>{formatInstant(row.sent_at)}</TableCell>
+                    <TableCell className="text-brand-label whitespace-normal">
+                      {row.error ?? ""}
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </TableBody>
+            </Table>
+          </Card>
         )}
-        <p className="text-muted-foreground text-xs">
+        <p className="text-brand-label text-xs">
           &ldquo;Sent&rdquo; means the mail server accepted the message. The interim Gmail transport
           has no bounce reporting (ADR 0010); a bounced address shows up in the sending inbox, not
           here. All times in Asia/Manila.

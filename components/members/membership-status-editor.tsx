@@ -27,7 +27,9 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Field, FieldHint, FieldLabel } from "@/components/ui/field";
 import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import type { OrgRole } from "@/lib/auth/route-access";
 import { updateMembershipStatus } from "@/lib/members/actions";
@@ -100,13 +102,12 @@ export function MembershipStatusEditor({
         }
       }}
     >
-      <div className="flex items-center gap-2">
-        <label className="text-sm text-muted-foreground" htmlFor="status-target">
-          Change status
-        </label>
-        <select
+      <div className="flex flex-wrap items-center gap-3">
+        <Label htmlFor="status-target">Change status</Label>
+        <NativeSelect
           id="status-target"
-          className="rounded-md border border-input bg-background px-2 py-1 text-sm"
+          wrapperClassName="w-full sm:w-52"
+          className="h-9 px-3 text-[13px]"
           value={target}
           onChange={(event) => setTarget(event.target.value as MembershipStatus)}
         >
@@ -116,7 +117,7 @@ export function MembershipStatusEditor({
               {MEMBERSHIP_STATUS_LABELS[status]}
             </option>
           ))}
-        </select>
+        </NativeSelect>
         <AlertDialogTrigger asChild>
           <Button type="button" size="sm" disabled={target === ""}>
             Continue
@@ -138,8 +139,8 @@ export function MembershipStatusEditor({
         </AlertDialogHeader>
 
         {needsReason ? (
-          <div className="space-y-1.5">
-            <Label htmlFor="ended_reason">Reason</Label>
+          <Field>
+            <FieldLabel htmlFor="ended_reason">Reason</FieldLabel>
             <Textarea
               id="ended_reason"
               rows={4}
@@ -147,14 +148,12 @@ export function MembershipStatusEditor({
               value={reason}
               onChange={(event) => setReason(event.target.value)}
             />
-            <p className="text-xs text-muted-foreground">
-              At least {ENDED_REASON_MIN_LENGTH} characters.
-            </p>
-          </div>
+            <FieldHint>At least {ENDED_REASON_MIN_LENGTH} characters.</FieldHint>
+          </Field>
         ) : null}
 
         {error ? (
-          <p role="alert" className="text-sm text-destructive">
+          <p role="alert" className="text-destructive text-sm">
             {error}
           </p>
         ) : null}

@@ -27,6 +27,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { approveAllPending, type ApproveAllPendingResult } from "@/lib/applications/review-actions";
 
@@ -80,25 +81,25 @@ export function ApproveAllDialog() {
         </AlertDialogHeader>
 
         {errorMessage ? (
-          <p role="alert" className="text-sm text-destructive">
+          <p role="alert" className="text-destructive text-sm">
             {errorMessage}
           </p>
         ) : null}
 
         {result ? (
-          <div role="status" className="space-y-3 text-sm">
-            <p className="font-medium text-green-800 dark:text-green-300">
+          <Alert variant="success" role="status" className="block space-y-3">
+            <p className="font-semibold">
               Approved {result.applicationsApproved} application
               {result.applicationsApproved === 1 ? "" : "s"} and {result.renewalsApproved} renewal
               {result.renewalsApproved === 1 ? "" : "s"}.
             </p>
 
             {result.skipped.length > 0 ? (
-              <div className="space-y-1">
-                <p className="font-medium text-muted-foreground">
+              <div className="text-brand-body space-y-1">
+                <p className="font-medium">
                   Skipped ({result.skipped.length}) — did not meet the submission standards:
                 </p>
-                <ul className="list-disc space-y-0.5 pl-5 text-muted-foreground">
+                <ul className="list-disc space-y-0.5 pl-5">
                   {result.skipped.map((row) => (
                     <li key={row.id}>
                       {row.id} — {row.failures.length > 0 ? row.failures.join(", ") : "unknown"}
@@ -109,11 +110,11 @@ export function ApproveAllDialog() {
             ) : null}
 
             {result.failed.length > 0 ? (
-              <div className="space-y-1">
-                <p className="font-medium text-destructive">
+              <div className="text-destructive space-y-1">
+                <p className="font-medium">
                   Failed ({result.failed.length}) — review these individually:
                 </p>
-                <ul className="list-disc space-y-0.5 pl-5 text-destructive">
+                <ul className="list-disc space-y-0.5 pl-5">
                   {result.failed.map((row) => (
                     <li key={row.id}>{row.id}</li>
                   ))}
@@ -125,9 +126,9 @@ export function ApproveAllDialog() {
             result.renewalsApproved === 0 &&
             result.skipped.length === 0 &&
             result.failed.length === 0 ? (
-              <p className="text-muted-foreground">Nothing was pending. Nothing to do.</p>
+              <p className="text-brand-body">Nothing was pending. Nothing to do.</p>
             ) : null}
-          </div>
+          </Alert>
         ) : null}
 
         <AlertDialogFooter>

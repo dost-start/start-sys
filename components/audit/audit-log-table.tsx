@@ -22,8 +22,13 @@
 // must not acquire any by way of its own viewer.
 //
 // Server-rendered. No `'use client'`, no state.
+//
+// Brand restyle (2026-09-08, docs/design/canvas/boards_admin.py `audit_log`): the table
+// sits in a flush Card; a read is an info badge, an INSERT a success badge, any other
+// write neutral. Columns and text are unchanged.
 import { AuditEntryDiff } from "@/components/audit/audit-entry-diff";
 import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -53,23 +58,24 @@ function formatManila(iso: string): string {
 
 /** Reads that never changed a record are visually distinct from writes that did. */
 function operationVariant(operation: string) {
-  if (operation.startsWith("VIEW")) return "outline" as const;
-  if (operation === "INSERT") return "default" as const;
-  return "secondary" as const;
+  if (operation.startsWith("VIEW")) return "info" as const;
+  if (operation === "INSERT") return "success" as const;
+  return "neutral" as const;
 }
 
 export function AuditLogTable({ entries }: { entries: readonly AuditEntry[] }) {
   if (entries.length === 0) {
     return (
-      <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
-        No audit entries match these filters.
-      </div>
+      <Card className="border-border border border-dashed p-6 shadow-none">
+        <p className="text-brand-label text-sm">No audit entries match these filters.</p>
+      </Card>
     );
   }
 
   return (
-    // Scrolls inside its own container so the page body never scrolls horizontally.
-    <div className="overflow-x-auto rounded-md border">
+    // The Table primitive scrolls inside its own container, so the page body never
+    // scrolls horizontally; the Card is flush so the scroll edge is the card edge.
+    <Card className="overflow-hidden p-0">
       <Table>
         <TableHeader>
           <TableRow>
@@ -83,15 +89,15 @@ export function AuditLogTable({ entries }: { entries: readonly AuditEntry[] }) {
         <TableBody>
           {entries.map((entry) => (
             <TableRow key={entry.id}>
-              <TableCell className="align-top text-xs whitespace-nowrap tabular-nums">
+              <TableCell className="align-top font-mono text-xs whitespace-nowrap tabular-nums">
                 {formatManila(entry.created_at)}
               </TableCell>
               <TableCell className="align-top">
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-xs">{entry.actor_role}</span>
+                  <span className="text-brand-ink text-xs font-medium">{entry.actor_role}</span>
                   {/* A system job writes a null actor — shown as `system`, not as blank,
                       so "nobody was recorded" and "a job did it" stay distinguishable. */}
-                  <span className="font-mono text-[10px] break-all text-muted-foreground">
+                  <span className="text-brand-label font-mono text-[10px] break-all">
                     {entry.actor_user_id ?? "system"}
                   </span>
                 </div>
@@ -101,22 +107,22 @@ export function AuditLogTable({ entries }: { entries: readonly AuditEntry[] }) {
               </TableCell>
               <TableCell className="align-top">
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-xs">{entry.table_name}</span>
-                  <span className="font-mono text-[10px] break-all text-muted-foreground">
+                  <span className="text-brand-ink text-xs font-medium">{entry.table_name}</span>
+                  <span className="text-brand-label font-mono text-[10px] break-all">
                     {entry.row_id ?? "—"}
                   </span>
                 </div>
               </TableCell>
-              <TableCell className="align-top">
+              <TableCell className="min-w-[16rem] align-top whitespace-normal">
                 <AuditEntryDiff old_data={entry.old_data} new_data={entry.new_data} />
                 {entry.note !== null ? (
-                  <p className="mt-1 text-xs text-muted-foreground">{entry.note}</p>
+                  <p className="text-brand-label mt-1 text-xs">{entry.note}</p>
                 ) : null}
               </TableCell>
             </TableRow>
           ))}
         </TableBody>
       </Table>
-    </div>
+    </Card>
   );
 }

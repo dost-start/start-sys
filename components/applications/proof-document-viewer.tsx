@@ -10,6 +10,10 @@
 // EVERY RENDER OF THE PDF/IMAGE BRANCHES CAUSES ONE AUDIT ROW ON THE SERVER (the route
 // writes it, not this component) — so this component mounts the viewer element exactly
 // once per open and never prefetches or pre-mounts it from the list page.
+//
+// Brand edition (2026-09-08): the two detail pages mount this inside a white
+// `Card p-0 overflow-hidden`, which supplies the rounding and the clip — so the
+// iframe, image and fallback box below are edge-to-edge and borderless on purpose.
 "use client";
 
 import { useState } from "react";
@@ -41,7 +45,7 @@ export function ProofDocumentViewer({
 
   if (!mimeType) {
     return (
-      <p className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
+      <p className="bg-brand-field text-brand-label p-6 text-sm">
         No proof of enrollment is attached to this application.
       </p>
     );
@@ -52,7 +56,7 @@ export function ProofDocumentViewer({
       <iframe
         src={proofUrl}
         title="Proof of enrollment"
-        className="h-[70vh] w-full rounded-md border"
+        className="block h-[70vh] min-h-80 w-full"
         // The browser's own sandboxed PDF viewer is the residual-risk mitigation
         // ARCHITECTURE.md §4.1 names — never offer a download link alongside it.
       />
@@ -67,7 +71,7 @@ export function ProofDocumentViewer({
       <img
         src={proofUrl}
         alt="Proof of enrollment"
-        className="max-h-[70vh] w-full rounded-md border object-contain"
+        className="bg-brand-field block max-h-[70vh] w-full object-contain"
         onError={() => setImageFailed(true)}
       />
     );
@@ -76,8 +80,8 @@ export function ProofDocumentViewer({
   const unviewable = UNVIEWABLE_MIMES.has(mimeType) || imageFailed;
 
   return (
-    <div className="space-y-3 rounded-md border border-dashed p-6">
-      <p className="text-sm text-muted-foreground">
+    <div className="bg-brand-field space-y-3 p-6">
+      <p className="text-brand-body text-sm">
         {unviewable
           ? "This file is a HEIC/HEIF photo, which no browser can display inline."
           : "This file type cannot be previewed here."}{" "}
@@ -87,12 +91,12 @@ export function ProofDocumentViewer({
         href={proofUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="text-sm font-medium underline underline-offset-2"
+        className="text-brand-link text-sm font-medium underline underline-offset-[3px] hover:text-[#00508c]"
       >
         Open proof of enrollment in a new tab
       </a>
       {unviewable ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-brand-label text-xs">
           Suggested rejection reason: &ldquo;Your Certificate of Registration could not be displayed
           for review — please re-upload as a PDF, JPEG or PNG.&rdquo;
         </p>

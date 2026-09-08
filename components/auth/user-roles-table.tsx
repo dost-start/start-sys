@@ -3,21 +3,34 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // The tech_admin role-management grid (BUILD_PLAN S2-T40). Renders exactly what
 // `user_roles` grants — `user_id`, `role`, `person_id`, `region_id` — plus the
-// display-only joins the page fetched for readability. No table primitive is
-// vendored yet (`components/ui/` only holds `button.tsx` as of this slice, per
-// S5-T20), so this is a plain HTML `<table>` styled with Tailwind rather than a
-// TanStack grid — deliberately, so this file does not fork the S5 grid work.
+// display-only joins the page fetched for readability. Deliberately NOT a TanStack
+// grid — the vendored Table primitives are enough for a list this size, and this
+// file must not fork the S5 grid work.
 //
 // Each row's role/region is editable inline via `assignRole`; each row has a
 // `revokeRole` control. Both actions are `withRole(['tech_admin'])`-guarded
 // server-side (role-actions.ts) — the disabled state here is UX only, never the
 // enforcement (CONVENTIONS §0 rule "never rely on a hidden link or disabled
 // button as the enforcement of a permission").
+//
+// Brand restyle (2026-09-08, docs/design/canvas/boards_admin.py `user_roles`): the
+// vendored Card / Table / NativeSelect primitives. Option order, every string and every
+// `value` are unchanged.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { NativeSelect } from "@/components/ui/native-select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { assignRole, revokeRole } from "@/lib/auth/role-actions";
 import { ASSIGNABLE_ROLES } from "@/lib/auth/invite-schema";
 import type { OrgRole } from "@/lib/auth/route-access";
@@ -44,31 +57,31 @@ export function UserRolesTable({
 }) {
   if (rows.length === 0) {
     return (
-      <p className="text-muted-foreground rounded-lg border p-6 text-sm">
-        No accounts yet. Invite the first one above.
-      </p>
+      <Card className="border-border border border-dashed p-6 shadow-none">
+        <p className="text-brand-label text-sm">No accounts yet. Invite the first one above.</p>
+      </Card>
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border">
-      <table className="w-full min-w-[720px] text-left text-sm">
-        <thead className="bg-muted/50 text-muted-foreground">
-          <tr>
-            <th className="p-3 font-medium">Account</th>
-            <th className="p-3 font-medium">Person</th>
-            <th className="p-3 font-medium">Role</th>
-            <th className="p-3 font-medium">Region</th>
-            <th className="p-3 font-medium" />
-          </tr>
-        </thead>
-        <tbody>
+    <Card className="overflow-hidden p-0">
+      <Table className="min-w-[720px]">
+        <TableHeader>
+          <TableRow>
+            <TableHead>Account</TableHead>
+            <TableHead>Person</TableHead>
+            <TableHead>Role</TableHead>
+            <TableHead>Region</TableHead>
+            <TableHead />
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {rows.map((row) => (
             <UserRoleRowItem key={row.userId} row={row} regions={regions} />
           ))}
-        </tbody>
-      </table>
-    </div>
+        </TableBody>
+      </Table>
+    </Card>
   );
 }
 
@@ -114,12 +127,13 @@ function UserRoleRowItem({ row, regions }: { row: UserRoleRow; regions: readonly
   }
 
   return (
-    <tr className="border-t align-top">
-      <td className="p-3 font-mono text-xs">{row.userId}</td>
-      <td className="p-3">{row.personLabel ?? <span className="text-muted-foreground">—</span>}</td>
-      <td className="p-3">
-        <select
-          className="rounded-md border bg-background px-2 py-1 text-sm"
+    <TableRow className="align-top">
+      <TableCell className="font-mono text-xs">{row.userId}</TableCell>
+      <TableCell>{row.personLabel ?? <span className="text-brand-label">—</span>}</TableCell>
+      <TableCell>
+        <NativeSelect
+          className="h-9 text-[13px]"
+          wrapperClassName="w-44"
           value={role}
           disabled={isPending}
           onChange={(event) => setRole(event.target.value as OrgRole)}
@@ -129,12 +143,13 @@ function UserRoleRowItem({ row, regions }: { row: UserRoleRow; regions: readonly
               {r}
             </option>
           ))}
-        </select>
-      </td>
-      <td className="p-3">
+        </NativeSelect>
+      </TableCell>
+      <TableCell>
         {needsRegion ? (
-          <select
-            className="rounded-md border bg-background px-2 py-1 text-sm"
+          <NativeSelect
+            className="h-9 text-[13px]"
+            wrapperClassName="w-60"
             value={regionId}
             disabled={isPending}
             onChange={(event) => setRegionId(event.target.value)}
@@ -145,39 +160,41 @@ function UserRoleRowItem({ row, regions }: { row: UserRoleRow; regions: readonly
                 {region.name} ({region.code})
               </option>
             ))}
-          </select>
+          </NativeSelect>
         ) : (
-          <span className="text-muted-foreground">
+          <span className="text-brand-label">
             {row.regionLabel ?? "— (not a Regional Representative)"}
           </span>
         )}
-      </td>
-      <td className="space-x-2 p-3 text-right whitespace-nowrap">
-        {dirty && (
-          <Button size="sm" onClick={handleSave} disabled={isPending}>
-            Save
-          </Button>
-        )}
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={handleRevoke}
-          disabled={isPending || row.role === "member"}
-        >
-          Revoke
-        </Button>
-        {message && (
-          <p
-            className={
-              message.kind === "error"
-                ? "mt-1 text-xs text-destructive"
-                : "text-muted-foreground mt-1 text-xs"
-            }
-          >
-            {message.text}
-          </p>
-        )}
-      </td>
-    </tr>
+      </TableCell>
+      <TableCell className="text-right">
+        <div className="flex flex-col items-end gap-1.5">
+          <div className="flex justify-end gap-2">
+            {dirty && (
+              <Button size="sm" onClick={handleSave} disabled={isPending}>
+                Save
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleRevoke}
+              disabled={isPending || row.role === "member"}
+            >
+              Revoke
+            </Button>
+          </div>
+          {message && (
+            <p
+              className={
+                message.kind === "error" ? "text-destructive text-xs" : "text-success text-xs"
+              }
+            >
+              {message.text}
+            </p>
+          )}
+        </div>
+      </TableCell>
+    </TableRow>
   );
 }

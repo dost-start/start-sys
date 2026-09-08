@@ -7,6 +7,10 @@
 //
 // Access is enforced independently by RLS + `search_member_directory()` (0030) and by
 // `(admin)/layout.tsx`; this page adds no third opinion on top of them.
+//
+// Brand edition (2026-09-08): the page title is the shell's top bar ("Members"), so the
+// `<h1>` here is screen-reader-only; the count line, search, filter card, chips, table
+// card and pagination follow docs/design/canvas/boards_admin.py.
 import { redirect } from "next/navigation";
 
 import { MemberActiveFilters } from "@/components/members/member-active-filters";
@@ -15,6 +19,7 @@ import { MemberFilterBar } from "@/components/members/member-filters";
 import { MemberPagination } from "@/components/members/member-pagination";
 import { MemberSearch } from "@/components/members/member-search";
 import { MemberTable } from "@/components/members/member-table";
+import { Card } from "@/components/ui/card";
 import { getSessionContext } from "@/lib/auth/queries";
 import type { OrgRole } from "@/lib/auth/route-access";
 import { parseMemberFilters } from "@/lib/members/filters";
@@ -50,15 +55,13 @@ export default async function MembersPage({
     : { rows: [], total: 0, page: filters.page, perPage: filters.per_page };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">Members</h1>
-        <p className="text-sm text-muted-foreground">
-          {page.total} member{page.total === 1 ? "" : "s"} match the current filters.
-        </p>
-      </div>
+    <div className="space-y-5">
+      <h1 className="sr-only">Members</h1>
+      <p className="text-brand-body text-sm">
+        {page.total} member{page.total === 1 ? "" : "s"} match the current filters.
+      </p>
 
-      <div className="space-y-3">
+      <div className="space-y-4">
         <MemberSearch filters={filters} />
         <MemberFilterBar
           filters={filters}
@@ -69,9 +72,9 @@ export default async function MembersPage({
       </div>
 
       {!listResult.ok ? (
-        <p className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
-          {listResult.error.message}
-        </p>
+        <Card className="border-border border border-dashed p-6 shadow-none">
+          <p className="text-brand-label text-sm">{listResult.error.message}</p>
+        </Card>
       ) : (
         <>
           <MemberTable

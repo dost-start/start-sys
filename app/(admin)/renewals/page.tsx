@@ -2,14 +2,30 @@
 // membership applications"). Server Component through the caller's client:
 // `renewal_submissions_read` (0018) is the authorization; the redirect is UX for tiers
 // that would otherwise see an empty table. Filter state lives in the URL (CONVENTIONS §2).
+//
+// Brand edition (2026-09-08): the app shell's top bar reads "Renewals" for this path,
+// so the <h1> is screen-reader-only; the status filter is a nav of pill chips (links,
+// as before — the active one is the gradient chip) and the grid sits in a white panel
+// (design canvas `renewals`). Every string and test id is unchanged.
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { ApplicationStatusBadge } from "@/components/applications/application-status-badge";
+import { buttonVariants } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { getSessionContext } from "@/lib/auth/queries";
 import { homeForRole, LOGIN_PATH } from "@/lib/auth/route-access";
 import { listRenewals } from "@/lib/applications/renewal-queries";
 import { RENEWAL_QUEUE_STATUSES, type RenewalQueueStatus } from "@/lib/applications/renewal-schema";
+import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -54,31 +70,33 @@ export default async function RenewalsPage({
   ];
 
   return (
-    <div className="space-y-6">
-      <header className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Membership renewals</h1>
-        <p className="text-muted-foreground max-w-2xl text-sm">
+    <div className="space-y-5">
+      <header>
+        <h1 className="sr-only">Membership renewals</h1>
+        <p className="text-brand-body max-w-3xl text-sm">
           Returning scholars who submitted the renewal form for the current term. Approving one
           creates their membership for this term; their member ID never changes. The renewal period
           is opened on the{" "}
-          <Link href="/applications/window" className="underline underline-offset-2">
+          <Link
+            href="/applications/window"
+            className="text-brand-link font-medium underline underline-offset-[3px] hover:text-[#00508c]"
+          >
             application period
           </Link>{" "}
           page.
         </p>
       </header>
 
-      <nav className="flex flex-wrap gap-2 text-sm" aria-label="Filter by status">
+      <nav className="flex flex-wrap gap-2" aria-label="Filter by status">
         {tabs.map((tab) => (
           <Link
             key={tab.value}
             href={`/renewals?status=${tab.value}`}
             aria-current={tab.value === status ? "page" : undefined}
-            className={
-              tab.value === status
-                ? "rounded-md border bg-muted px-3 py-1 font-medium"
-                : "text-muted-foreground rounded-md border px-3 py-1 hover:text-foreground"
-            }
+            className={cn(
+              buttonVariants({ variant: tab.value === status ? "default" : "outline", size: "sm" }),
+              "rounded-full no-underline",
+            )}
           >
             {tab.label}
           </Link>
@@ -86,57 +104,49 @@ export default async function RenewalsPage({
       </nav>
 
       {rows.length === 0 ? (
-        <p className="text-muted-foreground text-sm" data-testid="renewals-empty">
+        <p className="text-brand-label text-sm" data-testid="renewals-empty">
           No {status === "all" ? "" : `${status} `}renewals this term.
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full min-w-[40rem] text-left text-sm" data-testid="renewals-table">
-            <thead className="text-muted-foreground">
-              <tr>
-                <th scope="col" className="px-4 py-2 font-medium">
-                  Member
-                </th>
-                <th scope="col" className="px-4 py-2 font-medium">
-                  Member ID
-                </th>
-                <th scope="col" className="px-4 py-2 font-medium">
-                  Status
-                </th>
-                <th scope="col" className="px-4 py-2 font-medium">
-                  Submitted
-                </th>
-                <th scope="col" className="px-4 py-2 font-medium">
-                  Decided
-                </th>
-              </tr>
-            </thead>
-            <tbody>
+        <Card className="overflow-hidden p-0">
+          <Table className="min-w-[40rem]" data-testid="renewals-table">
+            <TableHeader>
+              <TableRow>
+                <TableHead scope="col">Member</TableHead>
+                <TableHead scope="col">Member ID</TableHead>
+                <TableHead scope="col">Status</TableHead>
+                <TableHead scope="col">Submitted</TableHead>
+                <TableHead scope="col">Decided</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {rows.map((row) => (
-                <tr key={row.id} className="border-t">
-                  <td className="px-4 py-2">
+                <TableRow key={row.id}>
+                  <TableCell>
                     <Link
                       href={`/renewals/${row.id}`}
-                      className="underline-offset-2 hover:underline"
+                      className="text-brand-ink font-medium underline-offset-2 hover:underline"
                     >
                       {row.person
                         ? `${row.person.family_name}, ${row.person.given_name}`
                         : "(record unavailable)"}
                     </Link>
-                  </td>
-                  <td className="px-4 py-2 tabular-nums">{row.person?.member_id ?? "—"}</td>
-                  <td className="px-4 py-2">
+                  </TableCell>
+                  <TableCell className="font-mono text-[13px] tabular-nums">
+                    {row.person?.member_id ?? "—"}
+                  </TableCell>
+                  <TableCell>
                     <ApplicationStatusBadge status={row.status} />
-                  </td>
-                  <td className="px-4 py-2">{formatInstant(row.submitted_at)}</td>
-                  <td className="px-4 py-2">{formatInstant(row.reviewed_at)}</td>
-                </tr>
+                  </TableCell>
+                  <TableCell>{formatInstant(row.submitted_at)}</TableCell>
+                  <TableCell>{formatInstant(row.reviewed_at)}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </Card>
       )}
-      <p className="text-muted-foreground text-xs">All times shown in Asia/Manila.</p>
+      <p className="text-brand-label text-xs">All times shown in Asia/Manila.</p>
     </div>
   );
 }

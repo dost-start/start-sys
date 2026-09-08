@@ -12,6 +12,11 @@
 // applicant exists. This also covers the CBL Art. VIII §7.1 acknowledgement gate: a
 // reviewer with no current-term acknowledgement sees the same 404 as a bad id, which is
 // the documented (if terse) failure mode in ARCHITECTURE.md §9.
+//
+// Brand edition (2026-09-08): the `application_detail` board of the design canvas —
+// back link, the applicant's name as the visible page title with the status beside it,
+// the decision controls on the right, the two documents side by side, then the field
+// panels. Every string, control name and audit read is the one the previous version had.
 import { notFound, redirect } from "next/navigation";
 
 import { ApplicationDetailFields } from "@/components/applications/application-detail-fields";
@@ -19,6 +24,8 @@ import { ApplicationStatusBadge } from "@/components/applications/application-st
 import { ApproveApplicationDialog } from "@/components/applications/approve-application-dialog";
 import { ProofDocumentViewer } from "@/components/applications/proof-document-viewer";
 import { RejectApplicationDialog } from "@/components/applications/reject-application-dialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Card } from "@/components/ui/card";
 import type { Database } from "@/database.types";
 import { getApplicationDetail } from "@/lib/applications/queries";
 import { getSessionContext } from "@/lib/auth/queries";
@@ -91,16 +98,18 @@ export default async function ApplicationDetailPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <a href="/applications" className="text-sm text-muted-foreground hover:underline">
-            ← Back to applications
-          </a>
-          <h1 className="mt-1 text-xl font-semibold tracking-tight">{applicantName}</h1>
-          <div className="mt-1 flex items-center gap-2">
+      <div>
+        <a href="/applications" className="text-brand-label text-xs hover:underline">
+          ← Back to applications
+        </a>
+        <div className="mt-2.5 flex flex-wrap items-start justify-between gap-4">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3.5 gap-y-2">
+            <h1 className="text-brand-ink text-[26px] leading-tight font-semibold break-words">
+              {applicantName}
+            </h1>
             <ApplicationStatusBadge status={status} />
             {reviewedAt ? (
-              <span className="text-xs text-muted-foreground">
+              <span className="text-brand-label text-xs">
                 Decided{" "}
                 {new Intl.DateTimeFormat("en-PH", {
                   dateStyle: "medium",
@@ -110,44 +119,56 @@ export default async function ApplicationDetailPage({
               </span>
             ) : null}
           </div>
-        </div>
 
-        {/* Decision controls appear ONLY for a pending application. `approved` and
-            `rejected` are terminal states in this UI — DATA_MODEL.md §3.2 — and no
-            control here can re-decide them; a mistaken approval is corrected on the
-            resulting member's record, not by reversing this screen. */}
-        {status === "pending" ? (
-          <div className="flex gap-2">
-            <ApproveApplicationDialog applicationId={id} applicantName={applicantName} />
-            <RejectApplicationDialog applicationId={id} applicantName={applicantName} />
-          </div>
-        ) : null}
+          {/* Decision controls appear ONLY for a pending application. `approved` and
+              `rejected` are terminal states in this UI — DATA_MODEL.md §3.2 — and no
+              control here can re-decide them; a mistaken approval is corrected on the
+              resulting member's record, not by reversing this screen. */}
+          {status === "pending" ? (
+            <div className="flex flex-wrap gap-2.5">
+              <ApproveApplicationDialog applicationId={id} applicantName={applicantName} />
+              <RejectApplicationDialog applicationId={id} applicantName={applicantName} />
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {status === "approved" && memberId ? (
-        <div className="rounded-md border border-green-600/30 bg-green-50 px-4 py-3 text-sm font-medium text-green-800 dark:bg-green-950 dark:text-green-300">
+        <Alert variant="success" className="font-medium">
           Approved — member ID {memberId}
-        </div>
+        </Alert>
       ) : null}
 
       {status === "rejected" && reviewNote ? (
-        <div className="space-y-1 rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm">
-          <p className="font-medium text-destructive">Rejected</p>
-          <p className="text-muted-foreground">{reviewNote}</p>
-        </div>
+        <Alert variant="danger">
+          <div className="space-y-1">
+            <AlertTitle>Rejected</AlertTitle>
+            <AlertDescription>
+              <p>{reviewNote}</p>
+            </AlertDescription>
+          </div>
+        </Alert>
       ) : null}
 
       {/* Two documents (SRS 2026-09-05, 0040). Each viewer is ONE audited proxy read —
           do not mount either twice. */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold">Notice of Award</h2>
-        <ProofDocumentViewer applicationId={id} mimeType={noaMimeType} doc="noa" />
-      </section>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <section className="space-y-2.5">
+          <h2 className="text-brand-ink text-lg leading-tight font-semibold">Notice of Award</h2>
+          <Card className="overflow-hidden p-0">
+            <ProofDocumentViewer applicationId={id} mimeType={noaMimeType} doc="noa" />
+          </Card>
+        </section>
 
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold">Latest registration form</h2>
-        <ProofDocumentViewer applicationId={id} mimeType={proofMimeType} doc="registration" />
-      </section>
+        <section className="space-y-2.5">
+          <h2 className="text-brand-ink text-lg leading-tight font-semibold">
+            Latest registration form
+          </h2>
+          <Card className="overflow-hidden p-0">
+            <ProofDocumentViewer applicationId={id} mimeType={proofMimeType} doc="registration" />
+          </Card>
+        </section>
+      </div>
 
       <ApplicationDetailFields detail={detail} lookups={lookups} />
     </div>

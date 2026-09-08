@@ -24,7 +24,7 @@ export function MemberPagination({ filters, total }: { filters: MemberFilters; t
 
   return (
     <nav
-      className="flex items-center justify-between text-sm text-muted-foreground"
+      className="text-brand-label flex flex-wrap items-center justify-between gap-3 text-xs"
       aria-label="Member list pagination"
     >
       <span aria-live="polite">

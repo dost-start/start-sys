@@ -20,6 +20,10 @@
 //
 // NO ADDRESSES. The preview returns names and a count; an email address leaves the
 // database only as a frozen recipient row at send time, and only to the sending tier.
+//
+// Brand restyle (2026-09-08, docs/design/canvas/boards_admin.py `campaign_new`): the
+// filter options are CHIPS — a pill <label> wrapping the same native checkbox, now
+// screen-reader-only — so every id, value and label association is what it was.
 // ─────────────────────────────────────────────────────────────────────────────
 "use client";
 
@@ -27,7 +31,12 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 
 import { AudiencePicker } from "@/components/campaigns/audience-picker";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Card, CardTitle } from "@/components/ui/card";
+import { Field, FieldHint, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   createCampaign,
@@ -53,6 +62,7 @@ import {
   type TemplateKey,
 } from "@/lib/campaigns/templates";
 import type { AudienceOptions, AudiencePreview } from "@/lib/campaigns/types";
+import { cn } from "@/lib/utils";
 
 export type CampaignComposerProps = {
   options: AudienceOptions;
@@ -101,6 +111,13 @@ const EMPTY_AUDIENCE: AudienceFilter = {
   person_ids: [],
   excluded_person_ids: [],
 };
+
+/** The design canvas's `.chip` / `.chip.on`, driven by the wrapped checkbox's state. */
+const CHIP_CLASS =
+  "border-border bg-card text-brand-body inline-flex max-w-full min-h-8 cursor-pointer items-center gap-2 rounded-full border px-3 py-1 text-left text-[13px] transition-colors has-[:checked]:bg-brand-gradient has-[:checked]:border-transparent has-[:checked]:font-semibold has-[:checked]:text-brand-ink has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/25";
+
+/** The design canvas's `.label`, for a fieldset legend (the Label primitive is for <label>). */
+const LEGEND_CLASS = "text-brand-label mb-2 text-xs font-semibold tracking-[0.08em] uppercase";
 
 function isAudienceStatus(value: string): value is AudienceStatus {
   return (AUDIENCE_STATUSES as readonly string[]).includes(value);
@@ -250,77 +267,77 @@ export function CampaignComposer({ options, origin }: CampaignComposerProps) {
     .flatMap(([, messages]) => messages);
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-      <div className="space-y-6">
+    <div className="grid gap-7 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start">
+      <div className="min-w-0 space-y-6">
         {/* ── template ── */}
-        <section className="space-y-2">
-          <label htmlFor="template_key" className="text-sm font-medium">
-            Template
-          </label>
-          <select
+        <Field>
+          <FieldLabel htmlFor="template_key">Template</FieldLabel>
+          <NativeSelect
             id="template_key"
             name="template_key"
             value={templateKey}
             onChange={(event) => applyTemplate(event.target.value as TemplateKey)}
-            className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
           >
             {TEMPLATE_KEYS.map((key) => (
               <option key={key} value={key}>
                 {TEMPLATES[key].label}
               </option>
             ))}
-          </select>
-          <p className="text-muted-foreground text-xs">
+          </NativeSelect>
+          <FieldHint>
             Choosing a template replaces the subject and message with its starting text. The three
             form templates carry the link to the public form for this site.
-          </p>
-        </section>
+          </FieldHint>
+        </Field>
 
         {/* ── subject ── */}
-        <section className="space-y-2">
-          <label htmlFor="subject" className="text-sm font-medium">
-            Subject
-          </label>
-          <input
+        <Field>
+          <FieldLabel htmlFor="subject">Subject</FieldLabel>
+          <Input
             id="subject"
             name="subject"
             type="text"
             maxLength={200}
             value={subject}
             onChange={(event) => setSubject(event.target.value)}
-            className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
           />
           <FieldErrors messages={fieldErrors["subject"]} />
-        </section>
+        </Field>
 
         {/* ── body ── */}
-        <section className="space-y-2">
+        <Field>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <label htmlFor="body_markdown" className="text-sm font-medium">
-              Message
-            </label>
-            <div className="flex gap-1 rounded-md border p-0.5" role="tablist" aria-label="Format">
+            <FieldLabel htmlFor="body_markdown">Message</FieldLabel>
+            {/* The design canvas's `.tabs`: a soft-grey rail, the active tab lifted to white. */}
+            <div
+              className="bg-brand-field flex gap-1 rounded-lg p-1"
+              role="tablist"
+              aria-label="Format"
+            >
               {(
                 [
                   ["markdown", "Write it here"],
                   ["html", "Paste a design"],
                 ] as const
               ).map(([value, label]) => (
-                <button
+                <Button
                   key={value}
                   type="button"
                   role="tab"
+                  variant="ghost"
+                  size="sm"
                   aria-selected={bodyFormat === value}
                   data-testid={`body-format-${value}`}
                   onClick={() => setBodyFormat(value)}
-                  className={
+                  className={cn(
+                    "h-8 rounded-md px-3.5 text-[13px]",
                     bodyFormat === value
-                      ? "bg-primary text-primary-foreground rounded px-3 py-1 text-xs font-medium"
-                      : "text-muted-foreground hover:text-foreground rounded px-3 py-1 text-xs"
-                  }
+                      ? "bg-card text-brand-ink font-semibold shadow-[0_2px_8px_rgb(23_23_23/0.08)] hover:bg-card hover:text-brand-ink"
+                      : "",
+                  )}
                 >
                   {label}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -336,14 +353,14 @@ export function CampaignComposer({ options, origin }: CampaignComposerProps) {
                 className="font-mono text-sm"
               />
               <FieldErrors messages={fieldErrors["body_markdown"]} />
-              <p className="text-muted-foreground text-xs">
+              <FieldHint>
                 Formatting: <code>**bold**</code>, <code>__underline__</code>, <code>_italic_</code>
                 , <code>~~strike~~</code>, <code>`code`</code>, <code>[label](https://link)</code>,{" "}
                 <code>![alt](https://image)</code>, lines starting with <code>- </code> or{" "}
                 <code>1. </code> for a list, <code>&gt; </code> for a quote, <code>#</code> to{" "}
                 <code>###</code> for a heading, <code>---</code> for a divider, a blank line for a
                 new paragraph. Up to {MARKDOWN_BODY_MAX_CHARS.toLocaleString("en")} characters.
-              </p>
+              </FieldHint>
             </>
           ) : (
             <>
@@ -363,7 +380,7 @@ export function CampaignComposer({ options, origin }: CampaignComposerProps) {
                   {htmlError}
                 </p>
               )}
-              <p className="text-muted-foreground text-xs">
+              <FieldHint>
                 Paste the HTML from your email builder — the same code you would paste into Gmail.
                 It is checked on the server before it is saved: anything that could run code, load a
                 page, or reach a non-secure address is removed, and the preview shows you what
@@ -372,16 +389,16 @@ export function CampaignComposer({ options, origin }: CampaignComposerProps) {
                   ? ""
                   : ` — this one is ${Math.max(1, Math.round(htmlPreview.bytes / 1024))} KB`}
                 .
-              </p>
-              <p className="text-muted-foreground text-xs">
+              </FieldHint>
+              <FieldHint>
                 Two things are dropped that a builder may include: <code>&lt;style&gt;</code> blocks
                 (phone-only layout tweaks — a design that relies on them shows its desktop layout on
                 a phone, scaled to fit) and images that are not on an <code>https</code> address.
                 Host images where your builder puts them and paste the link it gives you.
-              </p>
+              </FieldHint>
             </>
           )}
-          <p className="text-muted-foreground text-xs">
+          <FieldHint>
             Merge fields:{" "}
             {MERGE_FIELDS.map((field, index) => (
               <span key={field}>
@@ -391,14 +408,18 @@ export function CampaignComposer({ options, origin }: CampaignComposerProps) {
             ))}
             . Nothing else can be merged — a birthdate or a phone number is not on the list, on
             purpose.
-          </p>
-        </section>
+          </FieldHint>
+        </Field>
 
         {/* ── audience ── */}
-        <section className="space-y-4 rounded-lg border p-4">
+        <Card className="gap-5 p-5 sm:p-6">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="text-base font-semibold">Recipients</h2>
-            <p className="text-sm" aria-live="polite" data-testid="audience-count">
+            <CardTitle>Recipients</CardTitle>
+            <p
+              className="text-brand-ink text-sm font-semibold"
+              aria-live="polite"
+              data-testid="audience-count"
+            >
               {previewError !== null
                 ? previewError
                 : preview === null || previewPending
@@ -406,20 +427,16 @@ export function CampaignComposer({ options, origin }: CampaignComposerProps) {
                   : `This will reach ${preview.count} ${preview.count === 1 ? "person" : "people"}.`}
             </p>
           </div>
-          <p className="text-muted-foreground text-xs">
+          <FieldHint>
             Every filter is &ldquo;any of&rdquo;; leaving one empty means it does not narrow. Only
             scholars with an email on file for the current term are counted.
-          </p>
+          </FieldHint>
 
           {preview !== null && preview.count > DAILY_SEND_WARNING_THRESHOLD ? (
-            <p
-              role="status"
-              data-testid="daily-limit-warning"
-              className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
-            >
+            <Alert variant="warning" role="status" data-testid="daily-limit-warning">
               Gmail sends about 500 messages a day. A list this size takes more than one day; the
               send pauses and resumes on its own.
-            </p>
+            </Alert>
           ) : null}
 
           <CheckboxGroup
@@ -463,30 +480,25 @@ export function CampaignComposer({ options, origin }: CampaignComposerProps) {
             }
           />
 
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-medium">Region</legend>
+          <fieldset className="space-y-3">
+            <legend className={LEGEND_CLASS}>Region</legend>
             {[...regionsByIsland.entries()].map(([island, regions]) => (
-              <div key={island} className="space-y-1">
-                <p className="text-muted-foreground text-xs">{island}</p>
-                <div className="flex flex-wrap gap-x-4 gap-y-1">
+              <div key={island} className="space-y-1.5">
+                <p className="text-brand-label text-xs">{island}</p>
+                <div className="flex flex-wrap gap-2">
                   {regions.map((region) => (
-                    <label key={region.id} className="flex items-center gap-1.5 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={audience.region_ids.includes(region.id)}
-                        onChange={(event) =>
-                          setAudience((current) => ({
-                            ...current,
-                            region_ids: toggled(
-                              current.region_ids,
-                              region.id,
-                              event.target.checked,
-                            ),
-                          }))
-                        }
-                      />
+                    <Chip
+                      key={region.id}
+                      checked={audience.region_ids.includes(region.id)}
+                      onChange={(on) =>
+                        setAudience((current) => ({
+                          ...current,
+                          region_ids: toggled(current.region_ids, region.id, on),
+                        }))
+                      }
+                    >
                       {region.name}
-                    </label>
+                    </Chip>
                   ))}
                 </div>
               </div>
@@ -526,10 +538,10 @@ export function CampaignComposer({ options, origin }: CampaignComposerProps) {
               }
             />
           ) : (
-            <p className="text-muted-foreground text-xs">
+            <FieldHint>
               No affiliations are recorded yet. A partnership (e.g. START x DataCamp) is a row a
               CRRD Admin adds, never a code change.
-            </p>
+            </FieldHint>
           )}
 
           {options.departments.length > 0 ? (
@@ -602,8 +614,8 @@ export function CampaignComposer({ options, origin }: CampaignComposerProps) {
 
           {preview !== null && preview.sample.length > 0 ? (
             <div className="space-y-1">
-              <p className="text-muted-foreground text-xs">Sample of who this reaches:</p>
-              <ul className="text-sm">
+              <p className="text-brand-label text-xs">Sample of who this reaches:</p>
+              <ul className="text-brand-body text-sm">
                 {preview.sample.map((line) => (
                   <li key={line}>{line}</li>
                 ))}
@@ -611,17 +623,17 @@ export function CampaignComposer({ options, origin }: CampaignComposerProps) {
             </div>
           ) : null}
 
-          <div className="space-y-2 border-t pt-4">
-            <h3 className="text-sm font-semibold">Pick people individually</h3>
-            <p className="text-muted-foreground text-xs">
+          <div className="space-y-3 border-t border-[#eff0f2] pt-5">
+            <h3 className="text-brand-ink text-sm font-semibold">Pick people individually</h3>
+            <FieldHint>
               Search finds anyone the filters above match. Untick someone to drop them from the
               send; tick someone to add them even if a filter above would otherwise exclude them.
-            </p>
+            </FieldHint>
             <AudiencePicker audience={audience} onChange={setAudience} />
           </div>
-        </section>
+        </Card>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-4">
           <Button
             type="button"
             onClick={submit}
@@ -633,61 +645,92 @@ export function CampaignComposer({ options, origin }: CampaignComposerProps) {
           >
             Save draft
           </Button>
-          <p className="text-muted-foreground text-xs">
+          <p className="text-brand-label max-w-md text-xs">
             Saving does not send. The draft opens on its own page, where the recipient list is
             frozen and the send is started — and watched — from there.
           </p>
         </div>
         {message === null ? null : (
-          <p role="alert" className="text-sm">
+          <p role="alert" className="text-brand-body text-sm">
             {message}
           </p>
         )}
       </div>
 
       {/* ── live preview ── */}
-      <aside className="space-y-3 lg:sticky lg:top-6 lg:self-start">
-        <h2 className="text-base font-semibold">Preview</h2>
-        <p className="text-muted-foreground text-xs">
-          Rendered as a recipient sees it, with sample values in place of the merge fields.
-        </p>
-        {rendered.error === null ? null : (
-          <p role="alert" className="text-destructive text-sm" data-testid="merge-token-error">
-            {rendered.error}
-          </p>
-        )}
-        <div className="rounded-lg border">
-          <div className="border-b px-4 py-2 text-sm">
-            <span className="text-muted-foreground">Subject: </span>
-            <span className="font-medium">{rendered.subject || "(no subject)"}</span>
-          </div>
-          {bodyFormat === "markdown" ? (
-            /* The renderer escapes the input FIRST and emits only its own tags
-               (lib/campaigns/markdown.ts), so this is our HTML, not the CRRD's. */
-            <div
-              className="prose prose-sm max-w-none px-4 py-3 text-sm"
-              data-testid="campaign-preview"
-              dangerouslySetInnerHTML={{ __html: rendered.html }}
-            />
-          ) : (
-            /* A pasted template is NOT ours, so it is never injected into this page.
-               `rendered.html` here is what the server-side allowlist returned, shown in a
-               sandboxed frame — no scripts, no forms, no navigation, same as the campaign
-               page's frame. */
-            <iframe
-              title="Rendered message"
-              srcDoc={rendered.html}
-              sandbox=""
-              className="h-[32rem] w-full rounded-b-lg bg-white"
-              data-testid="campaign-preview-frame"
-            />
+      <aside className="min-w-0 lg:sticky lg:top-6 lg:self-start">
+        <Card className="gap-3.5 p-5 sm:p-6">
+          <CardTitle>Preview</CardTitle>
+          <FieldHint>
+            Rendered as a recipient sees it, with sample values in place of the merge fields.
+          </FieldHint>
+          {rendered.error === null ? null : (
+            <Alert variant="danger" role="alert" data-testid="merge-token-error">
+              {rendered.error}
+            </Alert>
           )}
-        </div>
-        {bodyFormat === "html" && htmlPending ? (
-          <p className="text-muted-foreground text-xs">Checking the pasted HTML…</p>
-        ) : null}
+          <div className="border-border overflow-hidden rounded-xl border bg-white">
+            <div className="border-b border-[#eff0f2] px-4 py-2.5 text-sm">
+              <span className="text-brand-label">Subject: </span>
+              <span className="text-brand-ink font-medium">
+                {rendered.subject || "(no subject)"}
+              </span>
+            </div>
+            {bodyFormat === "markdown" ? (
+              /* The renderer escapes the input FIRST and emits only its own tags
+                 (lib/campaigns/markdown.ts), so this is our HTML, not the CRRD's. */
+              <div
+                className="prose prose-sm text-brand-body max-w-none px-4 py-3 text-sm"
+                data-testid="campaign-preview"
+                dangerouslySetInnerHTML={{ __html: rendered.html }}
+              />
+            ) : (
+              /* A pasted template is NOT ours, so it is never injected into this page.
+                 `rendered.html` here is what the server-side allowlist returned, shown in a
+                 sandboxed frame — no scripts, no forms, no navigation, same as the campaign
+                 page's frame. */
+              <iframe
+                title="Rendered message"
+                srcDoc={rendered.html}
+                sandbox=""
+                className="h-[32rem] w-full bg-white"
+                data-testid="campaign-preview-frame"
+              />
+            )}
+          </div>
+          {bodyFormat === "html" && htmlPending ? (
+            <FieldHint>Checking the pasted HTML…</FieldHint>
+          ) : null}
+        </Card>
       </aside>
     </div>
+  );
+}
+
+/**
+ * One filter option as a chip. The checkbox is the SAME native input it always was —
+ * only visually hidden — so the label association, keyboard toggling and `:checked`
+ * state are the browser's; the chip merely paints them.
+ */
+function Chip({
+  checked,
+  onChange,
+  children,
+}: {
+  checked: boolean;
+  onChange: (on: boolean) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className={CHIP_CLASS}>
+      <input
+        type="checkbox"
+        className="sr-only"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      {children}
+    </label>
   );
 }
 
@@ -703,18 +746,17 @@ function CheckboxGroup<T extends string | number>({
   onToggle: (value: T, on: boolean) => void;
 }) {
   return (
-    <fieldset className="space-y-1">
-      <legend className="text-sm font-medium">{legend}</legend>
-      <div className="flex flex-wrap gap-x-4 gap-y-1">
+    <fieldset>
+      <legend className={LEGEND_CLASS}>{legend}</legend>
+      <div className="flex flex-wrap gap-2">
         {items.map((item) => (
-          <label key={String(item.value)} className="flex items-center gap-1.5 text-sm">
-            <input
-              type="checkbox"
-              checked={selected.includes(item.value)}
-              onChange={(event) => onToggle(item.value, event.target.checked)}
-            />
+          <Chip
+            key={String(item.value)}
+            checked={selected.includes(item.value)}
+            onChange={(on) => onToggle(item.value, on)}
+          >
             {item.label}
-          </label>
+          </Chip>
         ))}
       </div>
     </fieldset>

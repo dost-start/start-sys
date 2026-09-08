@@ -11,11 +11,16 @@
 // the SELECT for anyone outside exec_admin/crrd_admin/moderator, and this page's own
 // `getSessionContext()` redirects a signed-out visitor. `(admin)/layout.tsx` is a third,
 // UX-only layer. Delete any two of the three and the third still holds.
+//
+// Brand edition (2026-09-08): the page title lives in the app shell's top bar, so the
+// <h1> here is screen-reader-only; the intro row is the pending count on the left and
+// the batch control on the right (design canvas, `applications` board).
 import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { ApplicationsTable } from "@/components/applications/applications-table";
 import { ApproveAllDialog } from "@/components/applications/approve-all-dialog";
+import { Card } from "@/components/ui/card";
 import type { Database } from "@/database.types";
 import { getSessionContext } from "@/lib/auth/queries";
 import { homeForRole } from "@/lib/auth/route-access";
@@ -82,14 +87,12 @@ export default async function ApplicationsPage({
       };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Applications</h1>
-          <p className="text-sm text-muted-foreground">
-            {pendingCount} pending decision{pendingCount === 1 ? "" : "s"} this term.
-          </p>
-        </div>
+    <div className="space-y-5">
+      <h1 className="sr-only">Applications</h1>
+      <div className="flex min-h-11 flex-wrap items-start justify-between gap-4">
+        <p className="text-brand-body max-w-3xl text-sm">
+          {pendingCount} pending decision{pendingCount === 1 ? "" : "s"} this term.
+        </p>
         {/* Both roles able to reach this render are already exec_admin/crrd_admin —
             REVIEWER_ROLES above already redirected everyone else — so no second role
             check is needed here (ADR 0013 §2's guard is the SQL function's own). */}
@@ -97,9 +100,11 @@ export default async function ApplicationsPage({
       </div>
 
       {!listResult.ok ? (
-        <p className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
-          No active term is open, so there is nothing to review yet.
-        </p>
+        <Card className="p-5 sm:p-6">
+          <p className="text-brand-label text-sm">
+            No active term is open, so there is nothing to review yet.
+          </p>
+        </Card>
       ) : (
         <ApplicationsTable
           page={page}

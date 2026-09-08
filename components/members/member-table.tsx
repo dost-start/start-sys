@@ -20,6 +20,7 @@ import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 
+import { Card } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -77,7 +78,9 @@ export function MemberTable({
   };
 
   return (
-    <div className="overflow-x-auto rounded-md border" data-testid="member-table">
+    // The `Table` primitive scrolls inside its own container, so the page body never
+    // scrolls horizontally at 375px; the card clips the rounded corners.
+    <Card className="overflow-hidden p-0" data-testid="member-table">
       <Table>
         <TableHeader>
           <TableRow>
@@ -89,7 +92,7 @@ export function MemberTable({
                   {sortable ? (
                     <button
                       type="button"
-                      className="flex items-center gap-1 hover:text-foreground"
+                      className="hover:text-brand-ink inline-flex items-center gap-1 tracking-[0.08em] uppercase"
                       onClick={() => toggleSort(header.column.id)}
                       aria-sort={
                         active ? (sortDirection === "asc" ? "ascending" : "descending") : "none"
@@ -128,6 +131,6 @@ export function MemberTable({
           )}
         </TableBody>
       </Table>
-    </div>
+    </Card>
   );
 }

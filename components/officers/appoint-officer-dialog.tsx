@@ -6,14 +6,16 @@
 // Art. VI basis. `position_code` is PRESELECTED — passed in as a prop from the roster
 // row this dialog opened on, never typed by the caller.
 //
-// No components/ui/select or checkbox primitive is vendored yet, so the acting flag is a
-// plain native checkbox and there is no free-text position field at all (CONVENTIONS §1.1
-// — vendor in place, do not invent one here).
+// Brand restyle (2026-09-08, docs/design/canvas/boards_admin.py `officers`): the vendored
+// Field / Input / Checkbox / Textarea / Alert primitives. Every id, name, placeholder,
+// `data-testid` and string is what it was.
 import { useState, useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -23,7 +25,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   appointOfficer,
@@ -134,27 +137,28 @@ export function AppointOfficerDialog({
         </DialogHeader>
 
         {appointedId ? (
-          <div
+          <Alert
+            variant="success"
             role="status"
             data-testid="officer-appointed"
-            className="rounded-md border border-green-600/30 bg-green-50 px-4 py-3 text-sm font-medium text-green-800 dark:bg-green-950 dark:text-green-300"
+            className="font-medium"
           >
             Appointment recorded.
-          </div>
+          </Alert>
         ) : (
-          <form onSubmit={onSubmit} className="space-y-4">
+          <form onSubmit={onSubmit} className="space-y-5">
             <input type="hidden" {...register("position_code")} />
             <input type="hidden" {...register("person_id")} />
 
-            <div className="space-y-1.5">
-              <Label htmlFor="appoint-member-id">Member ID</Label>
-              <div className="flex gap-2">
-                <input
+            <Field>
+              <FieldLabel htmlFor="appoint-member-id">Member ID</FieldLabel>
+              <div className="flex gap-2.5">
+                <Input
                   id="appoint-member-id"
                   type="text"
                   placeholder="2026-0001"
                   autoComplete="off"
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                  className="font-mono"
                   value={memberId}
                   onChange={(event) => {
                     setMemberId(event.target.value);
@@ -172,31 +176,27 @@ export function AppointOfficerDialog({
                   {isLookingUp ? "Looking up…" : "Find"}
                 </Button>
               </div>
-              {lookupError ? <p className="text-xs text-destructive">{lookupError}</p> : null}
+              {lookupError ? <p className="text-destructive text-xs">{lookupError}</p> : null}
               {candidate ? (
-                <p className="text-xs text-muted-foreground" data-testid="officer-candidate">
+                <p className="text-brand-body text-xs" data-testid="officer-candidate">
                   {candidate.family_name}, {candidate.given_name} (
                   {candidate.member_id ?? "no member ID on file"})
                 </p>
               ) : null}
-            </div>
+            </Field>
 
             {candidate ? (
               <>
-                <div className="flex items-center gap-2">
-                  <input
-                    id="appoint-is-acting"
-                    type="checkbox"
-                    className="size-4"
-                    {...register("is_acting")}
-                  />
-                  <Label htmlFor="appoint-is-acting" className="font-normal">
-                    Acting appointment (CBL Art. VI §4.1-4.3)
-                  </Label>
-                </div>
+                <label
+                  htmlFor="appoint-is-acting"
+                  className="text-brand-body flex items-start gap-2.5 text-sm"
+                >
+                  <Checkbox id="appoint-is-acting" {...register("is_acting")} />
+                  <span>Acting appointment (CBL Art. VI §4.1-4.3)</span>
+                </label>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="appoint-note">Note</Label>
+                <Field>
+                  <FieldLabel htmlFor="appoint-note">Note</FieldLabel>
                   <Textarea
                     id="appoint-note"
                     rows={3}
@@ -206,12 +206,12 @@ export function AppointOfficerDialog({
                     {...register("status_note")}
                   />
                   {errors.status_note ? (
-                    <p className="text-xs text-destructive">{errors.status_note.message}</p>
+                    <p className="text-destructive text-xs">{errors.status_note.message}</p>
                   ) : null}
-                </div>
+                </Field>
 
                 {errors.person_id ? (
-                  <p className="text-xs text-destructive">{errors.person_id.message}</p>
+                  <p className="text-destructive text-xs">{errors.person_id.message}</p>
                 ) : null}
 
                 <DialogFooter>

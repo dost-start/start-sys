@@ -9,6 +9,8 @@
 //
 // Server Component — `MemberRecord` (`Tables<"people">`) carries every sensitive
 // column and must never enter a client bundle (CONVENTIONS.md §1.3).
+import { Badge } from "@/components/ui/badge";
+import { Card, CardTitle } from "@/components/ui/card";
 import { SCHOLARSHIP_AWARD_LABELS, SEX_LABELS } from "@/lib/applications/schema";
 import type { MemberRecord } from "@/lib/members/types";
 
@@ -17,11 +19,17 @@ export type MemberRecordLookups = {
   programs: Record<string, string>;
 };
 
+// A definition-list pair in the design canvas's label style (components/ui/label's
+// classes on a <dt>, since a <label> element belongs to a form control, not to a value).
 function Field({ label, value }: { label: string; value: string | null }) {
   return (
-    <div className="space-y-0.5">
-      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
-      <dd className="text-sm">{value === null || value === "" ? "—" : value}</dd>
+    <div className="space-y-1">
+      <dt className="text-brand-label text-xs leading-none font-semibold tracking-[0.08em] uppercase">
+        {label}
+      </dt>
+      <dd className="text-brand-ink text-sm break-words">
+        {value === null || value === "" ? "—" : value}
+      </dd>
     </div>
   );
 }
@@ -34,14 +42,12 @@ export function MemberSensitivePanel({
   lookups: MemberRecordLookups;
 }) {
   return (
-    <section className="space-y-3 rounded-lg border border-border bg-card p-4 sm:p-6">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold">Personal details</h2>
-        <span className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-          This view is logged (CBL Art. VIII §6)
-        </span>
+    <Card className="gap-4 p-5 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <CardTitle>Personal details</CardTitle>
+        <Badge variant="neutral">This view is logged (CBL Art. VIII §6)</Badge>
       </div>
-      <dl className="grid gap-3 sm:grid-cols-2">
+      <dl className="grid gap-x-8 gap-y-3.5 sm:grid-cols-2">
         <Field label="First name" value={record.given_name} />
         <Field label="Middle name" value={record.middle_name} />
         <Field label="Last name" value={record.family_name} />
@@ -84,6 +90,6 @@ export function MemberSensitivePanel({
           }
         />
       </dl>
-    </section>
+    </Card>
   );
 }

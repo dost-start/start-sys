@@ -157,7 +157,7 @@ jobs:
         run: |
           set -uo pipefail
           # The NEWEST migration that seeds a privacy_notice_versions row carries the hash
-          # of the current notice (0035 = v1, 0051 = v2, …). A rewrite is a new migration.
+          # of the current notice (0035 = v1, 0052 = v2, …). A rewrite is a new migration.
           latest=$(grep -l "insert into public.privacy_notice_versions" supabase/migrations/*.sql | sort | tail -n1)
           want=$(grep -oE "[0-9a-f]{64}" "$latest" | tail -n1)
           have=$(shasum -a 256 docs/privacy/PRIVACY_NOTICE.md | cut -d' ' -f1)

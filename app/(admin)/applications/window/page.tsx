@@ -16,11 +16,25 @@
 //
 // NO PII. A window row is a term id, a form kind and two timestamps. Nothing on this
 // page needs a confidentiality acknowledgement and nothing here is masked.
+//
+// Brand edition (2026-09-08): the app shell's top bar reads "Application period" for
+// this path, so the <h1> is screen-reader-only; the schedule and the two period forms
+// are white panels (design canvas `application_window`). Every string is unchanged.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { redirect } from "next/navigation";
 
 import { ApplicationWindowForm } from "@/components/applications/application-window-form";
+import { Alert } from "@/components/ui/alert";
+import { Card, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   MEMBERSHIP_APPLICATION_FORM_KIND,
   MEMBERSHIP_RENEWAL_FORM_KIND,
@@ -75,6 +89,13 @@ const STATE_LABEL: Record<WindowState, string> = {
   closed: "Closed — submissions are refused",
 };
 
+/** Tone only — the strings above are the contract, this is how each one reads. */
+const STATE_CLASS: Record<WindowState, string> = {
+  open: "text-success font-medium",
+  scheduled: "text-info font-medium",
+  closed: "text-brand-label",
+};
+
 export default async function ApplicationWindowPage() {
   const ctx = await getSessionContext();
   if (ctx === null) redirect(LOGIN_PATH);
@@ -123,70 +144,63 @@ export default async function ApplicationWindowPage() {
   );
 
   return (
-    <div className="space-y-8">
-      <header className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Application period</h1>
-        <p className="text-muted-foreground max-w-2xl text-sm">
+    <div className="space-y-6">
+      <header>
+        <h1 className="sr-only">Application period</h1>
+        <p className="text-brand-body max-w-3xl text-sm">
           The membership application form at <code>/apply</code> accepts submissions only while a
           period is open, for the current term{term ? ` (${term.label})` : ""}.
         </p>
       </header>
 
       {termId ? null : (
-        <p role="alert" className="text-sm">
+        <Alert variant="warning" role="alert">
           There is no active term, so no application period can be scheduled. A term is created by
           the Technical Admin.
-        </p>
+        </Alert>
       )}
 
-      <section className="space-y-4 rounded-lg border p-4 sm:p-6">
-        <h2 className="text-base font-semibold">Current schedule</h2>
+      <Card className="gap-4 p-5 sm:p-6">
+        <CardTitle>Current schedule</CardTitle>
 
         {rows.length === 0 ? (
-          <p className="text-muted-foreground text-sm">
+          <p className="text-brand-label text-sm">
             No application period has been scheduled for this term yet.
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[36rem] text-left text-sm">
-              <thead className="text-muted-foreground">
-                <tr>
-                  <th scope="col" className="py-2 pr-4 font-medium">
-                    Form
-                  </th>
-                  <th scope="col" className="py-2 pr-4 font-medium">
-                    Opens
-                  </th>
-                  <th scope="col" className="py-2 pr-4 font-medium">
-                    Closes
-                  </th>
-                  <th scope="col" className="py-2 font-medium">
-                    Status
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.id} className="border-t">
-                    <td className="py-2 pr-4">{row.form_kind}</td>
-                    <td className="py-2 pr-4">{formatInstant(row.opens_at)}</td>
-                    <td className="py-2 pr-4">{formatInstant(row.closes_at)}</td>
-                    <td className="py-2" data-testid={`window-status-${row.form_kind}`}>
-                      {STATE_LABEL[windowState(row)]}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table className="min-w-[36rem]">
+            <TableHeader>
+              <TableRow>
+                <TableHead scope="col">Form</TableHead>
+                <TableHead scope="col">Opens</TableHead>
+                <TableHead scope="col">Closes</TableHead>
+                <TableHead scope="col">Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell className="font-mono text-[13px]">{row.form_kind}</TableCell>
+                  <TableCell>{formatInstant(row.opens_at)}</TableCell>
+                  <TableCell>{formatInstant(row.closes_at)}</TableCell>
+                  <TableCell
+                    className={STATE_CLASS[windowState(row)]}
+                    data-testid={`window-status-${row.form_kind}`}
+                  >
+                    {STATE_LABEL[windowState(row)]}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         )}
-        <p className="text-muted-foreground text-xs">All times shown in Asia/Manila.</p>
-      </section>
+        <p className="text-brand-label text-xs">All times shown in Asia/Manila.</p>
+      </Card>
 
-      <section className="space-y-4 rounded-lg border p-4 sm:p-6">
-        <h2 className="text-base font-semibold">
+      <Card className="gap-4 p-5 sm:p-6">
+        <CardTitle>
           {state === "open" ? "Change or close the open period" : "Schedule the period"}
-        </h2>
+        </CardTitle>
 
         <ApplicationWindowForm
           isOpen={state === "open"}
@@ -194,17 +208,17 @@ export default async function ApplicationWindowPage() {
           defaultOpensAtLocal={defaultOpensAtLocal}
           defaultClosesAtLocal={defaultClosesAtLocal}
         />
-      </section>
+      </Card>
 
       {/* The renewal period (0044; PRD US-G7). Same table, same policies, same audit —
           a second row keyed on form_kind = 'membership_renewal'. */}
-      <section className="space-y-4 rounded-lg border p-4 sm:p-6">
-        <h2 className="text-base font-semibold">
+      <Card className="gap-4 p-5 sm:p-6">
+        <CardTitle>
           {renewalState === "open"
             ? "Change or close the open renewal period"
             : "Schedule the renewal period"}
-        </h2>
-        <p className="text-muted-foreground text-sm">
+        </CardTitle>
+        <p className="text-brand-label text-sm">
           The membership renewal form at <code>/renew</code> — for returning scholars, identified by
           member ID and email — accepts submissions only while this period is open.
         </p>
@@ -215,14 +229,14 @@ export default async function ApplicationWindowPage() {
           defaultOpensAtLocal={renewalOpensAtLocal}
           defaultClosesAtLocal={renewalClosesAtLocal}
         />
-      </section>
+      </Card>
 
       {/* US-B4's operational fact, stated on the screen rather than in a runbook nobody
           has open at the time. Closing is not a cache invalidation and does not wait for
           one: the refusal lives inside `applications_insert_anon`, which re-checks
           `now() between opens_at and closes_at` on every INSERT. */}
-      <section className="text-muted-foreground max-w-2xl space-y-2 text-sm">
-        <h2 className="text-foreground text-base font-semibold">
+      <section className="text-brand-body max-w-3xl space-y-2 text-sm">
+        <h2 className="text-brand-ink text-lg leading-tight font-semibold">
           Closing takes effect on the next submission
         </h2>
         <p>

@@ -9,6 +9,11 @@
 // passes `ApplicationListRow`, whose columns are exactly `QUEUE_COLUMNS`
 // (`lib/applications/queries.ts`). There is no prop this component could widen to leak
 // them.
+//
+// Brand edition (2026-09-08): the `applications` board of the design canvas — status
+// filters as pill chips, the term selector right-aligned under an uppercase label, the
+// grid inside a flat white panel. Every label, control name and cell string is the one
+// the previous version rendered.
 "use client";
 
 import { useMemo } from "react";
@@ -17,6 +22,9 @@ import { flexRender, getCoreRowModel, useReactTable, type ColumnDef } from "@tan
 
 import { ApplicationStatusBadge } from "@/components/applications/application-status-badge";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 import {
   Table,
   TableBody,
@@ -55,7 +63,7 @@ const columns: ColumnDef<ApplicationListRow>[] = [
     cell: ({ row }) => (
       <a
         href={`/applications/${row.original.id}`}
-        className="font-medium underline-offset-2 hover:underline"
+        className="text-brand-ink font-medium underline-offset-2 hover:underline"
       >
         {row.original.applicant_given_name} {row.original.applicant_family_name}
       </a>
@@ -71,32 +79,24 @@ const columns: ColumnDef<ApplicationListRow>[] = [
     header: "Proof",
     cell: ({ row }) =>
       row.original.proof_verified_at ? (
-        <span className="text-sm text-muted-foreground">
-          {row.original.proof_mime_type ?? "attached"}
-        </span>
+        <span>{row.original.proof_mime_type ?? "attached"}</span>
       ) : (
-        <span className="text-sm text-muted-foreground">—</span>
+        <span className="text-brand-label">—</span>
       ),
   },
   {
     id: "submitted_at",
     header: "Submitted",
-    cell: ({ row }) => (
-      <span className="text-sm text-muted-foreground">
-        {formatManila(row.original.submitted_at)}
-      </span>
-    ),
+    cell: ({ row }) => <span>{formatManila(row.original.submitted_at)}</span>,
   },
   {
     id: "reviewed",
     header: "Decided",
     cell: ({ row }) =>
       row.original.reviewed_at ? (
-        <span className="text-sm text-muted-foreground">
-          {formatManila(row.original.reviewed_at)}
-        </span>
+        <span>{formatManila(row.original.reviewed_at)}</span>
       ) : (
-        <span className="text-sm text-muted-foreground">—</span>
+        <span className="text-brand-label">—</span>
       ),
   },
 ];
@@ -125,16 +125,16 @@ function buildStandardsColumn(
     header: "Standards",
     cell: ({ row }) => {
       if (row.original.status !== "pending") {
-        return <span className="text-sm text-muted-foreground">—</span>;
+        return <span className="text-brand-label">—</span>;
       }
       const failures = standardsFailures.get(row.original.id);
       if (failures === undefined) {
-        return <span className="text-sm text-muted-foreground">—</span>;
+        return <span className="text-brand-label">—</span>;
       }
       if (failures.length === 0) {
-        return <span className="text-sm text-green-700 dark:text-green-400">✓ meets</span>;
+        return <span className="text-success font-medium">✓ meets</span>;
       }
-      return <span className="text-sm text-destructive">✗ {failures.join(", ")}</span>;
+      return <span className="text-destructive font-medium">✗ {failures.join(", ")}</span>;
     },
   };
 }
@@ -191,8 +191,8 @@ export function ApplicationsTable({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by status">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by status">
           {statusChips.map((status) => {
             const active =
               status === "all" ? filters.status === undefined : filters.status === status;
@@ -202,6 +202,7 @@ export function ApplicationsTable({
                 type="button"
                 size="sm"
                 variant={active ? "default" : "outline"}
+                className="rounded-full"
                 onClick={() => navigate({ status: status === "all" ? undefined : status, page: 1 })}
               >
                 {STATUS_FILTER_LABEL[status]}
@@ -211,10 +212,12 @@ export function ApplicationsTable({
         </div>
 
         {terms.length > 0 ? (
-          <label className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
-            Term
-            <select
-              className="rounded-md border border-input bg-background px-2 py-1 text-sm"
+          <div className="ml-auto flex items-center gap-2">
+            <Label htmlFor="term">Term</Label>
+            <NativeSelect
+              id="term"
+              wrapperClassName="w-40"
+              className="h-9 px-3 pr-9 text-[13px]"
               value={filters.term_id ?? page.termId}
               onChange={(event) => navigate({ term_id: event.target.value, page: 1 })}
             >
@@ -223,12 +226,12 @@ export function ApplicationsTable({
                   {term.label}
                 </option>
               ))}
-            </select>
-          </label>
+            </NativeSelect>
+          </div>
         ) : null}
       </div>
 
-      <div className="overflow-x-auto rounded-md border">
+      <Card className="overflow-hidden p-0">
         <Table>
           <TableHeader>
             <TableRow>
@@ -237,7 +240,7 @@ export function ApplicationsTable({
                   {header.column.id === "submitted_at" ? (
                     <button
                       type="button"
-                      className="flex items-center gap-1 hover:text-foreground"
+                      className="hover:text-brand-ink inline-flex items-center gap-1 font-semibold tracking-[0.08em] uppercase"
                       onClick={() =>
                         navigate({
                           sort: currentSortDesc ? "submitted_at.asc" : "submitted_at.desc",
@@ -259,7 +262,7 @@ export function ApplicationsTable({
               <TableRow>
                 <TableCell
                   colSpan={tableColumns.length}
-                  className="py-10 text-center text-muted-foreground"
+                  className="text-brand-label py-10 text-center"
                 >
                   {filters.status
                     ? `No ${filters.status} applications match these filters.`
@@ -279,9 +282,9 @@ export function ApplicationsTable({
             )}
           </TableBody>
         </Table>
-      </div>
+      </Card>
 
-      <div className="flex items-center justify-between text-sm text-muted-foreground">
+      <div className="text-brand-label flex flex-wrap items-center justify-between gap-3 text-sm">
         <span>
           Page {page.page} of {totalPages} · {page.total} total
         </span>

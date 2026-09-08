@@ -8,7 +8,18 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { MemberStatusBadge } from "@/components/members/member-status-badge";
+import { Card } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import type { RegionContactRow } from "@/lib/dashboard/queries";
+
+const linkClassName = "text-brand-link underline-offset-4 hover:underline";
 
 function safeHref(url: string | null): string | null {
   if (!url) return null;
@@ -30,56 +41,53 @@ export function RegionContactsTable({
 }) {
   if (rows.length === 0) {
     return (
-      <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-        {emptyMessage}
-      </p>
+      <Card className="border-border border border-dashed p-6 shadow-none">
+        <p className="text-brand-label text-center text-sm">{emptyMessage}</p>
+      </Card>
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-border">
-      <table className="w-full text-sm">
-        <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
-          <tr>
-            <th className="px-3 py-2 font-medium">Name</th>
-            <th className="px-3 py-2 font-medium">Member ID</th>
-            <th className="px-3 py-2 font-medium">Status</th>
-            <th className="px-3 py-2 font-medium">University</th>
-            <th className="px-3 py-2 font-medium">Email</th>
-            <th className="px-3 py-2 font-medium">Contact number</th>
-            <th className="px-3 py-2 font-medium">Facebook</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border">
+    <Card className="overflow-hidden p-0">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Name</TableHead>
+            <TableHead>Member ID</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>University</TableHead>
+            <TableHead>Email</TableHead>
+            <TableHead>Contact number</TableHead>
+            <TableHead>Facebook</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {rows.map((row) => {
             const fb = safeHref(row.facebook_account);
             const tel = telHref(row.contact_number);
             return (
-              <tr key={row.membership_id}>
-                <td className="px-3 py-2 whitespace-nowrap">
+              <TableRow key={row.membership_id}>
+                <TableCell className="text-brand-ink font-medium">
                   {row.family_name}, {row.given_name}
-                </td>
-                <td className="px-3 py-2 font-mono text-xs">{row.member_id ?? "—"}</td>
-                <td className="px-3 py-2">
+                </TableCell>
+                <TableCell className="font-mono text-[13px]">{row.member_id ?? "—"}</TableCell>
+                <TableCell>
                   <MemberStatusBadge status={row.status} />
-                </td>
-                <td className="px-3 py-2">{row.university_name ?? "—"}</td>
-                <td className="px-3 py-2">
+                </TableCell>
+                <TableCell className="whitespace-normal">{row.university_name ?? "—"}</TableCell>
+                <TableCell>
                   {row.personal_email ? (
-                    <a
-                      className="underline underline-offset-4"
-                      href={`mailto:${row.personal_email}`}
-                    >
+                    <a className={linkClassName} href={`mailto:${row.personal_email}`}>
                       {row.personal_email}
                     </a>
                   ) : (
                     "—"
                   )}
-                </td>
-                <td className="px-3 py-2 whitespace-nowrap">
+                </TableCell>
+                <TableCell>
                   {row.contact_number ? (
                     tel ? (
-                      <a className="underline underline-offset-4" href={tel}>
+                      <a className={linkClassName} href={tel}>
                         {row.contact_number}
                       </a>
                     ) : (
@@ -88,11 +96,11 @@ export function RegionContactsTable({
                   ) : (
                     "—"
                   )}
-                </td>
-                <td className="px-3 py-2">
+                </TableCell>
+                <TableCell>
                   {fb ? (
                     <a
-                      className="underline underline-offset-4"
+                      className={linkClassName}
                       href={fb}
                       target="_blank"
                       rel="noopener noreferrer"
@@ -102,12 +110,12 @@ export function RegionContactsTable({
                   ) : (
                     (row.facebook_account ?? "—")
                   )}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             );
           })}
-        </tbody>
-      </table>
-    </div>
+        </TableBody>
+      </Table>
+    </Card>
   );
 }

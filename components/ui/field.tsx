@@ -23,9 +23,15 @@ function FieldLabel({
   /**
    * Marks the field required with an asterisk (PDF review 2026-09-09, Danielle and Aira:
    * "required fields carry no asterisk"). The asterisk is `aria-hidden` and paired with
-   * visually-hidden " (required)" text, so the accessible name gains the word rather than
-   * a punctuation mark a screen reader would read as "star" — and `getByLabel("First
-   * name")` in e2e/ still matches, because the substring is unchanged.
+   * visually-hidden " (required)" text, so a screen reader hears the word rather than a
+   * punctuation mark it would read as "star".
+   *
+   * ⚠ THIS CHANGES THE FIELD'S ACCESSIBLE NAME, which is what `getByLabel` matches on.
+   * A substring matcher is unaffected; a regex anchored at BOTH ends is not, and four in
+   * `e2e/apply-with-upload.spec.ts` had to lose their trailing `$` (`/^sex$/` no longer
+   * matched "Sex (required)", and the test failed three helpers later as a bounced
+   * submission). If a label matcher stops finding a field after this prop is added
+   * somewhere new, that is the reason.
    */
   required?: boolean;
   className?: string;

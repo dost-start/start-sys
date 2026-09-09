@@ -280,16 +280,24 @@ const applyScreens = {
   birthdate: (page: Page) => page.getByLabel(/date of birth|birthdate/i),
   contactNumber: (page: Page) => page.getByLabel(/contact number|mobile/i),
   facebook: (page: Page) => page.getByLabel(/facebook/i),
-  sex: (page: Page) => page.getByLabel(/^sex$/i),
+  // ⚠ THE FOUR SHORT LABELS ARE ANCHORED AT THE START ONLY, NOT AT BOTH ENDS.
+  // Finding A4 (2026-09-09) appends a visually-hidden " (required)" to every required
+  // field's ACCESSIBLE NAME — deliberately, so a screen reader hears the word rather than
+  // reading the asterisk as "star". `getByLabel` matches the accessible name, so
+  // `/^sex$/` stopped matching "Sex (required)" and the whole submission bounced on a
+  // field the test had silently failed to fill. The leading anchor is what still
+  // distinguishes "Program" from "Expected year of graduation"; the trailing one was only
+  // ever guarding against a suffix that now legitimately exists.
+  sex: (page: Page) => page.getByLabel(/^sex\b/i),
   addressLine: (page: Page) => page.getByLabel(/street address/i),
   cityMunicipality: (page: Page) => page.getByLabel(/city.*municipality/i),
-  province: (page: Page) => page.getByLabel(/^province$/i),
+  province: (page: Page) => page.getByLabel(/^province\b/i),
   postalCode: (page: Page) => page.getByLabel(/postal code/i),
 
   scholarshipAward: (page: Page) => page.getByLabel(/scholarship award/i),
   awardYear: (page: Page) => page.getByLabel(/year of award/i),
-  university: (page: Page) => page.getByLabel(/^university$/i),
-  program: (page: Page) => page.getByLabel(/^program$/i),
+  university: (page: Page) => page.getByLabel(/^university\b/i),
+  program: (page: Page) => page.getByLabel(/^program\b/i),
   yearLevel: (page: Page) => page.getByLabel(/year level/i),
   expectedGradYear: (page: Page) => page.getByLabel(/graduat/i),
 

@@ -131,9 +131,9 @@ select pg_temp.login_anon();
 
 select is(
   (select count(*)::int from public.privacy_notice_versions),
-  2,
-  'anon reads EXACTLY 2 privacy notice versions (v1 from 0035, v2 from 0052) — the '
-  'published text must be readable without an account or consent to it is not informed'
+  3,
+  'anon reads EXACTLY 3 privacy notice versions (v1 from 0035, v2 from 0052, v3 from 0056) '
+  '— the published text must be readable without an account or consent to it is not informed'
 );
 
 select pg_temp.logout();
@@ -400,7 +400,7 @@ select pg_temp.logout();
 select is(
   (select consented_at::text || '|' || privacy_notice_version
      from public.applications where id = '00000000-0000-4000-8000-000000000934'),
-  now()::text || '|v2',
+  now()::text || '|v3',
   'and the anonymous row lands with the SERVER''s clock and the SERVER''s current version, '
   'not the 1999 timestamp and the invented ''v0'' the client sent'
 );

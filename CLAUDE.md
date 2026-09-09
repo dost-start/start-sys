@@ -36,7 +36,7 @@ If a query returns an empty set with no error, read the "If your query returns n
 | Email preview | `pnpm email` → `react-email dev` |
 
 <!-- decision: package.json script names are not fixed by the locked stack; these short aliases are chosen for handover legibility. -->
-Node 24.x via `.nvmrc`. pnpm 11.x via `packageManager`. Never `npm` or `yarn`. Migrations apply to production only via CI on merge to `main` — never by hand in the Supabase dashboard.
+Node 24.x via `.nvmrc`. pnpm 11.x via `packageManager`. Never `npm` or `yarn`. Migrations reach production by a **manual `supabase db push` from a clean checkout of `main`, after merge** — CI only tests them against an ephemeral container (ARCHITECTURE.md §8). **Push the schema BEFORE deploying the code**, or the app calls columns and functions that do not exist yet. Never by hand in the Supabase dashboard.
 
 ## Naming
 

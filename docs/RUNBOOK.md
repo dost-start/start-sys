@@ -17,6 +17,59 @@ CTO signs at the end of each term.
 
 ---
 
+## Releasing a merged change — push the schema, then deploy
+
+**Owning role:** `tech_admin` (CTO). **When:** after every merge to `main` that adds a
+migration, or changes application code. **Elapsed:** a few minutes, plus the migration.
+
+⚠️ **NOTHING IS AUTOMATIC. A MERGE MOVES NOTHING.** `ci.yml` runs on push to `main`, but
+only against an ephemeral container — it has no credential for the production database and
+no deploy step. A merged migration is a file in git and nothing more until someone runs the
+push below. This surprised us on 2026-09-09, when a merge landed seven migrations and the
+live schema did not move; `ARCHITECTURE.md` §8 had claimed otherwise and has been corrected.
+
+### The order, and why it is that way
+
+```bash
+git checkout main && git pull        # 1. exactly what was merged, nothing local
+supabase migration list              # 2. what is pending, and against which project
+supabase db push                     # 3. schema first — needs the database password
+vercel --prod                        # 4. code second, ONLY after 3 succeeds
+```
+
+**Schema first, code second, always.** A deploy that lands before its migrations is an
+application calling columns and functions that do not exist yet, and it does not fail in a
+way that names the cause — it surfaces as a form refusing to save, or a page 500ing, while
+every migration file sits correctly in the repository.
+
+The reverse order is safe only for a change with no migration at all. If you are not sure
+whether the merge carried one, step 2 tells you.
+
+### Before step 3
+
+- **Check the project.** `supabase migration list` prints the linked project. It must be the
+  ORG project. We ran two Supabase projects on the same day once (Sydney and Singapore) and
+  a push to the wrong one is silent and correct-looking.
+- **The password is in the CTO's Keychain**, not in the repo and not in Bitwarden as of
+  2026-09-09 — which is itself launch debt (`docs/issues/2026-09-06-launch-debt.md`). Read
+  it with `security find-generic-password -w`; never print it into a terminal others can see.
+
+### After step 4
+
+- `GET /api/health` — expect `200`, `status: "ok"`, and a `db_latency_ms` under about 50ms
+  warm. A number in the hundreds means the database is in the wrong region, which is a
+  bigger problem than the deploy.
+- Open one authenticated screen the change touched. A green deploy proves the build, not the
+  migration.
+
+### Automating this
+
+Real, tracked work rather than a nice-to-have: a `deploy.yml` gated on `ci.yml` going green,
+with `SUPABASE_ACCESS_TOKEN` and the project ref as repository secrets. Until it exists, this
+runbook IS the mechanism, and "applied by CI" is not something any document should claim.
+
+---
+
 ## Document store swap — Google Drive ⇄ Supabase Storage
 
 **Owning role:** `tech_admin` (CTO). **When:** OQ-1 resolves against us (no Workspace tenant

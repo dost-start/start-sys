@@ -52,7 +52,7 @@ Every version below is **locked**. Do not substitute. Deviations require an ADR 
 | PostgreSQL | `17`, Supabase-managed, **Pro plan**, `ap-southeast-1` (Singapore) | Database **and authorization engine** | Singapore is nearest to PH (~40ms RTT) and a defensible cross-border transfer location for the RA 10173 processing register. **Pro is required at launch, not later:** Free auto-pauses after 7 days idle (this system is idle for months between application periods) and has no automated backups — that is the Availability NFR and the Backup & Recovery NFR failed on day one. |
 | @supabase/supabase-js | `2.112.x` | **The only data-access path for user-facing code** | Every query carries the caller's JWT through PostgREST, so RLS applies by construction and cannot be forgotten. There is no second connection path, therefore no way to write a query that skips the security boundary. **The single decision the whole security model rests on.** |
 | @supabase/ssr | `0.12.x` | Cookie-based sessions in App Router + middleware | Server Components, Server Actions and middleware share one authenticated client, so there is exactly one notion of "who is calling". |
-| supabase CLI | `2.116.x`, devDependency | Migrations + type generation | Plain `.sql` in `supabase/migrations/`, committed, applied by CI on merge. **Schema is never clicked into the dashboard** — dashboard drift is how a student project permanently loses its schema history. `supabase gen types typescript` → `database.types.ts`, committed and verified in CI. |
+| supabase CLI | `2.116.x`, devDependency | Migrations + type generation | Plain `.sql` in `supabase/migrations/`, committed, and applied to production by a **manual `supabase db push` after merge** — not by CI; see §8. **Schema is never clicked into the dashboard** — dashboard drift is how a student project permanently loses its schema history. `supabase gen types typescript` → `database.types.ts`, committed and verified in CI. |
 | pgTAP | latest stable, enabled via migration | RLS security test suite, **CI-blocking** | The most important artifact in the repo. See §5. |
 | **NO ORM** | — | Absent by design | Prisma and Drizzle both connect through the pooler as a privileged role and **bypass RLS** unless every call remembers to set the session role. One forgotten call silently returns all 600 scholars' PII — no error, no crash, no log entry. Cost accepted: complex reporting lives in SQL views and RPCs, not a query builder. |
 
@@ -574,7 +574,37 @@ Even a panicked `psql` session at 2am cannot renumber a member. The `{3,}` regex
 | RA 10173 purge | Monthly | POSTs the redaction endpoint → `redact_expired_pii()` + Drive deletes |
 | Drive health check | Daily | `/api/health/drive`; alerts `tech_admin` on failure |
 
-`ci.yml` blocks merge on: typecheck → eslint → vitest → `supabase db lint` → **pgTAP RLS suite against an ephemeral Postgres** → Playwright smoke. **Migrations apply automatically on merge to main** — there is no manual "run this SQL in the dashboard" step, because that step is where undocumented schema drift enters a student-run project and never leaves.
+`ci.yml` blocks merge on: typecheck → eslint → vitest → `supabase db lint` → **pgTAP RLS suite against an ephemeral Postgres** → Playwright smoke.
+
+⚠️ **MIGRATIONS DO NOT APPLY ON MERGE. THEY ARE PUSHED BY HAND.** This paragraph used to
+claim they applied automatically; that was aspirational and was corrected on 2026-09-09,
+after a merge landed seven migrations and moved nothing. `ci.yml` runs on push to `main`,
+but only against an **ephemeral** container — there is no `supabase db push`, no
+`supabase link`, and no deploy step in either workflow file. Nothing in CI can reach the
+production database, and nothing has the credential to.
+
+**The real sequence, and the order is load-bearing:**
+
+```bash
+git checkout main && git pull      # a clean checkout of what was just merged
+supabase migration list            # what is about to be applied, and to which project
+supabase db push                   # the CTO, with the database password
+vercel --prod                      # ONLY after the push succeeds
+```
+
+**Schema first, code second.** A deploy that lands before its migrations is an application
+calling functions and columns that do not exist yet — and the failure surfaces as a member
+edit refusing to save, not as anything that names a missing migration.
+
+What has NOT changed is the rule the old sentence existed to protect, and it is the one that
+matters: **schema is never clicked into the Supabase dashboard.** Dashboard drift is how a
+student-run project permanently loses its schema history. A migration file in git, applied by
+`db push` from a clean checkout, keeps the history intact whether the push is automated or
+typed by a human.
+
+Automating it is real, tracked work — it needs `SUPABASE_ACCESS_TOKEN` and the project ref as
+repository secrets and a `deploy.yml` that runs after `ci.yml` goes green. Until that exists,
+the runbook is the mechanism (`docs/RUNBOOK.md`), and the launch-debt issue carries it.
 
 ---
 

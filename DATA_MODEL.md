@@ -8,7 +8,7 @@ Triggered by the framework rule: *"`DATA_MODEL.md` — schema has >5 entities OR
 
 ## TL;DR (read this first)
 
-- **PostgreSQL 17 on Supabase Pro (`ap-southeast-1`). No ORM.** Schema lives in plain `.sql` files in `supabase/migrations/`, applied by CI on merge to `main`. Never clicked into the dashboard.
+- **PostgreSQL 17 on Supabase Pro (`ap-southeast-1`). No ORM.** Schema lives in plain `.sql` files in `supabase/migrations/`, applied to production by a **manual `supabase db push` after merge** — CI tests them against an ephemeral container and never touches production (ARCHITECTURE.md §8). Never clicked into the dashboard.
 - **Identity is split from membership.** `people` = one row per human, forever (member ID, join year, PII). `memberships` = one row per person **per term** (status, region, year level). Everything that changes annually hangs off `memberships` or carries a `term_id`.
 - **`people.member_id` (`2024-001`) is immutable.** It is not on `memberships`, so renewal has no code path that could renumber anyone. Enforced by a `BEFORE UPDATE` trigger + `CHECK` + a counter table, not by application discipline.
 - **Archival is a status flip, never a data migration.** No `_archive` tables, no annual ETL. `terms.status` goes `active → archived`; `current_term_id()` is what every dashboard filters on. "Dashboards are wiped clean" is free because the new term genuinely has zero memberships on day one.
@@ -475,7 +475,7 @@ erDiagram
 
 ## 6. Schema DDL
 
-Plain SQL, applied by CI. `supabase gen types typescript` produces `database.types.ts`, committed and verified in CI, so the schema is the source of truth for TypeScript types.
+Plain SQL. CI applies these to an ephemeral Postgres to test them; production is a manual `supabase db push` after merge (ARCHITECTURE.md §8). `supabase gen types typescript` produces `database.types.ts`, committed and verified in CI, so the schema is the source of truth for TypeScript types.
 
 ```
 supabase/migrations/

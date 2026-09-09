@@ -49,8 +49,23 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_home    record;
-  v_current record;
+  -- ⚠ SCALARS, NOT `record`. A plpgsql RECORD that was never assigned raises "record is
+  -- not assigned yet" the moment a field is read — so the null-code path (an applicant who
+  -- gave no address, or a patch that touches nothing else) blew up on the first
+  -- `v_home_city_code`. Scalars are NULL until assigned, which is exactly the semantics
+  -- the coalesces below want. Found in CI, 2026-09-09.
+  v_home_barangay    text;
+  v_home_submun      text;
+  v_home_city        text;
+  v_home_province    text;
+  v_home_region      text;
+  v_home_city_code   text;
+  v_cur_barangay     text;
+  v_cur_submun       text;
+  v_cur_city         text;
+  v_cur_province     text;
+  v_cur_region       text;
+  v_cur_city_code    text;
   v_home_code    text := nullif(btrim(p_payload ->> 'psgc_barangay_code'), '');
   v_current_code text := nullif(btrim(p_payload ->> 'current_psgc_barangay_code'), '');
   v_same    boolean := coalesce((p_payload ->> 'current_address_same_as_home')::boolean, false);
@@ -65,10 +80,18 @@ begin
   -- `psgc_resolve` raises on a code that is not a barangay, so a truncated address is
   -- refused here rather than stored half-formed.
   if v_home_code is not null then
-    select * into v_home from public.psgc_resolve(v_home_code);
+    select r.barangay_name, r.sub_municipality_name, r.city_name,
+           r.province_name, r.region_name, r.city_code
+      into v_home_barangay, v_home_submun, v_home_city,
+           v_home_province, v_home_region, v_home_city_code
+      from public.psgc_resolve(v_home_code) r;
   end if;
   if v_current_code is not null then
-    select * into v_current from public.psgc_resolve(v_current_code);
+    select r.barangay_name, r.sub_municipality_name, r.city_name,
+           r.province_name, r.region_name, r.city_code
+      into v_cur_barangay, v_cur_submun, v_cur_city,
+           v_cur_province, v_cur_region, v_cur_city_code
+      from public.psgc_resolve(v_current_code) r;
   end if;
 
   update public.people p set
@@ -76,12 +99,12 @@ begin
     address_line      = coalesce(nullif(btrim(p_payload ->> 'address_line'), ''), p.address_line),
     postal_code       = coalesce(nullif(btrim(p_payload ->> 'postal_code'), ''), p.postal_code),
     psgc_barangay_code = coalesce(v_home_code, p.psgc_barangay_code),
-    psgc_city_code     = coalesce(v_home.city_code, p.psgc_city_code),
-    barangay          = coalesce(v_home.barangay_name, p.barangay),
-    sub_municipality  = coalesce(v_home.sub_municipality_name, p.sub_municipality),
-    city_municipality = coalesce(v_home.city_name, p.city_municipality),
-    province          = coalesce(v_home.province_name, p.province),
-    region_name       = coalesce(v_home.region_name, p.region_name),
+    psgc_city_code     = coalesce(v_home_city_code, p.psgc_city_code),
+    barangay          = coalesce(v_home_barangay, p.barangay),
+    sub_municipality  = coalesce(v_home_submun, p.sub_municipality),
+    city_municipality = coalesce(v_home_city, p.city_municipality),
+    province          = coalesce(v_home_province, p.province),
+    address_region    = coalesce(v_home_region, p.address_region),
 
     -- Current. When "same as home" is ticked the typed lines are copied too, so the
     -- current address is a complete, readable address rather than a pointer.
@@ -92,12 +115,12 @@ begin
       nullif(btrim(p_payload ->> (case when v_same then 'postal_code' else 'current_postal_code' end)), ''),
       p.current_postal_code),
     current_psgc_barangay_code = coalesce(v_current_code, p.current_psgc_barangay_code),
-    current_psgc_city_code     = coalesce(v_current.city_code, p.current_psgc_city_code),
-    current_barangay           = coalesce(v_current.barangay_name, p.current_barangay),
-    current_sub_municipality   = coalesce(v_current.sub_municipality_name, p.current_sub_municipality),
-    current_city_municipality  = coalesce(v_current.city_name, p.current_city_municipality),
-    current_province           = coalesce(v_current.province_name, p.current_province),
-    current_region_name        = coalesce(v_current.region_name, p.current_region_name),
+    current_psgc_city_code     = coalesce(v_cur_city_code, p.current_psgc_city_code),
+    current_barangay           = coalesce(v_cur_barangay, p.current_barangay),
+    current_sub_municipality   = coalesce(v_cur_submun, p.current_sub_municipality),
+    current_city_municipality  = coalesce(v_cur_city, p.current_city_municipality),
+    current_province           = coalesce(v_cur_province, p.current_province),
+    current_address_region     = coalesce(v_cur_region, p.current_address_region),
     current_address_same_as_home = case
       when p_payload ? 'current_address_same_as_home' then v_same
       else p.current_address_same_as_home end,

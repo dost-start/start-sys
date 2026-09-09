@@ -53,7 +53,7 @@
 alter table public.people
   add column barangay                 text,
   add column sub_municipality         text,
-  add column region_name              text,
+  add column address_region           text,
   add column psgc_barangay_code       text references public.psgc_locations(code),
   add column psgc_city_code           text references public.psgc_locations(code);
 
@@ -64,7 +64,7 @@ alter table public.people
   add column current_sub_municipality   text,
   add column current_city_municipality  text,
   add column current_province           text,
-  add column current_region_name        text,
+  add column current_address_region     text,
   add column current_postal_code        text,
   add column current_psgc_barangay_code text references public.psgc_locations(code),
   add column current_psgc_city_code     text references public.psgc_locations(code),
@@ -79,9 +79,12 @@ comment on column public.people.barangay is
 comment on column public.people.sub_municipality is
   'SENSITIVE: only ever set inside the City of Manila, whose fourteen districts (Tondo, '
   'Binondo, Sampaloc …) sit between the city and the barangay. Null everywhere else.';
-comment on column public.people.region_name is
+comment on column public.people.address_region is
   'SENSITIVE: the region of the HOME ADDRESS. NOT memberships.region_id, which is the org '
-  'region resolved from the university at approval and drives Regional Rep scoping.';
+  'region resolved from the university at approval and drives Regional Rep scoping. Named '
+  '`address_region` and not `region_name` because that name is already taken by '
+  'v_member_directory''s ORG region, and two different regions under one name in one system '
+  'is how somebody eventually reads the wrong one.';
 comment on column public.people.psgc_barangay_code is
   'The PSA 10-digit code of the home barangay — the authoritative machine value for the '
   'whole home address, since every level above it is an ancestor of this row.';
@@ -97,7 +100,7 @@ comment on column public.people.current_address_same_as_home is
 insert into public.sensitive_column_registry (table_name, column_name, rationale) values
   ('people', 'barangay',                   'Home barangay — the delivery-level component of a home address.'),
   ('people', 'sub_municipality',           'Home sub-municipality (City of Manila only) — an address component.'),
-  ('people', 'region_name',                'Home address region — an address component, not the org region.'),
+  ('people', 'address_region',             'Home address region — an address component, not the org region.'),
   ('people', 'psgc_barangay_code',         'PSA code of the home barangay; identifies a household as precisely as the name.'),
   ('people', 'psgc_city_code',             'PSA code of the home city or municipality.'),
   ('people', 'current_address_line',       'Current street address — where the scholar actually lives while studying.'),
@@ -105,7 +108,7 @@ insert into public.sensitive_column_registry (table_name, column_name, rationale
   ('people', 'current_sub_municipality',   'Current sub-municipality (City of Manila only).'),
   ('people', 'current_city_municipality',  'Current city or municipality.'),
   ('people', 'current_province',           'Current province.'),
-  ('people', 'current_region_name',        'Current address region.'),
+  ('people', 'current_address_region',     'Current address region.'),
   ('people', 'current_postal_code',        'Current postal code.'),
   ('people', 'current_psgc_barangay_code', 'PSA code of the current barangay.'),
   ('people', 'current_psgc_city_code',     'PSA code of the current city or municipality.')

@@ -274,9 +274,13 @@ select throws_ok(
 -- ten seconds later from a form populated before the first save. Without this the second write
 -- wins silently and the first admin's edit is gone with no trace but an audit diff nobody
 -- reads.
+-- ⚠ The patch key has to be one the whitelist still ADMITS, or this measures the wrong
+-- refusal. `city_municipality` used to be patchable and stopped being so in 0059 — it is
+-- now derived from the barangay code — so a patch naming it raises 22023 (not patchable)
+-- BEFORE the timestamp is ever compared, and the test would pass for the wrong reason.
 select throws_ok(
   $$ select public.update_member_record('00000000-0000-4000-b000-000000000004'::uuid,
-       '{"city_municipality":"Stale Write City"}'::jsonb,
+       '{"contact_number":"+639990000000"}'::jsonb,
        '2020-01-01T00:00:00Z'::timestamptz) $$,
   '40001'::char(5), null::text,
   'a STALE expected_updated_at loses with 40001 (serialization_failure), which '

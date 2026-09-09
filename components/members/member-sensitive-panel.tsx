@@ -63,7 +63,7 @@ export function MemberSensitivePanel({
             tell "not collected under the old form" from "the field does not exist". */}
         <Field label="Barangay" value={record.barangay} />
         <Field label="District (Manila only)" value={record.sub_municipality} />
-        <Field label="Address region" value={record.region_name} />
+        <Field label="Address region" value={record.address_region} />
         <Field
           label="Current address"
           value={

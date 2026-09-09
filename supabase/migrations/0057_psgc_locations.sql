@@ -44103,7 +44103,15 @@ from (values
 ) as v(code, psgc)
 where public.regions.code = v.code;
 
--- Every region must now carry one, and they must be distinct — a null or a duplicate here
--- is an address cascade that silently drops or doubles a region.
-alter table public.regions alter column psgc_code set not null;
+-- ⚠ DELIBERATELY NOT `NOT NULL`, and the reason is a test that already existed.
+-- `021_reference_rls.sql` asserts that tech_admin CAN insert a region — "a nineteenth
+-- region lands as a tech_admin write rather than a deploy" (PRD US-E3). A NOT NULL here
+-- would break that write, because a region the PSA has not yet published has no PSA code
+-- to give it. The eighteen we seed all carry one and pgTAP asserts exactly that; a
+-- nineteenth may sit codeless until the PSA catches up, which is the honest state.
+--
+-- UNIQUE still holds, and it is the half that matters: two regions sharing a code would
+-- double a region in the address cascade and split its members between two identical
+-- entries. Postgres allows many NULLs under a unique index, which is what makes the two
+-- rules coexist.
 create unique index regions_psgc_code_unique on public.regions (psgc_code);

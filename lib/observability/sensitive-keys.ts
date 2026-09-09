@@ -55,7 +55,10 @@ export const SENSITIVE_KEYS = [
   // scrubbing the name and shipping the code would be scrubbing nothing.
   "barangay",
   "sub_municipality",
-  "region_name",
+  // Named `address_region`, not `region_name`: that name belongs to
+  // v_member_directory's ORG region, and two different regions under one name in one
+  // system is how somebody eventually scrubs or reads the wrong one.
+  "address_region",
   "psgc_barangay_code",
   "psgc_city_code",
   "current_address_line",
@@ -63,7 +66,7 @@ export const SENSITIVE_KEYS = [
   "current_sub_municipality",
   "current_city_municipality",
   "current_province",
-  "current_region_name",
+  "current_address_region",
   "current_postal_code",
   "current_psgc_barangay_code",
   "current_psgc_city_code",

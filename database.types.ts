@@ -883,6 +883,7 @@ export type Database = {
       people: {
         Row: {
           address_line: string | null
+          address_region: string | null
           award_year: number | null
           barangay: string | null
           birthdate: string | null
@@ -890,6 +891,7 @@ export type Database = {
           contact_number: string | null
           created_at: string
           current_address_line: string | null
+          current_address_region: string | null
           current_address_same_as_home: boolean
           current_barangay: string | null
           current_city_municipality: string | null
@@ -897,7 +899,6 @@ export type Database = {
           current_province: string | null
           current_psgc_barangay_code: string | null
           current_psgc_city_code: string | null
-          current_region_name: string | null
           current_sub_municipality: string | null
           facebook_account: string | null
           family_name: string
@@ -916,7 +917,6 @@ export type Database = {
           psgc_barangay_code: string | null
           psgc_city_code: string | null
           redacted_at: string | null
-          region_name: string | null
           scholarship_award:
             | Database["public"]["Enums"]["scholarship_award"]
             | null
@@ -930,6 +930,7 @@ export type Database = {
         }
         Insert: {
           address_line?: string | null
+          address_region?: string | null
           award_year?: number | null
           barangay?: string | null
           birthdate?: string | null
@@ -937,6 +938,7 @@ export type Database = {
           contact_number?: string | null
           created_at?: string
           current_address_line?: string | null
+          current_address_region?: string | null
           current_address_same_as_home?: boolean
           current_barangay?: string | null
           current_city_municipality?: string | null
@@ -944,7 +946,6 @@ export type Database = {
           current_province?: string | null
           current_psgc_barangay_code?: string | null
           current_psgc_city_code?: string | null
-          current_region_name?: string | null
           current_sub_municipality?: string | null
           facebook_account?: string | null
           family_name: string
@@ -963,7 +964,6 @@ export type Database = {
           psgc_barangay_code?: string | null
           psgc_city_code?: string | null
           redacted_at?: string | null
-          region_name?: string | null
           scholarship_award?:
             | Database["public"]["Enums"]["scholarship_award"]
             | null
@@ -977,6 +977,7 @@ export type Database = {
         }
         Update: {
           address_line?: string | null
+          address_region?: string | null
           award_year?: number | null
           barangay?: string | null
           birthdate?: string | null
@@ -984,6 +985,7 @@ export type Database = {
           contact_number?: string | null
           created_at?: string
           current_address_line?: string | null
+          current_address_region?: string | null
           current_address_same_as_home?: boolean
           current_barangay?: string | null
           current_city_municipality?: string | null
@@ -991,7 +993,6 @@ export type Database = {
           current_province?: string | null
           current_psgc_barangay_code?: string | null
           current_psgc_city_code?: string | null
-          current_region_name?: string | null
           current_sub_municipality?: string | null
           facebook_account?: string | null
           family_name?: string
@@ -1010,7 +1011,6 @@ export type Database = {
           psgc_barangay_code?: string | null
           psgc_city_code?: string | null
           redacted_at?: string | null
-          region_name?: string | null
           scholarship_award?:
             | Database["public"]["Enums"]["scholarship_award"]
             | null

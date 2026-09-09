@@ -328,8 +328,12 @@ create temp table fx_renewal_payload on commit drop as
     'sex', 'female', 'scholarship_award', 'merit', 'award_year', '2022',
     'program_id', (select id from fx_program)::text,
     'university_id', (select id from fx_university)::text,
-    'address_line', 'Renewed Address Line 074', 'city_municipality', 'Renewed City',
-    'province', 'Renewed Province', 'postal_code', '4074'
+    -- PR C2 (0058/0059): the renewal carries a PSGC barangay CODE, not a typed city and
+    -- province. 1380500001 is Addition Hills, Mandaluyong — the names below are resolved
+    -- from it server-side, which is the whole point of the change.
+    'address_line', 'Renewed Address Line 074', 'postal_code', '4074',
+    'psgc_barangay_code', '1380500001',
+    'current_address_same_as_home', 'true'
   ) as body;
 grant select on fx_renewal_payload to public;
 
@@ -393,9 +397,13 @@ select is(
 select pg_temp.logout();
 
 select is(
-  (select address_line from public.people where id = '00000000-0000-4000-b000-000000000001'),
-  'Renewed Address Line 074',
-  'approve_renewal() (0045) now writes the renewal payload''s mailing address onto people'
+  (select address_line || ' | ' || barangay || ' | ' || city_municipality
+          || ' | ' || address_region
+     from public.people where id = '00000000-0000-4000-b000-000000000001'),
+  'Renewed Address Line 074 | Addition Hills | City of Mandaluyong | National Capital Region (NCR)',
+  'approve_renewal() writes the typed line the scholar gave AND the place names resolved '
+  'from their barangay code — the renewal cannot record an address in a shape /apply could '
+  'not (0059)'
 );
 
 select is(

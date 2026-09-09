@@ -78,11 +78,15 @@ select is(
 -- ═══════════════════════════════════════════════════════════════════════════════════
 -- 4-6 — our regions and the PSA's
 -- ═══════════════════════════════════════════════════════════════════════════════════
+-- The column is deliberately NULLABLE (see 0057's note: 021 asserts tech_admin may add a
+-- nineteenth region, which would have no PSA code yet). What must hold is that all
+-- EIGHTEEN SEEDED regions carry one — a null among those is a region the cascade cannot
+-- start from, and it would be invisible until an applicant from there tried to apply.
 select is(
-  (select count(*)::int from public.regions where psgc_code is null),
-  0,
-  'every one of our regions carries a PSA code — a null here is a region the cascade '
-  'cannot start from');
+  (select count(*)::int from public.regions where psgc_code is not null),
+  18,
+  'all eighteen seeded regions carry a PSA code — the column is nullable only so a '
+  'nineteenth region can be added before the PSA publishes one');
 
 select ok(
   (select bool_and(exists (
@@ -179,10 +183,16 @@ select throws_ok(
   'anon CANNOT invent a place — no INSERT policy exists for any role');
 select pg_temp.logout();
 
+-- ⚠ RAISES rather than affecting zero rows, and that difference matters. Everywhere else
+-- in this schema an unauthorised UPDATE is filtered away by a policy's USING half; here
+-- there is no UPDATE privilege AT ALL (`revoke all` in 0057), which is the stronger form —
+-- a policy added carelessly in 2029 could re-open a missing policy, but not a missing grant.
 select pg_temp.login_as('00000000-0000-4000-a000-000000000002');   -- tech_admin
-select is(pg_temp.rows_affected(
-  $$ update public.psgc_locations set name = 'Renamed' where code = '1380602000' $$), 0,
-  'not even tech_admin can rename a place — a new PSA quarter is a new migration');
+select throws_ok(
+  $$ update public.psgc_locations set name = 'Renamed' where code = '1380602000' $$,
+  '42501'::char(5), null::text,
+  'not even tech_admin can rename a place — no UPDATE privilege exists, so a new PSA '
+  'quarter is a new migration and never a dashboard edit');
 select pg_temp.logout();
 
 select is(
@@ -245,10 +255,10 @@ select is(
   (select count(*)::int from public.sensitive_column_registry
     where table_name = 'people'
       and column_name in (
-        'barangay', 'sub_municipality', 'region_name',
+        'barangay', 'sub_municipality', 'address_region',
         'psgc_barangay_code', 'psgc_city_code',
         'current_address_line', 'current_barangay', 'current_sub_municipality',
-        'current_city_municipality', 'current_province', 'current_region_name',
+        'current_city_municipality', 'current_province', 'current_address_region',
         'current_postal_code', 'current_psgc_barangay_code', 'current_psgc_city_code')),
   14,
   'all FOURTEEN new address columns are registered sensitive — codes as well as names '

@@ -118,7 +118,9 @@ const EMPTY_PAGE: AuditPage = { entries: [], nextCursor: null, readable: false }
  * is the bug (lib/auth/with-role.ts).
  */
 export function canReadAuditLog(role: ActionContext["role"]): boolean {
-  return role === "exec_admin" || role === "tech_admin";
+  // Amended 2026-09-09 (migration 0053, ADR 0015): crrd_admin joins the two admin
+  // tiers. Mirrors `audit_log_read`; if the two disagree the policy is the answer.
+  return role === "exec_admin" || role === "tech_admin" || role === "crrd_admin";
 }
 
 /**

@@ -19,8 +19,8 @@
 --                     reg  pos  aff  ppl  usr  trm  win  mem  m_aff dept cmte c_mbr d_asg off  ack  audit  reg'y
 --   exec_admin         18   23    1    6    8    2    2    5     1    7    1    2     1    4    2   ALL     17
 --   tech_admin         18   23    1    0    8    2    2    0     0    7    1    0     0    4    2   ALL     17
---   crrd_admin         18   23    1    6    1    2    2    5     1    7    1    2     1    4    1     0      0
---   crrd_deputy          18   23    1    6    1    2    2    5     1    7    1    2     1    4    0     0      0
+--   crrd_admin         18   23    1    6    1    2    2    5     1    7    1    2     1    4    1   ALL      0
+--   crrd_deputy          18   23    1    6    1    2    2    5     1    7    1    2     1    4    0   ALL      0
 --   officer            18   23    1    6    1    2    2    5     1    7    1    2     1    4    0     0      0
 --   regional_rep_a     18   23    1    2    1    2    2    3     1    7    1    1     1    4    0     0      0
 --   regional_rep_b     18   23    1    2    1    2    2    2     0    7    1    1     0    4    0     0      0
@@ -229,7 +229,8 @@ select is((select count(*) from public.committee_memberships)::int,             
 select is((select count(*) from public.department_assignments)::int,            1, 'crrd_admin sees exactly 1 department_assignment');
 select is((select count(*) from public.officer_assignments)::int,               4, 'crrd_admin sees exactly 4 officer_assignments');
 select is((select count(*) from public.confidentiality_acknowledgements)::int,  1, 'crrd_admin sees exactly 1 confidentiality_acknowledgement — their own; they may not enumerate who has NOT signed');
-select is((select count(*) from public.audit_log)::int,                         0, 'crrd_admin sees exactly 0 audit_log rows — the watched must not read the watcher (PRD US-I1)');
+select is((select count(*) from public.audit_log)::int,
+          (select n from fx_audit_total),                                          'crrd_admin sees EVERY audit_log row — widened by 0053 (ADR 0015)');
 select is((select count(*) from public.sensitive_column_registry)::int,         0, 'crrd_admin sees exactly 0 registry rows — the map of where the PII is is exec/tech only');
 
 
@@ -254,7 +255,8 @@ select is((select count(*) from public.committee_memberships)::int,             
 select is((select count(*) from public.department_assignments)::int,            1, 'crrd_deputy sees exactly 1 department_assignment');
 select is((select count(*) from public.officer_assignments)::int,               4, 'crrd_deputy sees exactly 4 officer_assignments');
 select is((select count(*) from public.confidentiality_acknowledgements)::int,  0, 'crrd_deputy sees exactly 0 confidentiality_acknowledgements — P3 deliberately has not signed (PRD US-J5)');
-select is((select count(*) from public.audit_log)::int,                         0, 'crrd_deputy sees exactly 0 audit_log rows');
+select is((select count(*) from public.audit_log)::int,
+          (select n from fx_audit_total),                                          'crrd_deputy sees EVERY audit_log row — the tier grants it, not the acknowledgement');
 select is((select count(*) from public.sensitive_column_registry)::int,         0, 'crrd_deputy sees exactly 0 registry rows');
 
 
@@ -279,7 +281,7 @@ select is((select count(*) from public.committee_memberships)::int,             
 select is((select count(*) from public.department_assignments)::int,            1, 'officer sees exactly 1 department_assignment');
 select is((select count(*) from public.officer_assignments)::int,               4, 'officer sees exactly 4 officer_assignments');
 select is((select count(*) from public.confidentiality_acknowledgements)::int,  0, 'officer sees exactly 0 confidentiality_acknowledgements — the officer fixture holds no person_id');
-select is((select count(*) from public.audit_log)::int,                         0, 'officer sees exactly 0 audit_log rows — PRD US-I1 restricts it to exec and tech');
+select is((select count(*) from public.audit_log)::int,                         0, 'officer sees exactly 0 audit_log rows — PRD US-I1 admits exec, tech and CRRD only');
 select is((select count(*) from public.sensitive_column_registry)::int,         0, 'officer sees exactly 0 registry rows');
 
 

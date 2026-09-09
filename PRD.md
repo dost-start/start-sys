@@ -409,7 +409,14 @@ Format: `As a <role>, I can <action> so that <outcome>.` Every story is testable
 - Membership status updates, officer role changes, application decisions, permission grants and document views are all logged.
 - Each entry names the acting user, the affected record, the action, the timestamp, and what changed.
 - No user role can edit or delete an audit entry.
-- The log is readable only by Executive and Technical Admins.
+- The log is readable by Executive, Technical **and CRRD** Admins. *(Amended 2026-09-09 —
+  migration `0053`, ADR 0015. The original wording was "only by Executive and Technical
+  Admins"; CRRD was added because they operate the records surface the log records and
+  had no way to answer "who changed this" about their own department's work. The
+  objection — the watched reading the watcher — is recorded in the ADR rather than
+  dismissed. Immutability is what makes the log trustworthy and immutability did not
+  move: still no INSERT, UPDATE or DELETE policy for any tier, still masked before
+  write, so widening the read widens no PII.)*
 
 **US-I2 — Search members.** As an authorized user, I can search for a specific member record by name or member ID, so that I can find a person in seconds instead of scrolling a spreadsheet. *(PDF Specific Problem 2)*
 - Partial-name search returns matches; search is case- and accent-tolerant.

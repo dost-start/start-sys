@@ -17,7 +17,9 @@ import { ApplicationClosed } from "@/components/applications/application-closed"
 import { BrandBackground } from "@/components/brand/brand-background";
 import { BrandFooter } from "@/components/brand/brand-footer";
 import { BrandHero } from "@/components/brand/brand-hero";
+import { orgContactEmail } from "@/lib/brand/org-contact";
 import { getPublicWindowState } from "@/lib/applications/queries";
+import { cachedReference } from "@/lib/applications/reference-cache";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 import { ApplicationForm } from "./application-form";
@@ -38,17 +40,21 @@ export const metadata: Metadata = {
  * component ever needs its own Supabase client.
  */
 async function listApplyRegions(): Promise<RegionOption[]> {
-  const supabase = await createServerSupabase();
-  const { data, error } = await supabase
-    .from("regions")
-    .select("id, code, name")
-    .order("sort_order", { ascending: true });
+  // PR E: memoised per process for REFERENCE_TTL_MS. Reference rows change only in a
+  // migration; the window state above is deliberately NOT cached.
+  return cachedReference<RegionOption>("regions", async () => {
+    const supabase = await createServerSupabase();
+    const { data, error } = await supabase
+      .from("regions")
+      .select("id, code, name")
+      .order("sort_order", { ascending: true });
 
-  // An empty/errored read here is not fatal to the page — MembershipSection renders
-  // an explicit "regions could not be loaded" notice rather than a form nobody can
-  // complete, which is better than a 500 for what is likely a transient blip.
-  if (error || !data) return [];
-  return data;
+    // An empty/errored read here is not fatal to the page — MembershipSection renders
+    // an explicit "regions could not be loaded" notice rather than a form nobody can
+    // complete, which is better than a 500 for what is likely a transient blip.
+    if (error || !data) return [];
+    return data;
+  });
 }
 
 /**
@@ -57,36 +63,47 @@ async function listApplyRegions(): Promise<RegionOption[]> {
  * applicants but stay readable by reviewers.
  */
 async function listApplyUniversities(): Promise<UniversityOption[]> {
-  const supabase = await createServerSupabase();
-  const { data, error } = await supabase
-    .from("universities")
-    .select("id, name, region_id, city_municipality")
-    .eq("is_active", true)
-    .order("name", { ascending: true });
-  if (error || !data) return [];
-  return data;
+  // PR E: memoised per process for REFERENCE_TTL_MS. Reference rows change only in a
+  // migration; the window state above is deliberately NOT cached.
+  return cachedReference<UniversityOption>("universities", async () => {
+    const supabase = await createServerSupabase();
+    const { data, error } = await supabase
+      .from("universities")
+      .select("id, name, region_id, city_municipality")
+      .eq("is_active", true)
+      .order("name", { ascending: true });
+    if (error || !data) return [];
+    return data;
+  });
 }
 
 async function listApplyPrograms(): Promise<ProgramOption[]> {
-  const supabase = await createServerSupabase();
-  const { data, error } = await supabase
-    .from("programs")
-    .select("id, name")
-    .eq("is_active", true)
-    .order("sort_order", { ascending: true });
-  if (error || !data) return [];
-  return data;
+  // PR E: memoised per process for REFERENCE_TTL_MS. Reference rows change only in a
+  // migration; the window state above is deliberately NOT cached.
+  return cachedReference<ProgramOption>("programs", async () => {
+    const supabase = await createServerSupabase();
+    const { data, error } = await supabase
+      .from("programs")
+      .select("id, name")
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true });
+    if (error || !data) return [];
+    return data;
+  });
 }
 
 export default async function ApplyPage() {
   const windowState = await getPublicWindowState();
+  // A7: one resolution, both branches. `org-contact` is server-only, so this is the
+  // boundary where the address stops being an environment read and becomes a prop.
+  const contactEmail = orgContactEmail();
 
   if (!windowState.open) {
     return (
       <main className="brand-surface flex min-h-screen flex-col">
         <BrandBackground />
         <div className="flex flex-1 items-center justify-center px-4 py-16 sm:px-10">
-          <ApplicationClosed window={windowState} />
+          <ApplicationClosed window={windowState} contactEmail={contactEmail} />
         </div>
         <BrandFooter />
       </main>
@@ -109,6 +126,7 @@ export default async function ApplyPage() {
         regions={regions}
         universities={universities}
         programs={programs}
+        contactEmail={contactEmail}
       />
       <BrandFooter />
     </main>

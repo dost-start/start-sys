@@ -8,6 +8,10 @@ import Link from "next/link";
 
 import { Card } from "@/components/ui/card";
 import type { PublicWindowState } from "@/lib/applications/queries";
+// A7 (reviewer PDF 2026-09-09): the contact address arrives as a PROP rather than being
+// hardcoded. It is derived from the mail environment by `lib/brand/org-contact.ts`, which
+// is `server-only`, so the server page resolves it and passes it down — this component is
+// on the client side of the boundary and must not read the environment itself.
 
 const MANILA_TIME_ZONE = "Asia/Manila";
 
@@ -19,7 +23,13 @@ function formatManila(iso: string): string {
   }).format(new Date(iso));
 }
 
-export function ApplicationClosed({ window }: { window: PublicWindowState }) {
+export function ApplicationClosed({
+  window,
+  contactEmail,
+}: {
+  window: PublicWindowState;
+  contactEmail: string;
+}) {
   return (
     <Card
       radius="hero"
@@ -61,7 +71,7 @@ export function ApplicationClosed({ window }: { window: PublicWindowState }) {
       <p className="text-brand-body text-sm">
         Already submitted an application?{" "}
         <a
-          href="mailto:crrd@start-dost.org"
+          href={`mailto:${contactEmail}`}
           className="text-brand-link font-medium underline underline-offset-4"
         >
           Contact CRRD

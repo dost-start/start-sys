@@ -13,11 +13,13 @@ import type { Metadata } from "next";
 import type { ProgramOption, UniversityOption } from "@/components/applications/academic-section";
 import type { RegionOption } from "@/components/applications/membership-section";
 import { RenewalClosed } from "@/components/applications/renewal-closed";
+import { orgContactEmail } from "@/lib/brand/org-contact";
 import { BrandBackground } from "@/components/brand/brand-background";
 import { BrandFooter } from "@/components/brand/brand-footer";
 import { BrandHero } from "@/components/brand/brand-hero";
 import { getPublicWindowState } from "@/lib/applications/queries";
 import { MEMBERSHIP_RENEWAL_FORM_KIND } from "@/lib/applications/window-schema";
+import { cachedReference } from "@/lib/applications/reference-cache";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 import { RenewalForm } from "./renewal-form";
@@ -31,35 +33,47 @@ export const metadata: Metadata = {
 };
 
 async function listRegions(): Promise<RegionOption[]> {
-  const supabase = await createServerSupabase();
-  const { data, error } = await supabase
-    .from("regions")
-    .select("id, code, name")
-    .order("sort_order", { ascending: true });
-  if (error || !data) return [];
-  return data;
+  // PR E: memoised per process for REFERENCE_TTL_MS. Reference rows change only in a
+  // migration; the window state above is deliberately NOT cached.
+  return cachedReference<RegionOption>("regions", async () => {
+    const supabase = await createServerSupabase();
+    const { data, error } = await supabase
+      .from("regions")
+      .select("id, code, name")
+      .order("sort_order", { ascending: true });
+    if (error || !data) return [];
+    return data;
+  });
 }
 
 async function listUniversities(): Promise<UniversityOption[]> {
-  const supabase = await createServerSupabase();
-  const { data, error } = await supabase
-    .from("universities")
-    .select("id, name, region_id, city_municipality")
-    .eq("is_active", true)
-    .order("name", { ascending: true });
-  if (error || !data) return [];
-  return data;
+  // PR E: memoised per process for REFERENCE_TTL_MS. Reference rows change only in a
+  // migration; the window state above is deliberately NOT cached.
+  return cachedReference<UniversityOption>("universities", async () => {
+    const supabase = await createServerSupabase();
+    const { data, error } = await supabase
+      .from("universities")
+      .select("id, name, region_id, city_municipality")
+      .eq("is_active", true)
+      .order("name", { ascending: true });
+    if (error || !data) return [];
+    return data;
+  });
 }
 
 async function listPrograms(): Promise<ProgramOption[]> {
-  const supabase = await createServerSupabase();
-  const { data, error } = await supabase
-    .from("programs")
-    .select("id, name")
-    .eq("is_active", true)
-    .order("sort_order", { ascending: true });
-  if (error || !data) return [];
-  return data;
+  // PR E: memoised per process for REFERENCE_TTL_MS. Reference rows change only in a
+  // migration; the window state above is deliberately NOT cached.
+  return cachedReference<ProgramOption>("programs", async () => {
+    const supabase = await createServerSupabase();
+    const { data, error } = await supabase
+      .from("programs")
+      .select("id, name")
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true });
+    if (error || !data) return [];
+    return data;
+  });
 }
 
 export default async function RenewPage() {
@@ -70,7 +84,7 @@ export default async function RenewPage() {
       <main className="brand-surface flex min-h-screen flex-col">
         <BrandBackground />
         <div className="flex flex-1 items-center justify-center px-4 py-16 sm:px-10">
-          <RenewalClosed />
+          <RenewalClosed contactEmail={orgContactEmail()} />
         </div>
         <BrandFooter />
       </main>

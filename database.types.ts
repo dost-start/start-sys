@@ -884,10 +884,21 @@ export type Database = {
         Row: {
           address_line: string | null
           award_year: number | null
+          barangay: string | null
           birthdate: string | null
           city_municipality: string | null
           contact_number: string | null
           created_at: string
+          current_address_line: string | null
+          current_address_same_as_home: boolean
+          current_barangay: string | null
+          current_city_municipality: string | null
+          current_postal_code: string | null
+          current_province: string | null
+          current_psgc_barangay_code: string | null
+          current_psgc_city_code: string | null
+          current_region_name: string | null
+          current_sub_municipality: string | null
           facebook_account: string | null
           family_name: string
           github_account: string | null
@@ -902,13 +913,17 @@ export type Database = {
           postal_code: string | null
           program_id: string | null
           province: string | null
+          psgc_barangay_code: string | null
+          psgc_city_code: string | null
           redacted_at: string | null
+          region_name: string | null
           scholarship_award:
             | Database["public"]["Enums"]["scholarship_award"]
             | null
           school: string | null
           school_id_no: string | null
           sex: Database["public"]["Enums"]["sex_option"] | null
+          sub_municipality: string | null
           suffix: string | null
           university_id: string | null
           updated_at: string
@@ -916,10 +931,21 @@ export type Database = {
         Insert: {
           address_line?: string | null
           award_year?: number | null
+          barangay?: string | null
           birthdate?: string | null
           city_municipality?: string | null
           contact_number?: string | null
           created_at?: string
+          current_address_line?: string | null
+          current_address_same_as_home?: boolean
+          current_barangay?: string | null
+          current_city_municipality?: string | null
+          current_postal_code?: string | null
+          current_province?: string | null
+          current_psgc_barangay_code?: string | null
+          current_psgc_city_code?: string | null
+          current_region_name?: string | null
+          current_sub_municipality?: string | null
           facebook_account?: string | null
           family_name: string
           github_account?: string | null
@@ -934,13 +960,17 @@ export type Database = {
           postal_code?: string | null
           program_id?: string | null
           province?: string | null
+          psgc_barangay_code?: string | null
+          psgc_city_code?: string | null
           redacted_at?: string | null
+          region_name?: string | null
           scholarship_award?:
             | Database["public"]["Enums"]["scholarship_award"]
             | null
           school?: string | null
           school_id_no?: string | null
           sex?: Database["public"]["Enums"]["sex_option"] | null
+          sub_municipality?: string | null
           suffix?: string | null
           university_id?: string | null
           updated_at?: string
@@ -948,10 +978,21 @@ export type Database = {
         Update: {
           address_line?: string | null
           award_year?: number | null
+          barangay?: string | null
           birthdate?: string | null
           city_municipality?: string | null
           contact_number?: string | null
           created_at?: string
+          current_address_line?: string | null
+          current_address_same_as_home?: boolean
+          current_barangay?: string | null
+          current_city_municipality?: string | null
+          current_postal_code?: string | null
+          current_province?: string | null
+          current_psgc_barangay_code?: string | null
+          current_psgc_city_code?: string | null
+          current_region_name?: string | null
+          current_sub_municipality?: string | null
           facebook_account?: string | null
           family_name?: string
           github_account?: string | null
@@ -966,24 +1007,56 @@ export type Database = {
           postal_code?: string | null
           program_id?: string | null
           province?: string | null
+          psgc_barangay_code?: string | null
+          psgc_city_code?: string | null
           redacted_at?: string | null
+          region_name?: string | null
           scholarship_award?:
             | Database["public"]["Enums"]["scholarship_award"]
             | null
           school?: string | null
           school_id_no?: string | null
           sex?: Database["public"]["Enums"]["sex_option"] | null
+          sub_municipality?: string | null
           suffix?: string | null
           university_id?: string | null
           updated_at?: string
         }
         Relationships: [
           {
+            foreignKeyName: "people_current_psgc_barangay_code_fkey"
+            columns: ["current_psgc_barangay_code"]
+            isOneToOne: false
+            referencedRelation: "psgc_locations"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "people_current_psgc_city_code_fkey"
+            columns: ["current_psgc_city_code"]
+            isOneToOne: false
+            referencedRelation: "psgc_locations"
+            referencedColumns: ["code"]
+          },
+          {
             foreignKeyName: "people_program_id_fkey"
             columns: ["program_id"]
             isOneToOne: false
             referencedRelation: "programs"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "people_psgc_barangay_code_fkey"
+            columns: ["psgc_barangay_code"]
+            isOneToOne: false
+            referencedRelation: "psgc_locations"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "people_psgc_city_code_fkey"
+            columns: ["psgc_city_code"]
+            isOneToOne: false
+            referencedRelation: "psgc_locations"
+            referencedColumns: ["code"]
           },
           {
             foreignKeyName: "people_university_id_fkey"
@@ -1045,6 +1118,41 @@ export type Database = {
         }
         Relationships: []
       }
+      psgc_locations: {
+        Row: {
+          code: string
+          created_at: string
+          is_active: boolean
+          level: Database["public"]["Enums"]["psgc_level"]
+          name: string
+          parent_code: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          is_active?: boolean
+          level: Database["public"]["Enums"]["psgc_level"]
+          name: string
+          parent_code?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          is_active?: boolean
+          level?: Database["public"]["Enums"]["psgc_level"]
+          name?: string
+          parent_code?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "psgc_locations_parent_code_fkey"
+            columns: ["parent_code"]
+            isOneToOne: false
+            referencedRelation: "psgc_locations"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
       rate_limit_buckets: {
         Row: {
           bucket: string
@@ -1072,6 +1180,7 @@ export type Database = {
           id: string
           island_group: Database["public"]["Enums"]["island_group"]
           name: string
+          psgc_code: string
           sort_order: number
         }
         Insert: {
@@ -1079,6 +1188,7 @@ export type Database = {
           id?: string
           island_group: Database["public"]["Enums"]["island_group"]
           name: string
+          psgc_code: string
           sort_order: number
         }
         Update: {
@@ -1086,6 +1196,7 @@ export type Database = {
           id?: string
           island_group?: Database["public"]["Enums"]["island_group"]
           name?: string
+          psgc_code?: string
           sort_order?: number
         }
         Relationships: []
@@ -1593,6 +1704,10 @@ export type Database = {
       _temptypes: { Args: { "": string }; Returns: string }
       _todo: { Args: never; Returns: string }
       allocate_member_id: { Args: { p_person_id: string }; Returns: string }
+      apply_address_to_person: {
+        Args: { p_payload: Json; p_person_id: string }
+        Returns: undefined
+      }
       approve_all_pending: { Args: never; Returns: Json }
       approve_application: { Args: { p_app_id: string }; Returns: string }
       approve_renewal: { Args: { p_id: string }; Returns: string }
@@ -1830,6 +1945,17 @@ export type Database = {
           storage_ref: string
         }[]
       }
+      psgc_resolve: {
+        Args: { p_code: string }
+        Returns: {
+          barangay_name: string
+          city_code: string
+          city_name: string
+          province_name: string
+          region_name: string
+          sub_municipality_name: string
+        }[]
+      }
       reject_application: {
         Args: { p_app_id: string; p_reason: string }
         Returns: undefined
@@ -1947,6 +2073,13 @@ export type Database = {
         | "officer"
         | "regional_rep"
         | "member"
+      psgc_level:
+        | "region"
+        | "province"
+        | "city"
+        | "municipality"
+        | "sub_municipality"
+        | "barangay"
       recipient_status: "queued" | "sent" | "failed" | "suppressed"
       scholarship_award:
         | "ra_7687"
@@ -2126,6 +2259,14 @@ export const Constants = {
         "officer",
         "regional_rep",
         "member",
+      ],
+      psgc_level: [
+        "region",
+        "province",
+        "city",
+        "municipality",
+        "sub_municipality",
+        "barangay",
       ],
       recipient_status: ["queued", "sent", "failed", "suppressed"],
       scholarship_award: [

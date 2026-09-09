@@ -98,6 +98,30 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+/** The `psgc_resolve()` shape, read defensively out of the detail jsonb. */
+type ResolvedAddressView = {
+  barangay_name: string | null;
+  sub_municipality_name: string | null;
+  city_name: string | null;
+  province_name: string | null;
+  region_name: string | null;
+};
+
+function readResolved(detail: Record<string, unknown>, key: string): ResolvedAddressView | null {
+  const value = detail[key];
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const str = (k: string) =>
+    typeof row[k] === "string" && row[k] !== "" ? (row[k] as string) : null;
+  return {
+    barangay_name: str("barangay_name"),
+    sub_municipality_name: str("sub_municipality_name"),
+    city_name: str("city_name"),
+    province_name: str("province_name"),
+    region_name: str("region_name"),
+  };
+}
+
 export function ApplicationDetailFields({
   detail,
   lookups,
@@ -110,6 +134,13 @@ export function ApplicationDetailFields({
   const familyName = readString(detail, "applicant_family_name");
   const email = readString(detail, "applicant_email");
   const birthdate = text(payload, "birthdate");
+
+  // PR C2: attached by `getApplicationDetail`, which calls `psgc_resolve()` for each of
+  // the two codes. Null when the applicant predates the cascade or the code no longer
+  // resolves — the fields then render "—" rather than the read failing.
+  const home = readResolved(detail, "resolved_home_address");
+  const current = readResolved(detail, "resolved_current_address");
+  const sameAsHome = text(payload, "current_address_same_as_home") === "true";
 
   const sex = text(payload, "sex");
   const award = text(payload, "scholarship_award");
@@ -147,11 +178,36 @@ export function ApplicationDetailFields({
         <Field label="LinkedIn" value={text(payload, "linkedin_account")} />
       </Section>
 
+      {/*
+        PR C2: the payload holds barangay CODES; the names come from `psgc_resolve()` and
+        are attached by `getApplicationDetail`. A reviewer sees an address, never a code —
+        and it is the same resolution the write path performs, so what is shown here is
+        what will be stored on approval.
+      */}
       <Section title="Home address">
         <Field label="Street address" value={text(payload, "address_line")} />
-        <Field label="City / municipality" value={text(payload, "city_municipality")} />
-        <Field label="Province" value={text(payload, "province")} />
+        <Field label="Barangay" value={home?.barangay_name ?? null} />
+        <Field label="District (Manila only)" value={home?.sub_municipality_name ?? null} />
+        <Field label="City / municipality" value={home?.city_name ?? null} />
+        <Field label="Province" value={home?.province_name ?? null} />
+        <Field label="Region" value={home?.region_name ?? null} />
         <Field label="Postal code" value={text(payload, "postal_code")} />
+      </Section>
+
+      <Section title="Current address">
+        {sameAsHome ? (
+          <Field label="Current address" value="Same as home address" />
+        ) : (
+          <>
+            <Field label="Street address" value={text(payload, "current_address_line")} />
+            <Field label="Barangay" value={current?.barangay_name ?? null} />
+            <Field label="District (Manila only)" value={current?.sub_municipality_name ?? null} />
+            <Field label="City / municipality" value={current?.city_name ?? null} />
+            <Field label="Province" value={current?.province_name ?? null} />
+            <Field label="Region" value={current?.region_name ?? null} />
+            <Field label="Postal code" value={text(payload, "current_postal_code")} />
+          </>
+        )}
       </Section>
 
       <Section title="Scholarship and academic information">

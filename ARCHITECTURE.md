@@ -236,6 +236,22 @@ PRD flow: *portal → personal + academic data → **upload proof of enrollment*
 | 8 | CCDO or moderator | Approves → `approve_application(app_id)` (SECURITY DEFINER). In **one transaction**: allocate member ID, insert `people` (if new) + `memberships`, write audit row. | No human role has table-level INSERT on `people`. You can never get an ID without a membership or vice versa. See §6. |
 | 9 | CRRD | After the application period closes, sends the acceptance campaign. | §4.2. |
 
+> **Amended 2026-09-09 (PR C2, migrations `0057`–`0059`) — the address is a cascade.** Step 2
+> of the table above no longer accepts a typed city or province. The applicant picks
+> Region → Province → City/Municipality → Barangay from `psgc_locations`, the PSA's own
+> 43,769 rows, and types only the street line and the postal code. **Two addresses are
+> collected** — home and current, with a "same as home" tick.
+>
+> The form sends a BARANGAY CODE and nothing else about the place. Every name is resolved
+> server-side by `psgc_resolve()` and written by `apply_address_to_person()` (0059), which
+> is the single write path for an address on all three of `approve_application`,
+> `approve_renewal` and `update_member_record`. A client cannot state a place name at all,
+> so a stored code and a stored name can never disagree.
+>
+> The cascade's DEPTH is data-driven, not fixed at four: NCR has no provinces, and the City
+> of Manila has fourteen sub-municipalities between the city and the barangay. Both fall
+> out of "ask for the children of what was just picked" with no special case in the app.
+
 **Residual risk, stated plainly:** Drive does not virus-scan files under 100MB on upload. Mitigation is the MIME allowlist + server-side metadata verification, and viewing through the proxy in the browser's sandboxed PDF viewer rather than downloading. A malicious PDF remains theoretically possible.
 
 **Fallback (fully specified, no TBD):** if START-DOST has no Workspace tenant supporting Shared Drives (Workspace for Nonprofits' base tier does **not** include them), switch to a dedicated org-owned Google account (`files@<org domain>`) with a one-time OAuth consent, same `drive.file` scope, refresh token in `GOOGLE_DRIVE_REFRESH_TOKEN`. **The consent screen MUST be moved from Testing to In production** — refresh tokens issued in Testing expire after 7 days, and a Drive integration that silently dies every Monday is the most likely way this feature breaks post-handover. Everything funnels through `lib/documents/`, so this is a ~150-line change. See `openQuestions` — decide in week one, before the first real document is uploaded.

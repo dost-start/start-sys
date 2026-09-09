@@ -59,6 +59,28 @@ export function MemberSensitivePanel({
         <Field label="City / municipality" value={record.city_municipality} />
         <Field label="Province" value={record.province} />
         <Field label="Postal code" value={record.postal_code} />
+        {/* PR C2: the levels the cascade added. Rendered even when null so a reader can
+            tell "not collected under the old form" from "the field does not exist". */}
+        <Field label="Barangay" value={record.barangay} />
+        <Field label="District (Manila only)" value={record.sub_municipality} />
+        <Field label="Address region" value={record.region_name} />
+        <Field
+          label="Current address"
+          value={
+            record.current_address_same_as_home
+              ? "Same as home address"
+              : [
+                  record.current_address_line,
+                  record.current_barangay,
+                  record.current_sub_municipality,
+                  record.current_city_municipality,
+                  record.current_province,
+                  record.current_postal_code,
+                ]
+                  .filter(Boolean)
+                  .join(", ") || null
+          }
+        />
         <Field label="School" value={record.school} />
         {/* School ID number removed from this panel (Ethan, 2026-09-06) — UI-only; the
             column still exists on `record` and is still masked by audit_row() and

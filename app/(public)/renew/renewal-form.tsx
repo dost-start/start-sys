@@ -87,8 +87,6 @@ const KNOWN_FIELDS = new Set<string>([
   "contact_number",
   "facebook_account",
   "address_line",
-  "city_municipality",
-  "province",
   "postal_code",
   "scholarship_award",
   "award_year",
@@ -186,9 +184,14 @@ export function RenewalForm({
       contact_number: "",
       facebook_account: "",
       address_line: "",
-      city_municipality: "",
-      province: "",
       postal_code: "",
+      // PR C2: the cascade writes these through `setValue`; they are declared here so the
+      // field is registered from the first render and a restored draft has somewhere to land.
+      psgc_barangay_code: "",
+      current_address_same_as_home: true,
+      current_address_line: "",
+      current_postal_code: "",
+      current_psgc_barangay_code: "",
       scholarship_award: "" as unknown as RenewalSubmitInput["scholarship_award"],
       award_year: "",
       university_id: "",
@@ -577,7 +580,7 @@ export function RenewalForm({
               {step === 1 ? (
                 <>
                   <RenewalIdentitySection />
-                  <PersonalSection />
+                  <PersonalSection regions={regions} />
                 </>
               ) : null}
 

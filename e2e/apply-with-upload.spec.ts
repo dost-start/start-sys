@@ -289,10 +289,15 @@ const applyScreens = {
   // distinguishes "Program" from "Expected year of graduation"; the trailing one was only
   // ever guarding against a suffix that now legitimately exists.
   sex: (page: Page) => page.getByLabel(/^sex\b/i),
-  addressLine: (page: Page) => page.getByLabel(/street address/i),
-  cityMunicipality: (page: Page) => page.getByLabel(/city.*municipality/i),
-  province: (page: Page) => page.getByLabel(/^province\b/i),
-  postalCode: (page: Page) => page.getByLabel(/postal code/i),
+  // PR C2: the address is a CASCADE now, not three text boxes. City and province are no
+  // longer typed and have no locator — they are ancestors of the barangay the picker
+  // resolves, filled server-side. `pickPsgcAddress` below drives the whole thing.
+  addressLine: (page: Page) => page.getByLabel(/house number and street/i).first(),
+  postalCode: (page: Page) => page.getByLabel(/^postal code/i).first(),
+  psgcRegion: (page: Page, prefix: string) => page.locator(`#${prefix}_region`),
+  psgcStep: (page: Page, prefix: string, depth: number) => page.locator(`#${prefix}_psgc_${depth}`),
+  psgcHidden: (page: Page, prefix: string) =>
+    page.locator(`input[name="${prefix}_psgc_barangay_code"]`),
 
   scholarshipAward: (page: Page) => page.getByLabel(/scholarship award/i),
   awardYear: (page: Page) => page.getByLabel(/year of award/i),
@@ -414,6 +419,40 @@ type ApplicantFields = {
  * fill is asserted to have found its control: a label that stops matching must fail here,
  * by name, not three helpers later as "the success screen never appeared".
  */
+/**
+ * Drive one PSGC address picker to a barangay (PR C2).
+ *
+ * ⚠ THE NUMBER OF STEPS IS DATA-DRIVEN AND THE TEST MUST NOT ASSUME IT. NCR has no
+ * provinces, so its cities hang off the region; the City of Manila has sub-municipalities
+ * between the city and the barangay. So this picks the first real option, waits for the
+ * next select to appear, and repeats until none does — which is exactly what an applicant
+ * does, and exactly what a fixed three-step helper would get wrong for two regions.
+ *
+ * Returns whether a barangay code actually landed in the hidden field, so a picker that
+ * silently stopped early fails HERE, by name, rather than four helpers later as a bounced
+ * submission.
+ */
+async function pickPsgcAddress(page: Page, prefix: string): Promise<boolean> {
+  const region = applyScreens.psgcRegion(page, prefix);
+  if ((await region.count()) === 0) return false;
+  if (!(await selectFirstRealOption(region))) return false;
+
+  // Five is the deepest the country goes (region → province → city → district → barangay)
+  // plus one, so a cascade that never terminates fails the test instead of hanging it.
+  for (let depth = 0; depth < 6; depth += 1) {
+    const step = applyScreens.psgcStep(page, prefix, depth);
+    try {
+      await step.waitFor({ state: "visible", timeout: 5_000 });
+    } catch {
+      break; // no further level — the previous one was the barangay
+    }
+    if (!(await selectFirstRealOption(step))) return false;
+  }
+
+  const code = await applyScreens.psgcHidden(page, prefix).inputValue();
+  return /^\d{10}$/.test(code);
+}
+
 async function fillApplicationForm(page: Page, applicant: ApplicantFields): Promise<void> {
   expect(await currentStep(page)).toBe(1);
 
@@ -427,8 +466,6 @@ async function fillApplicationForm(page: Page, applicant: ApplicantFields): Prom
     [applyScreens.contactNumber(page), "09171234500"],
     [applyScreens.facebook(page), "https://facebook.com/e2e.applicant"],
     [applyScreens.addressLine(page), "159 Fixture St."],
-    [applyScreens.cityMunicipality(page), "Quezon City"],
-    [applyScreens.province(page), "Metro Manila"],
     [applyScreens.postalCode(page), "1100"],
   ];
   for (const [locator, value] of personal) {
@@ -436,6 +473,12 @@ async function fillApplicationForm(page: Page, applicant: ApplicantFields): Prom
   }
   // The SRS choice list (0038): rows, not code — pick the first real option.
   expect(await selectFirstRealOption(applyScreens.sex(page))).toBe(true);
+
+  // PR C2 — the home address cascade. "Same as home address" is ticked by default, so the
+  // current address needs no input here; the tick is the claim and the database copies
+  // home across (`apply_address_to_person`, 0059).
+  expect(await pickPsgcAddress(page, "home")).toBe(true);
+
   await nextStep(page);
 
   // ── Step 2 — the region FIRST, then scholarship and school ───────────────

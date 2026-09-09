@@ -62,10 +62,14 @@ export default async function MemberDetailPage({ params }: { params: Promise<{ i
 
   // Names for the two SRS choice columns (0037/0038). Public reference tables, read as
   // the caller; an id whose row is gone falls back to the raw id in the panel.
-  const [universityRows, programRows] = await Promise.all([
+  const [universityRows, programRows, regionRows] = await Promise.all([
     ctx.supabase.from("universities").select("id, name"),
     ctx.supabase.from("programs").select("id, name"),
+    // PR C2: the top of the two address cascades. Our eighteen regions with their PSA
+    // codes — the picker walks down from here through `psgc_locations`.
+    ctx.supabase.from("regions").select("psgc_code, name").order("sort_order", { ascending: true }),
   ]);
+  const psgcRegions = regionRows.data ?? [];
   const toMap = (rows: { id: string; name: string }[] | null): Record<string, string> =>
     Object.fromEntries((rows ?? []).map((r) => [r.id, r.name]));
   const lookups = {
@@ -172,7 +176,7 @@ export default async function MemberDetailPage({ params }: { params: Promise<{ i
       ) : null}
 
       <MemberSensitivePanel record={record} lookups={lookups} />
-      <MemberEditForm record={record} />
+      <MemberEditForm record={record} regions={psgcRegions} />
       <MemberTermHistory memberId={record.member_id} rows={termHistory} />
       <MemberAuditTrail entries={auditTrail} />
     </div>

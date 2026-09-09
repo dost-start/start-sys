@@ -229,6 +229,16 @@ export async function listApplications(
  * (ARCHITECTURE.md §9 item 5). If the screen must say so out loud, the answer is a
  * separate `has_confidentiality_ack()` call on the page — not a wider error code here.
  */
+/** What `psgc_resolve()` returns: the five levels of a PSGC address, plus the city code. */
+export type ResolvedAddress = {
+  barangay_name: string;
+  sub_municipality_name: string;
+  city_name: string;
+  province_name: string;
+  region_name: string;
+  city_code: string;
+};
+
 export async function getApplicationDetail(
   ctx: ActionContext,
   applicationId: string,
@@ -249,7 +259,32 @@ export async function getApplicationDetail(
     return err<Record<string, unknown>>("not_found");
   }
 
-  return ok(data as Record<string, unknown>);
+  const detail = data as Record<string, unknown>;
+
+  // PR C2: the payload now carries barangay CODES, not place names — a reviewer must not
+  // be shown "1380602001". Resolved here, through the same `psgc_resolve()` the write
+  // paths use, so the review screen and the stored record can never describe the address
+  // differently. A code that no longer resolves (a barangay dissolved by a later PSA
+  // quarter) leaves the names absent rather than failing the whole detail read.
+  const payload =
+    detail["payload"] !== null && typeof detail["payload"] === "object"
+      ? (detail["payload"] as Record<string, unknown>)
+      : {};
+  detail["resolved_home_address"] = await resolvePsgc(ctx, payload["psgc_barangay_code"]);
+  detail["resolved_current_address"] = await resolvePsgc(
+    ctx,
+    payload["current_psgc_barangay_code"],
+  );
+
+  return ok(detail);
+}
+
+/** The five names for a barangay code, or null. Never throws into the caller's read. */
+async function resolvePsgc(ctx: ActionContext, code: unknown): Promise<ResolvedAddress | null> {
+  if (typeof code !== "string" || code === "") return null;
+  const { data, error } = await ctx.supabase.rpc("psgc_resolve", { p_code: code });
+  if (error || !data || data.length === 0) return null;
+  return data[0] ?? null;
 }
 
 /**

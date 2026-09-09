@@ -16,6 +16,12 @@ export type RegionOption = {
   id: string;
   code: string;
   name: string;
+  /**
+   * The PSA's two-digit region code (0057 §2). Carried here so the address cascade can
+   * start from OUR eighteen regions — the same list this section's dropdown offers —
+   * rather than from a nineteenth copy read out of `psgc_locations`.
+   */
+  psgc_code: string;
 };
 
 export function MembershipSection({ regions }: { regions: RegionOption[] }) {

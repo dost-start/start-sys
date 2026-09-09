@@ -6,23 +6,38 @@
 // Field `name`s are the zod keys, which are the payload / column names — CONVENTIONS
 // §6, no mapping layer. The SRS dropped the school ID; it is not collected here any
 // more (0038) and stays removed (ADR 0013 — Ethan, 2026-09-06). Home address RETURNS
-// here (ADR 0013 §Consequences, Ethan 2026-09-06 "include home address") as four
-// required fields — the design canvas omitted them by mistake; the decision stands.
+// here (ADR 0013 §Consequences, Ethan 2026-09-06 "include home address"), and since PR C2
+// (2026-09-09) it is a PSGC CASCADE rather than typed boxes, alongside a second CURRENT
+// address for scholars who board near their university.
 // Age is computed from the birthdate at review time and never stored.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useFormContext } from "react-hook-form";
 
 import { Field, FieldError, FieldLabel, FormSection } from "@/components/applications/form-section";
+import {
+  PsgcAddressPicker,
+  type PsgcRegionOption,
+} from "@/components/applications/psgc-address-picker";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { SEX_LABELS, SEX_OPTIONS, type ApplicationSubmitInput } from "@/lib/applications/schema";
 
-export function PersonalSection() {
+export function PersonalSection({ regions }: { regions: PsgcRegionOption[] }) {
   const {
     register,
+    setValue,
+    watch,
     formState: { errors },
   } = useFormContext<ApplicationSubmitInput>();
+
+  // The cascade owns a barangay code; react-hook-form owns the field. `watch` is what
+  // keeps the two in step across a draft restore, a server field error and the "same as
+  // home" toggle.
+  const homeCode = watch("psgc_barangay_code");
+  const currentCode = watch("current_psgc_barangay_code");
+  const sameAsHome = watch("current_address_same_as_home");
 
   return (
     <FormSection
@@ -222,46 +237,40 @@ export function PersonalSection() {
         </div>
       </div>
 
+      {/*
+        PR C2 (2026-09-09): the two addresses. City and province are no longer typed — they
+        are ancestors of the barangay the cascade resolves, filled server-side by
+        `psgc_resolve()`. Only the street line and the postal code are still typed, which is
+        exactly what Ethan asked for.
+      */}
       <div className="flex flex-col gap-5">
         <h3 className="text-brand-ink text-base font-semibold">Home Address</h3>
+        <p className="text-muted-foreground -mt-3 text-sm">
+          Your permanent address. Pick each level from the list.
+        </p>
 
-        <Field>
-          <FieldLabel htmlFor="address_line" required>
-            Street address
-          </FieldLabel>
-          <Input
-            id="address_line"
-            autoComplete="street-address"
-            aria-invalid={errors.address_line ? "true" : "false"}
-            {...register("address_line")}
-          />
-          <FieldError message={errors.address_line?.message} />
-        </Field>
+        <PsgcAddressPicker
+          idPrefix="home"
+          regions={regions}
+          value={homeCode ?? ""}
+          onChange={(code) =>
+            setValue("psgc_barangay_code", code, { shouldValidate: true, shouldDirty: true })
+          }
+          error={errors.psgc_barangay_code?.message}
+        />
 
         <div className="grid gap-5 sm:grid-cols-3">
-          <Field>
-            <FieldLabel htmlFor="city_municipality" required>
-              City / municipality
+          <Field className="sm:col-span-2">
+            <FieldLabel htmlFor="address_line" required>
+              House number and street
             </FieldLabel>
             <Input
-              id="city_municipality"
-              autoComplete="address-level2"
-              aria-invalid={errors.city_municipality ? "true" : "false"}
-              {...register("city_municipality")}
+              id="address_line"
+              autoComplete="street-address"
+              aria-invalid={errors.address_line ? "true" : "false"}
+              {...register("address_line")}
             />
-            <FieldError message={errors.city_municipality?.message} />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="province" required>
-              Province
-            </FieldLabel>
-            <Input
-              id="province"
-              autoComplete="address-level1"
-              aria-invalid={errors.province ? "true" : "false"}
-              {...register("province")}
-            />
-            <FieldError message={errors.province?.message} />
+            <FieldError message={errors.address_line?.message} />
           </Field>
           <Field>
             <FieldLabel htmlFor="postal_code" required>
@@ -278,6 +287,72 @@ export function PersonalSection() {
             <FieldError message={errors.postal_code?.message} />
           </Field>
         </div>
+      </div>
+
+      <div className="flex flex-col gap-5">
+        <h3 className="text-brand-ink text-base font-semibold">Current Address</h3>
+        <p className="text-muted-foreground -mt-3 text-sm">
+          Where you actually live while studying — a dorm or boarding house, if that is not your
+          home address.
+        </p>
+
+        <label className="text-brand-body flex items-start gap-3 text-sm leading-relaxed">
+          <Checkbox
+            id="current_address_same_as_home"
+            {...register("current_address_same_as_home")}
+          />
+          <span>My current address is the same as my home address.</span>
+        </label>
+
+        {/*
+          Hidden rather than unmounted when the box is ticked: unmounting would unregister
+          the fields and drop whatever was already typed, so an applicant who ticks the box
+          to check something and unticks it again would find their work gone. The schema
+          ignores these three entirely while the box is ticked.
+        */}
+        {sameAsHome ? null : (
+          <>
+            <PsgcAddressPicker
+              idPrefix="current"
+              regions={regions}
+              value={currentCode ?? ""}
+              onChange={(code) =>
+                setValue("current_psgc_barangay_code", code, {
+                  shouldValidate: true,
+                  shouldDirty: true,
+                })
+              }
+              error={errors.current_psgc_barangay_code?.message}
+            />
+
+            <div className="grid gap-5 sm:grid-cols-3">
+              <Field className="sm:col-span-2">
+                <FieldLabel htmlFor="current_address_line" required>
+                  House number and street
+                </FieldLabel>
+                <Input
+                  id="current_address_line"
+                  aria-invalid={errors.current_address_line ? "true" : "false"}
+                  {...register("current_address_line")}
+                />
+                <FieldError message={errors.current_address_line?.message} />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="current_postal_code" required>
+                  Postal code
+                </FieldLabel>
+                <Input
+                  id="current_postal_code"
+                  inputMode="numeric"
+                  placeholder="1100"
+                  aria-invalid={errors.current_postal_code ? "true" : "false"}
+                  {...register("current_postal_code")}
+                />
+                <FieldError message={errors.current_postal_code?.message} />
+              </Field>
+            </div>
+          </>
+        )}
       </div>
     </FormSection>
   );

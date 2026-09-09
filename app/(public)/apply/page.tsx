@@ -46,7 +46,7 @@ async function listApplyRegions(): Promise<RegionOption[]> {
     const supabase = await createServerSupabase();
     const { data, error } = await supabase
       .from("regions")
-      .select("id, code, name")
+      .select("id, code, name, psgc_code")
       .order("sort_order", { ascending: true });
 
     // An empty/errored read here is not fatal to the page — MembershipSection renders

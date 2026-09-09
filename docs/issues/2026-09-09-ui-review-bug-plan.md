@@ -12,7 +12,7 @@ against the deployment of commit `2ac84de`. (2) A QA pass I ran the same day aga
 | **PR A** — bug pack (A1–A10) | **shipped** |
 | **PR B** — audit log readable by CRRD | **shipped** (`0053`, ADR 0015) |
 | **PR C1** — optional social links | **shipped** (`0055`) |
-| **PR C2** — PSGC address cascade | **BLOCKED** — see below. The region → university half shipped under PR E. |
+| **PR C2** — PSGC address cascade | **shipped** (`0057`–`0059`) — Ethan supplied the PSA workbook on 2026-09-09 |
 | **PR D** — draft autosave | **shipped** (+ privacy notice `v3`, `0056`) |
 | **PR E** — performance | **shipped** (the three remaining code items) |
 | **PR F** — orphan reconciliation | **code was already complete; the gap is two GitHub secrets.** Documented, and the job now logs which host it swept. |
@@ -93,7 +93,7 @@ already has. The RR contact view keeps Facebook only (ADR 0011 scope) unless ask
 
 ---
 
-## PR C2 — addresses become a PSGC cascade ⛔ blocked
+## PR C2 — addresses become a PSGC cascade ✅ shipped
 
 Replaces the typed City and Province fields:
 
@@ -119,26 +119,50 @@ resident thinks in districts). **Home and current address**, with a "same as hom
   required, ambiguous left null with a printed report. Old rows have no barangay stored,
   so the backfill can only ever fill province and city.
 
-### Why this is blocked, and what it is blocked ON
+### Unblocked and shipped — Ethan supplied the workbook, 2026-09-09
 
-**psa.gov.ph still answers 403 to a scripted request** (re-checked 2026-09-09 with a
-browser user-agent; unrelated hosts answer 200 from the same machine, so it is the PSA
-refusing automation, not a network problem). There is no dataset to load.
+psa.gov.ph still refuses a scripted download (403), so the data arrived the only way it
+could: **`PSGC Q4 2025 Updates.xlsx`, publication date 31 December 2025, downloaded by
+hand.** `scripts/generate-psgc-migration.py` turns it into `0057_psgc_locations.sql` —
+**43,769 rows**: 18 regions, 84 provinces, 149 cities, 1,493 municipalities, 14
+sub-municipalities and 42,011 barangays.
 
-**This will not be worked around.** The alternatives are to fabricate the rows or to pull
-them from an unofficial mirror and pin it as the org's authoritative national geography.
-Both are worse than waiting: a wrong barangay list is invisible to every test in this repo
-— it type-checks, it renders, the cascade works — and surfaces years later as a scholar
-whose address does not exist. Which mirror (if any) is trustworthy is a data-quality call
-for the project head, not an implementation detail.
+The generator is committed alongside the SQL so a new quarter is reproducible rather than
+trusted, and the publication date is pinned in the migration header so "which PSGC is this
+address from?" has an answer years later.
 
-**What is needed:** the PSGC publication downloaded once by hand from psa.gov.ph, dropped
-in the repo with its release date, and the migration generated from it.
+**One table, self-referencing, not four.** The cascade asks for "the children of what was
+just picked" and stops at barangays — which handles the two places the hierarchy is NOT
+four levels deep, with no special case in the application:
 
-**What shipped in the meantime**, because it is the same pattern and needed no new data:
-the `/apply` and `/renew` university select is now filtered by the region chosen on the
-same step — 445 options down to ~20, and the region moved above the school so the cascade
-reads in order (PR E below). PR C2 extends that shape rather than replacing it.
+- **NCR has no provinces.** Its cities hang directly off the region (verified: zero
+  province rows under PSA 13).
+- **The City of Manila has fourteen sub-municipalities** — Tondo, Binondo, Sampaloc … —
+  between city and barangay. Ethan's own example was "Binondo in Manila", and Binondo's
+  barangays are "Barangay 287" through "Barangay 296": collapse that level away and a
+  Manila resident is choosing between bare numbers. His other example, Addition Hills, is
+  a barangay directly under Mandaluyong. Both are asserted by name in pgTAP `078`.
+
+**The form sends a barangay code and nothing else about the place.** Every name is
+resolved server-side by `psgc_resolve()` and written by `apply_address_to_person()`
+(0059), which is the single address write path for `approve_application`,
+`approve_renewal` and `update_member_record`. `city_municipality` and `province` left both
+the submit schema and the patch whitelist — a client, including an admin on the edit
+screen, can no longer state a place name at all, so a stored code and a stored name cannot
+disagree.
+
+**The mapping that would have been silently wrong:** PSA `16` is Region XIII (Caraga),
+which we seed as `R13`. A mapping written from the numbers alone files every Caraga
+address in a region that does not exist, and nothing else in this system compares an
+address against anything. Asserted in `078`.
+
+**Backfill:** deliberately timid, and it recovers only the CITY CODE for legacy rows —
+they hold a typed province and city and no barangay at all, so there is no leaf to
+reconstruct. Exact normalised match, the "City of X" / "X City" inversion handled, the
+typed province used to disambiguate, and **anything ambiguous is left null**. There are
+four San Isidros in Nueva Ecija alone; guessing writes a wrong address that looks exactly
+like a right one, and a null is visibly missing where a wrong barangay is not. The typed
+names are not rewritten either — what the scholar attested to stays.
 
 ---
 

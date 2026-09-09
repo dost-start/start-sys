@@ -50,7 +50,7 @@ const migration = (file: string): string =>
 // 1 — the whitelist matches update_member_record()
 // ═════════════════════════════════════════════════════════════════════════════
 
-describe("MEMBER_PATCHABLE_KEYS mirrors 0055's whitelist (update_member_record, latest)", () => {
+describe("MEMBER_PATCHABLE_KEYS mirrors 0059's whitelist (update_member_record, latest)", () => {
   /**
    * Pull the `k not in ( ... )` list out of `update_member_record()`. Scoped to the text
    * after `where k not in (` so the function's other quoted literals cannot be swept in.
@@ -59,12 +59,12 @@ describe("MEMBER_PATCHABLE_KEYS mirrors 0055's whitelist (update_member_record, 
     // 0055 holds the LATEST `create or replace` of this function (PR C1). Parsing an
     // older migration would compare the schema against a superseded whitelist and pass
     // while the live function disagreed — which is the exact drift this test exists for.
-    const sql = migration("0055_optional_social_accounts.sql");
+    const sql = migration("0059_address_write_paths.sql");
     const marker = "where k not in (";
     const start = sql.indexOf(marker);
     if (start === -1) {
       throw new Error(
-        "0055 no longer contains update_member_record()'s `where k not in (` whitelist that " +
+        "0059 no longer contains update_member_record()'s `where k not in (` whitelist that " +
           "this test parses. Restore it, or the schema/SQL parity is unguarded.",
       );
     }
@@ -84,9 +84,21 @@ describe("MEMBER_PATCHABLE_KEYS mirrors 0055's whitelist (update_member_record, 
     expect([...MEMBER_PATCHABLE_KEYS].sort()).toEqual(parsed);
   });
 
-  it("has twenty-two keys and no duplicates", () => {
-    expect(MEMBER_PATCHABLE_KEYS).toHaveLength(22);
-    expect(new Set(MEMBER_PATCHABLE_KEYS).size).toBe(22);
+  it("has twenty-five keys and no duplicates", () => {
+    expect(MEMBER_PATCHABLE_KEYS).toHaveLength(25);
+    expect(new Set(MEMBER_PATCHABLE_KEYS).size).toBe(25);
+  });
+
+  it("PR C2 — the derived place NAMES are not patchable, only the codes", () => {
+    // `city_municipality` and `province` left the whitelist in 0059. They are resolved
+    // from the barangay code by psgc_resolve(); allowing a direct patch would let the
+    // stored city disagree with the stored city code with nothing to catch it.
+    for (const derived of ["city_municipality", "province", "barangay", "region_name"]) {
+      expect(MEMBER_PATCHABLE_KEYS as readonly string[]).not.toContain(derived);
+    }
+    for (const owned of ["psgc_barangay_code", "current_psgc_barangay_code"]) {
+      expect(MEMBER_PATCHABLE_KEYS as readonly string[]).toContain(owned);
+    }
   });
 
   it("names none of the columns that must never be patchable", () => {

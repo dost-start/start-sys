@@ -50,6 +50,23 @@ export const SENSITIVE_KEYS = [
   "instagram_account",
   "github_account",
   "linkedin_account",
+  // 0058 (PR C2) — the two PSGC-coded addresses. The CODES are here beside the names
+  // because a barangay code identifies a household as precisely as the barangay does;
+  // scrubbing the name and shipping the code would be scrubbing nothing.
+  "barangay",
+  "sub_municipality",
+  "region_name",
+  "psgc_barangay_code",
+  "psgc_city_code",
+  "current_address_line",
+  "current_barangay",
+  "current_sub_municipality",
+  "current_city_municipality",
+  "current_province",
+  "current_region_name",
+  "current_postal_code",
+  "current_psgc_barangay_code",
+  "current_psgc_city_code",
   // applications / renewal_submissions
   "applicant_email",
   "payload",

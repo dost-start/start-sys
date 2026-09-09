@@ -35,10 +35,11 @@ import {
 } from "@/lib/applications/schema";
 
 /**
- * The eighteen keys, transcribed independently from
+ * The twenty-one keys, transcribed independently from
  * `supabase/migrations/0041_approve_and_record_v2.sql` as extended by
- * `0055_optional_social_accounts.sql`, rather than imported — so the assertion below
- * compares two sources instead of comparing the module to itself.
+ * `0055_optional_social_accounts.sql` and `0059_address_write_paths.sql`
+ * (whose `apply_address_to_person()` reads the seven address keys), rather than imported —
+ * so the assertion below compares two sources instead of comparing the module to itself.
  */
 const KEYS_APPROVE_APPLICATION_READS = [
   "birthdate",
@@ -56,9 +57,12 @@ const KEYS_APPROVE_APPLICATION_READS = [
   "university_id",
   "program_id",
   "address_line",
-  "city_municipality",
-  "province",
   "postal_code",
+  "psgc_barangay_code",
+  "current_address_same_as_home",
+  "current_address_line",
+  "current_postal_code",
+  "current_psgc_barangay_code",
 ];
 
 /** A complete, valid submission. Every rejection case below mutates exactly one field. */
@@ -73,8 +77,11 @@ const VALID = {
   contact_number: "09171234567",
   facebook_account: "https://www.facebook.com/maria.delacruz",
   address_line: "159 Fixture St.",
-  city_municipality: "Quezon City",
-  province: "Metro Manila",
+  // PR C2: a real PSGC barangay code — 13-806-02-001 is "Barangay 287" in Binondo, the
+  // sub-municipality of the City of Manila that Ethan used as his own example. Chosen
+  // deliberately over a flat four-level address because it exercises the deepest chain.
+  psgc_barangay_code: "1380602001",
+  current_address_same_as_home: true,
   postal_code: "1100",
   scholarship_award: "ra_7687",
   // A6: derived, never a literal — the accepted window rolls forward every 1 July,
@@ -101,14 +108,14 @@ function firstIssuePath(input: unknown): string {
 }
 
 describe("payload keys match every key approve_application() reads", () => {
-  it("APPLICATION_PAYLOAD_KEYS is exactly the eighteen keys approve_application() reads (0041 + 0055)", () => {
+  it("APPLICATION_PAYLOAD_KEYS is exactly the twenty-one keys the approval path reads (0041 + 0055 + 0059)", () => {
     expect([...APPLICATION_PAYLOAD_KEYS].sort()).toEqual(
       [...KEYS_APPROVE_APPLICATION_READS].sort(),
     );
-    expect(APPLICATION_PAYLOAD_KEYS).toHaveLength(18);
+    expect(APPLICATION_PAYLOAD_KEYS).toHaveLength(21);
   });
 
-  it("every one of those eighteen is a field the form actually collects", () => {
+  it("every one of those twenty-one is a field the form actually collects", () => {
     const formFields = Object.keys(applicationSubmitSchema.shape);
     for (const key of APPLICATION_PAYLOAD_KEYS) {
       expect(formFields).toContain(key);
@@ -122,9 +129,13 @@ describe("payload keys match every key approve_application() reads", () => {
     "instagram_account",
     "github_account",
     "linkedin_account",
+    // PR C2: null whenever "same as home" is ticked, which is the fixture's case.
+    "current_address_line",
+    "current_postal_code",
+    "current_psgc_barangay_code",
   ]);
 
-  it("buildApplicationPayload emits all eighteen, and the fifteen required ones non-null", () => {
+  it("buildApplicationPayload emits all twenty-one, and the required ones non-null", () => {
     const parsed = applicationSubmitSchema.parse(VALID);
     const payload = buildApplicationPayload(parsed, "2026-09-03T01:00:00.000Z");
 
@@ -169,29 +180,68 @@ describe("payload keys match every key approve_application() reads", () => {
     expect(payload["certified_accuracy_at"]).toBe("2026-09-03T01:00:00.000Z");
   });
 
-  it("carries the home address block again (ADR 0013), but never a school ID", () => {
-    // ADR 0013, 2026-09-06 ("Consequences"): home address returns to the form as four
-    // required keys. school_id_no is removed from every screen and was never a field
-    // this schema collects — it is not asserted absent from the payload as "gone", it
-    // simply never existed on this form to begin with.
+  it("carries the typed half of the address and the barangay CODE, never a place name", () => {
+    // PR C2: the form sends the street line, the postal code and a PSGC code. It does NOT
+    // send `city_municipality` or `province` — those are resolved from the code by
+    // `psgc_resolve()` (0058) and written by `apply_address_to_person()` (0059), so a
+    // client can no longer state a place name at all.
     const parsed = applicationSubmitSchema.parse(VALID);
     const payload = buildApplicationPayload(parsed, "2026-09-03T01:00:00.000Z");
     expect(payload["address_line"]).toBe("159 Fixture St.");
-    expect(payload["city_municipality"]).toBe("Quezon City");
-    expect(payload["province"]).toBe("Metro Manila");
     expect(payload["postal_code"]).toBe("1100");
-    for (const gone of ["school", "school_id_no"]) {
+    expect(payload["psgc_barangay_code"]).toBe("1380602001");
+    for (const gone of ["school", "school_id_no", "city_municipality", "province"]) {
       expect(Object.keys(payload)).not.toContain(gone);
     }
   });
 
-  it("requires all four home-address fields, and validates the postal code shape", () => {
-    for (const field of ["address_line", "city_municipality", "province", "postal_code"]) {
+  it("requires the typed home fields and the home barangay, and checks the postal shape", () => {
+    for (const field of ["address_line", "postal_code", "psgc_barangay_code"]) {
       expect(firstIssuePath({ ...VALID, [field]: "" })).toBe(field);
     }
     expect(firstIssuePath({ ...VALID, postal_code: "abcd" })).toBe("postal_code");
     expect(firstIssuePath({ ...VALID, postal_code: "110" })).toBe("postal_code");
+    // Shape only — that the code EXISTS is the database's job (an FK plus psgc_resolve).
+    expect(firstIssuePath({ ...VALID, psgc_barangay_code: "138060200" })).toBe(
+      "psgc_barangay_code",
+    );
     expect(applicationSubmitSchema.safeParse({ ...VALID, postal_code: "1100" }).success).toBe(true);
+  });
+
+  it("PR C2 — a current address that DIFFERS from home must be complete", () => {
+    const differs = { ...VALID, current_address_same_as_home: false };
+    // All three parts are demanded, each on its own field so the applicant is told which.
+    expect(firstIssuePath(differs)).toBe("current_address_line");
+    expect(firstIssuePath({ ...differs, current_address_line: "12 Dorm Rd." })).toBe(
+      "current_postal_code",
+    );
+    expect(
+      firstIssuePath({
+        ...differs,
+        current_address_line: "12 Dorm Rd.",
+        current_postal_code: "1101",
+      }),
+    ).toBe("current_psgc_barangay_code");
+
+    const complete = applicationSubmitSchema.safeParse({
+      ...differs,
+      current_address_line: "12 Dorm Rd.",
+      current_postal_code: "1101",
+      current_psgc_barangay_code: "1380500001", // Addition Hills, Mandaluyong
+    });
+    expect(complete.success).toBe(true);
+  });
+
+  it("PR C2 — ticking 'same as home' means the current fields are not demanded", () => {
+    // The tick is the claim; `apply_address_to_person()` copies home across. Demanding
+    // the fields anyway would make the box do nothing.
+    expect(applicationSubmitSchema.safeParse(VALID).success).toBe(true);
+    const payload = buildApplicationPayload(
+      applicationSubmitSchema.parse(VALID),
+      "2026-09-03T01:00:00.000Z",
+    );
+    expect(payload["current_address_same_as_home"]).toBe("true");
+    expect(payload["current_psgc_barangay_code"]).toBeNull();
   });
 
   it("never duplicates the applicant's identity columns into the payload", () => {

@@ -17,7 +17,7 @@ plus the QA pass against `https://start-sys-pi.vercel.app`, worked through as PR
 | **B** — audit log readable by CRRD | **shipped** | `0053` + ADR 0015. **Needs the migration applied before it takes effect.** |
 | **A9** — Special Advisor | **shipped** | Enforced in the database (`0054`), not just hidden |
 | **C1** — optional social links | **shipped** | `0055` |
-| **C2** — PSGC address cascade | **BLOCKED** | psa.gov.ph refuses scripted download. The university half shipped under PR E. |
+| **C2** — PSGC address cascade | **shipped** | `0057`–`0059`. Unblocked when Ethan supplied the PSA workbook, 2026-09-09. |
 | **D** — draft autosave | **shipped** | + privacy notice `v3` (`0056`) |
 | **E** — performance | **shipped** | Three code items; the region move already fixed the big one |
 | **F** — orphan reconciliation | **code was already complete** | The gap is two GitHub secrets only Ethan can set |
@@ -250,23 +250,75 @@ Row/Insert/Update output, because there is no local Postgres to regenerate from.
 
 ---
 
-## PR C2 — the PSGC address cascade: BLOCKED
+## PR C2 — the PSGC address cascade (unblocked 2026-09-09)
 
-**psa.gov.ph still answers 403 to a scripted request** (re-checked 2026-09-09 with a browser
-user-agent; unrelated hosts answer 200 from the same machine). There is no dataset to load.
+Ethan supplied `PSGC Q4 2025 Updates.xlsx` — PSA, publication date **31 December 2025** —
+which is the only way it could arrive: psa.gov.ph still answers 403 to a scripted request.
 
-**This will not be worked around.** The alternatives are to fabricate ~44,000 barangay rows
-or to pull them from an unofficial mirror and pin it as the org's authoritative national
-geography. Both are worse than waiting: a wrong barangay list type-checks, renders, and
-passes every test in this repo, then surfaces years later as a scholar whose address does
-not exist.
+`scripts/generate-psgc-migration.py` (committed) turns it into `0057_psgc_locations.sql`:
+**43,769 rows** — 18 regions, 84 provinces, 149 cities, 1,493 municipalities, 14
+sub-municipalities, 42,011 barangays — loaded with `COPY … FROM stdin`. The generator ships
+with the SQL so a new quarter is reproducible rather than trusted, and the publication date
+is pinned in the header so "which PSGC is this address from?" has an answer in 2031.
 
-**Needed:** the PSGC publication downloaded once by hand, dropped in the repo with its
-release date. The migration is generated from it.
+**The 10-digit code is `RR PPP MM BBB`** — verified against the file rather than assumed,
+by resolving every row's parent and failing the build if any is orphaned. All 43,769
+resolve.
 
-**What shipped instead**, being the same pattern and needing no new data: the university
-select is now filtered by the region chosen on the same step (see PR E). PR C2 extends that
-shape rather than replacing it.
+### One self-referencing table, not four
+
+The cascade asks for "the children of what was just picked" and stops when they are
+barangays. That is not tidiness — it is what handles the two places the hierarchy is **not**
+four levels deep, with no special case in the application:
+
+- **NCR has no provinces.** Its cities hang directly off the region.
+- **The City of Manila has fourteen sub-municipalities** between city and barangay.
+  Ethan's own example was "Binondo in Manila", and Binondo's barangays are "Barangay 287"
+  through "Barangay 296" — collapse that level away and a Manila resident is choosing
+  between bare numbers. His other example, **Addition Hills**, is a barangay directly under
+  Mandaluyong. Both are asserted by name in pgTAP `078`, because if a later quarter
+  reorganised either, the picker would silently render the wrong number of steps.
+
+### The form cannot name a place any more
+
+It sends a **barangay code**. Every place name is resolved server-side by `psgc_resolve()`
+and written by `apply_address_to_person()` (`0059`) — the single address write path for
+`approve_application`, `approve_renewal` and `update_member_record`.
+
+`city_municipality` and `province` left the submit schema **and** the admin patch whitelist.
+That second half matters: letting a reviewer type a city beside a code that says otherwise
+would file a member in a city they do not live in, with nothing downstream to notice.
+
+**Two addresses**, per the 2026-09-08 meeting: home, and the current address a scholar
+boards at while studying, with a "same as home" tick. The tick is the claim — the database
+copies home across, so the stored current address is a complete readable address rather
+than a pointer, and a client that ticks the box and sends a different current address is
+ignored.
+
+### The mapping that would have been silently wrong
+
+**PSA `16` is Region XIII (Caraga), which we seed as `R13`.** A mapping written from the
+numbers alone files every Caraga address in a region that does not exist — and nothing in
+this system compares an address against anything, so nothing would have said so. It is
+asserted in `078` with that reasoning written above it.
+
+### Backfill: timid on purpose
+
+Legacy rows hold a typed province and city and **no barangay at all**, so there is no leaf
+to reconstruct — the most recoverable is the city code. Exact normalised match, the "City of
+X" / "X City" inversion handled, the typed province used to disambiguate, and **anything
+ambiguous left null**. There are four San Isidros in Nueva Ecija alone; guessing writes a
+wrong address that looks exactly like a right one, and a null is visibly missing where a
+wrong barangay is not. The typed names are not rewritten either — what the scholar attested
+to stays what they attested to.
+
+### Also caught while doing this
+
+`029_role_matrix_columns.sql` promised in its own header that "a twentieth sensitive column
+FAILS this test", but every assertion in it was hand-written by column name — so the fifteen
+columns this PR added to `people` would have sailed past unasserted. It now derives the
+readable set from the catalog, so a new column is denied to `authenticated` until someone
+argues it in. That is PRD Success Metric 8 actually enforced rather than described.
 
 ---
 
@@ -379,6 +431,9 @@ logs.
 | `0054_special_advisor_exec_only.sql` | `SPECIAL_ADVISOR` narrows back to `exec_admin` (CBL Art. X) |
 | `0055_optional_social_accounts.sql` | Three optional social columns, registered sensitive; three functions replaced |
 | `0056_privacy_notice_v3.sql` | Privacy notice `v3` — storage correction + the device-draft disclosure |
+| `0057_psgc_locations.sql` | **Generated.** The PSA's PSGC as 43,769 rows + `regions.psgc_code` |
+| `0058_addresses_psgc.sql` | Two PSGC-coded addresses on `people`, the registry rows, `psgc_resolve()`, the timid backfill |
+| `0059_address_write_paths.sql` | `apply_address_to_person()` and the three write paths rewired through it |
 
 ⚠️ **Deploy order matters.** `0055` must be applied **before** the app is deployed. The
 member edit form now sends the three new keys, and the pre-`0055` `update_member_record()`
@@ -410,7 +465,7 @@ afterwards — but do not reverse it.
    array; nothing else changes. Blocks the visual half of A7.
 2. **The two GitHub secrets** — `APP_BASE_URL` (the **live** host) and `JOB_SHARED_SECRET`.
    Until then abandoned drafts keep their PII against a published retention promise.
-3. **The PSGC workbook**, downloaded by hand. Blocks PR C2 entirely.
+3. ~~The PSGC workbook~~ — **supplied 2026-09-09; PR C2 shipped.**
 4. **Confirm `DOCUMENT_STORE=supabase_storage`** is set on the org deployment — the privacy
    notice now states it as fact.
 5. **Delete the Sydney project** `krizhwugzrnlkxsixnde` once the org deployment is confirmed;

@@ -13,9 +13,14 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // ⚠ THE CONTRACT THAT MUST NOT DRIFT — APPLICATION_PAYLOAD_KEYS
 // ═══════════════════════════════════════════════════════════════════════════════
-// `approve_application()` (0041, extended by 0055) reads EIGHTEEN keys out of
-// `applications.payload` with `payload->>'…'` and writes them onto the new `people` and
-// `memberships` rows. Those eighteen strings are spelled HERE and nowhere else.
+// `approve_application()` (0041, extended by 0055) and `apply_address_to_person()` (0059,
+// which it calls) read TWENTY-ONE keys out of `applications.payload` with `payload->>'…'`
+// and write them onto the new `people` and `memberships` rows. Those twenty-one strings
+// are spelled HERE and nowhere else.
+//
+// PR C2 (2026-09-09) removed `city_municipality` and `province` — a client no longer
+// supplies a place NAME at all — and added the two barangay codes plus the current
+// address's typed parts.
 //
 // PR C1 (2026-09-09) added the last three: `instagram_account`, `github_account`,
 // `linkedin_account` — optional, but on the same contract, because a key that is only
@@ -135,6 +140,36 @@ export const DECLARED_ALLOWED_MIME = [
 /** 10MB. A phone photo of a Certificate of Registration is comfortably under this. */
 export const MAX_DECLARED_PROOF_BYTES = 10 * 1024 * 1024;
 
+/**
+ * A PSGC barangay code: the PSA's ten digits, and the leaf of the address cascade.
+ *
+ * Shape only. That the code EXISTS and is genuinely a barangay is checked by the database
+ * — a foreign key to `psgc_locations` plus `psgc_resolve()`, which raises on a code that
+ * names a city. Re-checking existence here would mean shipping 43,769 rows to the browser
+ * to answer a question the database answers for free.
+ */
+const PSGC_CODE_RE = /^\d{10}$/;
+
+const psgcBarangayCode = (message: string) =>
+  z.string().trim().min(1, message).regex(PSGC_CODE_RE, message);
+
+/** The same, optional — the current address is only required when it differs from home. */
+const optionalPsgcBarangayCode = () =>
+  z
+    .string()
+    .trim()
+    .regex(PSGC_CODE_RE, "Select the barangay from the list")
+    .optional()
+    .or(z.literal("").transform(() => undefined));
+
+const optionalPostalCode = () =>
+  z
+    .string()
+    .trim()
+    .regex(POSTAL_CODE_RE, "Enter a 4-digit postal code")
+    .optional()
+    .or(z.literal("").transform(() => undefined));
+
 const requiredText = (label: string, max = 120) =>
   z
     .string()
@@ -252,14 +287,33 @@ const personalShape = {
     isLinkedinProfileUrl,
     "Enter the link to your LinkedIn profile, e.g. linkedin.com/in/yourname",
   ),
-  // ADR 0013 (2026-09-06, "Consequences"): home address returns to the form. Required,
-  // not legacy-optional this time — `approve_application()` (0041) already reads all
-  // four `payload->>'…'` keys onto `people`, and they were simply null for every
-  // SRS-era submission until now.
+  // ── The two addresses (PR C2, 2026-09-09) ─────────────────────────────────
+  //
+  // Ethan: "let's make it drop down with drop down filter instead of typing it … the only
+  // thing that they will type is their address and postal code." So `city_municipality`
+  // and `province` are GONE from this form — they are derived server-side from the
+  // barangay code by `psgc_resolve()` (0058) and written by `apply_address_to_person()`
+  // (0059). A client cannot supply a place name at all any more, which is the point: a
+  // code and a name that disagree would be undetectable, and "Q.C." / "Quezon City" /
+  // "quezon city" were three different cities as far as any filter was concerned.
+  //
+  // ⚠ THE STORED SHAPE IS WIDER THAN THIS. `people` keeps the resolved names next to the
+  // codes so exports and the RR contact view need no join, and so a later PSA rename
+  // cannot re-word a member's historical record. Those columns are written by the
+  // database, never by this schema — see 0058's header.
   address_line: requiredText("Street address", 200),
-  city_municipality: requiredText("City or municipality", 120),
-  province: requiredText("Province", 120),
   postal_code: z.string().trim().regex(POSTAL_CODE_RE, "Enter a 4-digit postal code"),
+  psgc_barangay_code: psgcBarangayCode("Select your home barangay"),
+
+  // The 2026-09-08 meeting put the CURRENT address back on the form: where the scholar
+  // actually lives while studying, which for most of them is not home. The tick is a
+  // claim, not a shortcut — `apply_address_to_person()` copies home into current when it
+  // is set, so the stored current address is always a complete, readable address rather
+  // than a pointer to another column.
+  current_address_same_as_home: z.coerce.boolean(),
+  current_address_line: optionalText(200),
+  current_postal_code: optionalPostalCode(),
+  current_psgc_barangay_code: optionalPsgcBarangayCode(),
 };
 
 const academicShape = {
@@ -340,7 +394,22 @@ export const applicationSubmitSchema = z
     ...membershipShape,
     ...consentShape,
   })
-  .strict();
+  .strict()
+  // PR C2: "same as home" unticked means the current address is a real, separate address
+  // and all three of its parts are required. Ticked means they are ignored entirely — the
+  // database copies home across, so a half-filled current address left behind by someone
+  // who ticked the box afterwards cannot be stored.
+  .superRefine((value, ctx) => {
+    if (value.current_address_same_as_home) return;
+    const required = [
+      ["current_address_line", "Enter your current street address"],
+      ["current_postal_code", "Enter a 4-digit postal code"],
+      ["current_psgc_barangay_code", "Select your current barangay"],
+    ] as const;
+    for (const [field, message] of required) {
+      if (!value[field]) ctx.addIssue({ code: "custom", path: [field], message });
+    }
+  });
 
 export type ApplicationSubmitInput = z.infer<typeof applicationSubmitSchema>;
 
@@ -429,9 +498,12 @@ export const APPLICATION_PAYLOAD_KEYS = [
   "university_id",
   "program_id",
   "address_line",
-  "city_municipality",
-  "province",
   "postal_code",
+  "psgc_barangay_code",
+  "current_address_same_as_home",
+  "current_address_line",
+  "current_postal_code",
+  "current_psgc_barangay_code",
 ] as const;
 export type ApplicationPayloadKey = (typeof APPLICATION_PAYLOAD_KEYS)[number];
 
@@ -447,7 +519,7 @@ export type ApplicationPayload = Record<string, string | number | null>;
 /**
  * Build the `applications.payload` jsonb from a validated body.
  *
- * Contains the eighteen keys above VERBATIM, plus `middle_name` and `suffix` (0041
+ * Contains the twenty-one keys above VERBATIM, plus `middle_name` and `suffix` (0041
  * copies both onto `people` too, though they are not part of the payload contract
  * this module asserts) so that nothing an applicant typed is thrown away, plus the
  * consent record.
@@ -480,9 +552,15 @@ export function buildApplicationPayload(
     university_id: data.university_id,
     program_id: data.program_id,
     address_line: data.address_line,
-    city_municipality: data.city_municipality,
-    province: data.province,
     postal_code: data.postal_code,
+    psgc_barangay_code: data.psgc_barangay_code,
+    // Emitted as a STRING because `ApplicationPayload` is scalar-by-construction and
+    // `apply_address_to_person()` reads it with `->>` and casts. A boolean in the jsonb
+    // would read back as `"true"` either way; being explicit keeps the two in step.
+    current_address_same_as_home: data.current_address_same_as_home ? "true" : "false",
+    current_address_line: data.current_address_line ?? null,
+    current_postal_code: data.current_postal_code ?? null,
+    current_psgc_barangay_code: data.current_psgc_barangay_code ?? null,
     middle_name: data.middle_name ?? null,
     suffix: data.suffix ?? null,
     consent_privacy_notice_version: data.consent_privacy_notice_version,

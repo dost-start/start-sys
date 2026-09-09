@@ -27,9 +27,28 @@ Local gate green: `pnpm typecheck`, `pnpm check`, `pnpm test` (**885 passing**),
 `pnpm build`, `node scripts/audit-client-bundle.mjs` (PASS).
 
 **Not runnable on this machine: `pnpm db:lint` and `pnpm test:rls`** — there is no Docker
-here, so migrations `0053`–`0056` have never been applied to a Postgres. CI does both
-against an ephemeral database. Every pgTAP expectation that had to move is listed below,
-and every plan count was checked by hand against its assertion count.
+here, so migrations `0053`–`0056` were never applied to a Postgres locally. CI ran both
+against an ephemeral database on [PR #22](https://github.com/dost-start/start-sys/pull/22).
+
+**CI is green on all four jobs**, second run: `db` (supabase lint + the full pgTAP suite +
+the member-ID race), `e2e` (Playwright smoke), `js`, and `types-drift`.
+
+The first run found six failures and every one of them was an expected count this branch's
+own additions had moved — worth recording, because they are the checks earning their keep:
+
+- `028` and `033` — `sensitive_column_registry` is 26 rows, not 23 (`0055` registers three).
+- `093` — three privacy notice versions, not two, and the server now stamps `v3` over a
+  client-supplied `v0` (`0056`).
+- `e2e` — **the interesting one.** A4's visually-hidden " (required)" changes each required
+  field's *accessible name*, which is what `getByLabel` matches on, so `/^sex$/`,
+  `/^province$/`, `/^university$/` and `/^program$/` stopped matching and the spec failed
+  three helpers later as a bounced submission rather than at the field it could not find.
+  The four matchers lost their trailing `$` and kept the leading anchor, which is the half
+  actually doing work. The claim in `field.tsx` that e2e was unaffected was wrong and is
+  corrected there.
+
+`068`, `075` and `021` — the audit-log widening and the Special Advisor narrowing — passed
+on the **first** run, as did `types-drift` against the hand-edited `database.types.ts`.
 
 ---
 

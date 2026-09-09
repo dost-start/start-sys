@@ -312,6 +312,44 @@ wrong address that looks exactly like a right one, and a null is visibly missing
 wrong barangay is not. The typed names are not rewritten either — what the scholar attested
 to stays what they attested to.
 
+### What CI caught that no local check could
+
+There is no Docker on this machine, so `0057`–`0059` never met a Postgres before they were
+pushed. Six rounds, and every failure is worth keeping rather than quietly fixing away —
+each one is a rule about this stack that is not written down anywhere else.
+
+1. **`COPY … FROM stdin` cannot be used in a Supabase migration.** It needs the psql
+   *frontend protocol* to stream rows after the statement; the CLI applies migrations over
+   an ordinary connection and the server answers `unexpected message type 0x50 during COPY
+   from stdin (08P01)`. `supabase db reset` uses psql and would have accepted it — so this
+   is a defect that only ever appears in the path that matters. Now 88 batched INSERTs.
+2. **A plpgsql `record` that was never assigned raises on field access.** With no address in
+   the payload — an admin patching a phone number, a fixture with no address —
+   `apply_address_to_person` blew up on `v_home.city_code` and took all three write paths
+   with it. Twelve scalars now; scalars are NULL until assigned, which is what the
+   coalesces wanted anyway.
+3. **`regions.psgc_code` as `NOT NULL` fought a test that already existed.** `021` asserts
+   tech_admin may add a nineteenth region, and a region the PSA has not published has no
+   code to give it. Nullable, `UNIQUE` kept — that is the half that matters, since two
+   regions sharing a code would split a region's members between two identical cascade
+   entries.
+4. **`people.region_name` collided with `v_member_directory.region_name`**, which `018` and
+   `066` both forbid. They were right to: two different regions under one name in one system
+   is how somebody eventually reads or scrubs the wrong one. It is `address_region` now,
+   which is also just the better name.
+5. **A Server Component cannot CALL a function exported from a `"use client"` module.** It
+   may render such a component; invoking one fails at runtime with *"Attempted to call
+   toPsgcRegions() from the server"*. `tsc` and `pnpm build` both pass on this — it is a
+   runtime boundary, not a type one — so only e2e found it. The helper moved to a module
+   with neither directive, which is the only shape a client form and a server page can share.
+6. **`.gitignore`'s `node_modules/` does not match a `node_modules` SYMLINK.** A trailing
+   slash matches directories only, and an agent worktree borrowing the main checkout's
+   install creates a symlink. CI failed before running anything, on `ENOTDIR`. Both forms
+   are ignored now, with the reason.
+
+Final state: **db, e2e, js and types-drift all green**, including the new `078` and the
+full `/apply` flow driving the cascade in a real browser.
+
 ### Also caught while doing this
 
 `029_role_matrix_columns.sql` promised in its own header that "a twentieth sensitive column

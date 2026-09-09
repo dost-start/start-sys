@@ -262,10 +262,10 @@ const pendingOnly = (rows: ApplicationRow[]) => rows.filter((r) => r.status === 
 // "Degree program", "Year level", "Expected year of graduation", "Region". If a label
 // changes, it changes in one place here.
 //
-// THE FORM IS FOUR STEPS (brand restyle, 2026-09-08): Personal → Scholarship & school →
-// Documents → Review & submit, over ONE <form>. Each step renders only its own fields, so
+// THE FORM IS FOUR STEPS (brand restyle, 2026-09-08): Personal → Scholarship & School →
+// Documents → Review & Submit, over ONE <form>. Each step renders only its own fields, so
 // the helpers below fill a step, click Next, and assert the stepper actually advanced.
-// The stepper's own buttons ("4 Review & submit") sit OUTSIDE the <form>, which is why the
+// The stepper's own buttons ("4 Review & Submit") sit OUTSIDE the <form>, which is why the
 // Next and Submit locators are scoped to it — an unscoped /submit/ would match the stepper.
 
 const applyScreens = {
@@ -400,7 +400,7 @@ type ApplicantFields = {
 };
 
 /**
- * Fill steps 1 (Personal) and 2 (Scholarship & school) and click Next after each, so the
+ * Fill steps 1 (Personal) and 2 (Scholarship & School) and click Next after each, so the
  * page is left on step 3 (Documents) for `attachProof`. Every fill goes through
  * `fillIfPresent`, which dispatches on the tag — `fill()` throws on a <select> — and every
  * fill is asserted to have found its control: a label that stops matching must fail here,
@@ -430,16 +430,21 @@ async function fillApplicationForm(page: Page, applicant: ApplicantFields): Prom
   expect(await selectFirstRealOption(applyScreens.sex(page))).toBe(true);
   await nextStep(page);
 
-  // ── Step 2 — Scholarship & school, then the region ───────────────────────
+  // ── Step 2 — the region FIRST, then scholarship and school ───────────────
   // The SRS choice lists (0037/0038) and the 18 seeded regions, all populated by
   // ordinary anon reads — pick the first real option of each.
+  //
+  // ⚠ ORDER IS LOAD-BEARING (PR E, 2026-09-09). The university select offers only the
+  // schools in the CHOSEN region and is disabled until one is picked, so selecting the
+  // university before the region would find an empty, disabled control. Picking the
+  // region first is also what the form now renders first.
+  expect(await selectFirstRealOption(applyScreens.region(page))).toBe(true);
   expect(await selectFirstRealOption(applyScreens.scholarshipAward(page))).toBe(true);
   expect(await selectFirstRealOption(applyScreens.awardYear(page))).toBe(true);
   expect(await selectFirstRealOption(applyScreens.university(page))).toBe(true);
   expect(await selectFirstRealOption(applyScreens.program(page))).toBe(true);
   expect(await fillIfPresent(applyScreens.yearLevel(page), "2")).toBe(true);
   expect(await fillIfPresent(applyScreens.expectedGradYear(page), "2029")).toBe(true);
-  expect(await selectFirstRealOption(applyScreens.region(page))).toBe(true);
   await nextStep(page);
 
   // ── Step 3 — Documents: the caller attaches the files ────────────────────

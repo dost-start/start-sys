@@ -27,9 +27,15 @@
 // ADR 0005's driver swap does not touch this file.
 //
 // ⚠ CONTENT-TYPE COMES FROM THE STORED `proof_mime_type`, validated against
-// ALLOWED_MIME — never from the provider's response header and never from a query
+// SERVABLE_MIME — never from the provider's response header and never from a query
 // param. A caller-influenced Content-Type on a route that streams user-uploaded bytes is
 // a stored-XSS delivery mechanism.
+//
+// SERVABLE_MIME, not ALLOWED_MIME, and the asymmetry is deliberate: intake is PDF-only
+// since 0060, but rows submitted before that legitimately hold a JPEG, PNG or HEIC, and
+// narrowing what we accept must not retroactively make an already-submitted document
+// unreviewable. The value is still read from the stored column and still checked against
+// a closed server-side list — only the list is the historical one.
 //
 // STATUS CODES: 200, 401, 404, 500. Nothing else (CONVENTIONS §4.4).
 //
@@ -42,7 +48,7 @@
 
 import { NextResponse } from "next/server";
 
-import { DocumentUnavailableError, getProofStream, isAllowedMime } from "@/lib/documents";
+import { DocumentUnavailableError, getProofStream, isServableMime } from "@/lib/documents";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 /** Streams live data under the caller's session; never prerendered, never cached. */
@@ -127,7 +133,18 @@ export async function GET(
   // The stored type is validated BEFORE the audit write, so a corrupt row does not
   // produce a "viewed" record for a view that never happens. An unrecognised stored
   // mime is a data-integrity fault, not a permission fault: 500, not 404.
-  if (storedMime === null || !isAllowedMime(storedMime)) return serverError();
+  //
+  // SERVABLE, not ALLOWED — the distinction matters and is not cosmetic. Intake is
+  // PDF-only since 0060; this row may predate that and hold a JPEG, PNG or HEIC that was
+  // legitimately accepted at the time. Guarding here on `isAllowedMime` would 500 on
+  // every one of those, which is a real applicant's Certificate of Registration becoming
+  // unreviewable because a rule changed after they submitted it. The header is still
+  // taken from the STORED column and still checked against a fixed allowlist, so nothing
+  // about the safety of this line moved — only its width. See `SERVABLE_MIME`.
+  //
+  // After this change the 500 below is unreachable for any legitimately stored value,
+  // which is the point: it now fires only on genuine data corruption.
+  if (storedMime === null || !isServableMime(storedMime)) return serverError();
 
   // ── 4 — the audit write, FAIL CLOSED, before any byte moves ────────────────
   const { error: auditError } = await supabase.rpc("log_document_view", { p_app_id: id });

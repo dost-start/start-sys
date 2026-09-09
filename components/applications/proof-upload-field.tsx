@@ -28,7 +28,7 @@ export type ProofUploadStatus = "idle" | "uploading" | "success" | "error";
 /** Client-side check against the DECLARED limits — a claim, not the authoritative check. See the module header. */
 export function validateProofFile(file: File): string | null {
   if (!(DECLARED_ALLOWED_MIME as readonly string[]).includes(file.type)) {
-    return "Upload a PDF, JPEG, PNG or HEIC file — that is what a phone photo or a scan produces.";
+    return "Only PDF files are accepted. Save or export your document as a PDF, then upload it.";
   }
   if (file.size <= 0) {
     return "That file appears to be empty. Choose a different file.";
@@ -92,7 +92,7 @@ export function ProofUploadField({
         <UploadIcon aria-hidden="true" className="text-brand-label size-5 shrink-0" />
         <span className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-x-2">
           <span className="text-brand-ink text-sm font-medium">Choose a file</span>
-          <span className="text-muted-foreground text-xs">PDF, JPEG, PNG or HEIC · up to 10MB</span>
+          <span className="text-muted-foreground text-xs">PDF only · up to 10MB</span>
         </span>
         <input
           id={inputId}

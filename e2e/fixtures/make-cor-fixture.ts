@@ -24,12 +24,18 @@
 //      compares against `applications.proof_size_bytes` to prove the provider's OWN
 //      metadata — not the client's claim — reached the database (S3-T16).
 //
-// WHAT THESE FILES ARE NOT: decodable images. They carry a byte-exact JFIF header and
-//   an EOI marker with filler in between. That is sufficient and correct for what is
-//   under test — every gate in the system inspects the FIRST BYTES, never the pixels:
-//   `sniffMime()` reads 512 bytes (lib/documents/sniff-mime.ts), and both real drivers
-//   cross-check those against provider metadata. Producing a genuinely encoded 6MB JPEG
-//   would need an image library, which is a runtime dependency added for decoration.
+// WHAT THESE FILES ARE NOT: parseable documents. They carry a byte-exact header and
+//   trailer — `%PDF-1.7`/`%%EOF` for the PDF fixtures, SOI/EOI for the JPEG one — with
+//   filler in between. That is sufficient and correct for what is under test: every gate
+//   in the system inspects the FIRST BYTES, never the content. `sniffMime()` reads 512
+//   bytes (lib/documents/sniff-mime.ts), and both real drivers cross-check those against
+//   provider metadata. Producing a genuinely structured 6MB PDF would need a library,
+//   which is a runtime dependency added for decoration.
+//
+// PDF SINCE 0060. Intake narrowed to `application/pdf` on 2026-09-09, so the happy-path
+//   and oversize fixtures are PDFs. `makeGenuineJpeg()` remains — a real, honest JPEG —
+//   because "a valid file of a type we no longer accept" is now its own test case, and it
+//   is a different case from `makeDisguisedTextAsPdf()`, where the file lies about itself.
 //
 // NOTHING HERE IS PII. The bytes are deterministic filler; no real scholar's document is
 //   ever committed, generated, or copied into a fixture directory.
@@ -131,6 +137,35 @@ function fillerBytes(length: number): Uint8Array {
   return out;
 }
 
+/**
+ * `%PDF-1.7` — the eight bytes `sniffMime()` matches for `application/pdf`, and the same
+ * ones Google Drive and Supabase Storage type a file by.
+ */
+const PDF_HEADER = Uint8Array.from([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37]);
+
+/** `%%EOF` + newline, so the file ends the way a PDF does as well as beginning like one. */
+const PDF_EOF = Uint8Array.from([0x25, 0x25, 0x45, 0x4f, 0x46, 0x0a]);
+
+/**
+ * Header + filler + EOF, sized so the TOTAL is exactly `totalBytes`.
+ *
+ * The PDF counterpart of `jpegOfExactSize`, and the generator every intake fixture uses
+ * since the PDF-only narrowing (0060). Not a *valid* PDF — no xref, no objects — and it
+ * does not need to be: nothing under test parses one. Every gate in the path reads the
+ * first 512 bytes (`sniffMime`) or the provider's byte count, and this satisfies both.
+ */
+function pdfOfExactSize(totalBytes: number): Uint8Array {
+  const overhead = PDF_HEADER.length + PDF_EOF.length;
+  if (totalBytes <= overhead) {
+    throw new Error(`A PDF fixture must be larger than ${overhead} bytes.`);
+  }
+  const out = new Uint8Array(totalBytes);
+  out.set(PDF_HEADER, 0);
+  out.set(fillerBytes(totalBytes - overhead), PDF_HEADER.length);
+  out.set(PDF_EOF, totalBytes - PDF_EOF.length);
+  return out;
+}
+
 /** Header + filler + EOI, sized so the TOTAL is exactly `totalBytes`. */
 function jpegOfExactSize(totalBytes: number): Uint8Array {
   const overhead = JFIF_HEADER.length + JPEG_EOI.length;
@@ -205,16 +240,37 @@ function uniqueName(prefix: string, extension: string): string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * The realistic case: a ~6.5MB phone photo of a Certificate of Registration.
+ * The realistic case: a ~6.5MB scanned Certificate of Registration.
  *
  * This is the file that proves the direct browser PUT bypasses Vercel's 4.5MB cap. If it
  * uploads and `applications.proof_size_bytes` equals `byteLength`, the bytes went to the
  * document store and the server re-read the provider's own metadata (S3-T16).
+ *
+ * ⚠ **THE SIZE IS THE POINT AND MUST NOT BE REDUCED.** Anything at or under 4.5MB passes
+ * this spec even if the bytes were wrongly routed through a Vercel function, which is the
+ * exact regression it exists to catch.
+ *
+ * A PDF since 0060. It was a JPEG when intake accepted phone photos; the shape of the
+ * assertion is unchanged, only the type.
  */
 export async function makeCorPhoto(
   totalBytes: number = DEFAULT_COR_BYTES,
 ): Promise<GeneratedProofFile> {
-  return writeFixture(uniqueName("cor-photo", "jpg"), jpegOfExactSize(totalBytes), "image/jpeg");
+  return writeFixture(uniqueName("cor-scan", "pdf"), pdfOfExactSize(totalBytes), "application/pdf");
+}
+
+/**
+ * A perfectly valid JPEG — refused because it is not a PDF (0060).
+ *
+ * Distinct from `makeDisguisedTextAsPdf`: nothing about this file is a lie. The bytes are
+ * a real JPEG, the extension matches, the declared type matches the bytes. It is refused
+ * purely because intake narrowed to PDF, and the refusal has to happen in the FORM,
+ * before a row or a session URI exists.
+ *
+ * Small on purpose — size is irrelevant to this case.
+ */
+export async function makeGenuineJpeg(): Promise<GeneratedProofFile> {
+  return writeFixture(uniqueName("cor-photo", "jpg"), jpegOfExactSize(64 * 1024), "image/jpeg");
 }
 
 /**
@@ -226,9 +282,9 @@ export async function makeCorPhoto(
  */
 export async function makeOversizeCor(): Promise<GeneratedProofFile> {
   return writeFixture(
-    uniqueName("cor-oversize", "jpg"),
-    jpegOfExactSize(OVERSIZE_COR_BYTES),
-    "image/jpeg",
+    uniqueName("cor-oversize", "pdf"),
+    pdfOfExactSize(OVERSIZE_COR_BYTES),
+    "application/pdf",
   );
 }
 

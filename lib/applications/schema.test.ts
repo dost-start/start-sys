@@ -387,15 +387,15 @@ describe("applicationSubmitSchema rejects", () => {
 describe("startApplicationSchema — the file DECLARATION", () => {
   const VALID_START = {
     ...VALID,
-    proof_file_name: "cor.jpg",
-    proof_mime_type: "image/jpeg",
+    proof_file_name: "cor.pdf",
+    proof_mime_type: "application/pdf",
     proof_size_bytes: String(6 * 1024 * 1024),
     noa_file_name: "noa.pdf",
     noa_mime_type: "application/pdf",
     noa_size_bytes: String(512 * 1024),
   };
 
-  it("accepts a 6MB phone photo — the size the whole direct-PUT design exists for", () => {
+  it("accepts a 6MB PDF — the size the whole direct-PUT design exists for", () => {
     const parsed = startApplicationSchema.parse(VALID_START);
     expect(parsed.proof_size_bytes).toBe(6 * 1024 * 1024);
   });

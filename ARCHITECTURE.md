@@ -228,7 +228,7 @@ PRD flow: *portal → personal + academic data → **upload proof of enrollment*
 |---|---|---|---|
 | 1 | Applicant | Opens `/apply`. **No account, no login.** | Only route excluded from the middleware auth matcher. |
 | 2 | Applicant | Fills the multi-section form (react-hook-form + zod). **Consent to the privacy notice is captured here** (RA 10173 requires consent at collection). | Same zod schema client-side and inside the Server Action. |
-| 3 | Server Action | Validates declared MIME (`pdf`, `jpeg`, `png`, `heic`) and size (≤10MB). Inserts `applications` row as `status='draft'`. Mints a **Drive resumable upload session** server-side, scoped to one file in one folder; returns the short-lived session URI. | Anon `INSERT` policy on `applications` requires an open row in `application_windows` for the current term. **"The application period is closed" is a database fact, not a hidden link** — a leaked/forwarded URL is inert outside the window. |
+| 3 | Server Action | Validates declared MIME (**`pdf` only** since 2026-09-09, migration `0060` — see the note below) and size (≤10MB). Inserts `applications` row as `status='draft'`. Mints a **Drive resumable upload session** server-side, scoped to one file in one folder; returns the short-lived session URI. | Anon `INSERT` policy on `applications` requires an open row in `application_windows` for the current term. **"The application period is closed" is a database fact, not a hidden link** — a leaked/forwarded URL is inert outside the window. |
 | 4 | Browser | **PUTs the bytes directly to Google.** Real progress bar. | Vercel functions cap request bodies at **4.5MB**; a phone photo of a Certificate of Registration routinely exceeds that. Streaming through a Route Handler would fail in the field. Leaking the session URI is uninteresting — one upload, one folder, then it expires. |
 | 5 | Browser → Server Action | Reports the returned `fileId`. Server **re-fetches file metadata with the service account** to verify actual size and MIME — never trusting the client's claim; magic-byte-informed, not `Content-Type`-trusting. Writes `proof_drive_file_id` + `proof_web_view_link`, flips to `status='pending'` (the enum value; "submitted" is prose for this flip — see DATA_MODEL.md §3.2). | File lives in `START-SYS / Proof of Enrollment / <term> / {application_id}_{family_name}.{ext}`. Never "anyone with the link", ever. |
 | 6 | Applicant | Sees success + **pending status** screen. | PRD user flow. |
@@ -251,6 +251,21 @@ PRD flow: *portal → personal + academic data → **upload proof of enrollment*
 > The cascade's DEPTH is data-driven, not fixed at four: NCR has no provinces, and the City
 > of Manila has fourteen sub-municipalities between the city and the barangay. Both fall
 > out of "ask for the children of what was just picked" with no special case in the app.
+
+> **Amended 2026-09-09 — PDF only (migration `0060`, ADR 0017).** Intake accepts
+> `application/pdf` alone. The CCDO's documents are issued as PDFs, and the four-type
+> allowlist carried a trap: `image/heic` is the iPhone default, no browser renders it, and
+> the designed response was to reject and ask for a re-upload — which, alongside the same
+> day's decision that **rejection is final for the term**, would have permanently rejected
+> qualified scholars for owning an iPhone. Enforced at four gates: the client `accept`
+> attribute (UX only), the shared zod schema, `finalize_application()` /
+> `finalize_renewal()`, and `storage.buckets.allowed_mime_types`.
+>
+> **The READ path is deliberately wider.** `SERVABLE_MIME` in `lib/documents/types.ts`
+> still carries the historical four, and both proof proxies guard on it rather than on the
+> intake allowlist, so documents submitted before the narrowing stay reviewable. Narrowing
+> what we accept must never retroactively destroy what we already hold. That list is frozen
+> and can only shrink.
 
 **Residual risk, stated plainly:** Drive does not virus-scan files under 100MB on upload. Mitigation is the MIME allowlist + server-side metadata verification, and viewing through the proxy in the browser's sandboxed PDF viewer rather than downloading. A malicious PDF remains theoretically possible.
 

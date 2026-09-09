@@ -44,7 +44,7 @@ begin;
 \ir helpers/auth.psql
 \ir helpers/fixtures.psql
 
-select plan(22);
+select plan(24);
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════════
@@ -132,7 +132,7 @@ select lives_ok(
        '00000000-0000-4000-8000-000000000101',
        'tok-alpha-happy',
        'ref-happy-verified',
-       'image/jpeg',
+       'application/pdf',
        6291456::bigint,
        'noa-happy-verified',
        'application/pdf',
@@ -166,7 +166,7 @@ select is(
 select ok(
   (select proof_verified_at is not null
       and submitted_at      is not null
-      and proof_mime_type   = 'image/jpeg'
+      and proof_mime_type   = 'application/pdf'
       and proof_drive_file_id = 'ref-happy-verified'
       and noa_drive_file_id   = 'noa-happy-verified'
       and noa_mime_type       = 'application/pdf'
@@ -195,7 +195,7 @@ select lives_ok(
        '00000000-0000-4000-8000-000000000101',
        'tok-alpha-happy',
        'ref-happy-verified',
-       'image/jpeg',
+       'application/pdf',
        6291456::bigint,
        'noa-happy-verified',
        'application/pdf',
@@ -310,6 +310,36 @@ select throws_ok(
   'client-side convenience'
 );
 
+-- 0060: the PDF-only narrowing, asserted at the DATA LAYER rather than at the form.
+--
+-- These three types were accepted until 2026-09-09 and real rows still hold them, so they
+-- remain SERVABLE through the proof proxy (lib/documents SERVABLE_MIME). They are no longer
+-- ACCEPTABLE, and this is the assertion that proves the difference is enforced where a
+-- client cannot reach around it: the Server Action's zod schema and the browser's `accept`
+-- attribute are both bypassable, and finalize_application() is not.
+select throws_ok(
+  $$ select public.finalize_application(
+       '00000000-0000-4000-8000-000000000102',
+       'tok-bravo-validation',
+       'ref-jpeg', 'image/jpeg', 1024::bigint, 'noa-doc', 'application/pdf', 1024::bigint) $$,
+  '23514'::char(5), null::text,
+  'image/jpeg raises 23514 since 0060 — a phone photo was accepted before the PDF-only '
+  'narrowing and is refused now, WITH a valid token, so the gate is not the form'
+);
+
+-- The NOA carries the same allowlist as the registration form. Asserted separately because
+-- 0060 replaced two independent parameter checks in one function body, and a narrowing that
+-- reached only the first argument would still pass every assertion above.
+select throws_ok(
+  $$ select public.finalize_application(
+       '00000000-0000-4000-8000-000000000102',
+       'tok-bravo-validation',
+       'ref-ok', 'application/pdf', 1024::bigint, 'noa-heic', 'image/heic', 1024::bigint) $$,
+  '23514'::char(5), null::text,
+  'image/heic on the NOA raises 23514 too — the narrowing covers BOTH documents, and HEIC '
+  'is the specific type that motivated it (no browser renders it)'
+);
+
 select throws_ok(
   $$ select public.finalize_application(
        '00000000-0000-4000-8000-000000000102',
@@ -372,7 +402,7 @@ select lives_ok(
   $$ select public.finalize_application(
        '00000000-0000-4000-8000-000000000104',
        'tok-delta-duplicate',
-       'ref-duplicate', 'image/png', 2048::bigint, 'noa-doc', 'application/pdf', 1024::bigint) $$,
+       'ref-duplicate', 'application/pdf', 2048::bigint, 'noa-doc', 'application/pdf', 1024::bigint) $$,
   'a DUPLICATE (term, email) finalize returns SUCCESS, not an error — the response is '
   'byte-identical to a first-time submission, so the public form cannot be used to '
   'enumerate which addresses have already applied'

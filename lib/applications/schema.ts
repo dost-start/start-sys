@@ -129,15 +129,17 @@ const EARLIEST_PLAUSIBLE_BIRTH_YEAR = 1900;
 // Drift is caught by an assertion in `schema.test.ts`, which is a test file and may
 // import `lib/documents/types` freely.
 
-/** MIME types the form will offer and accept as a CLAIM. */
-export const DECLARED_ALLOWED_MIME = [
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-  "image/heic",
-] as const;
+/**
+ * MIME types the form will offer and accept as a CLAIM. PDF alone since 0060.
+ *
+ * Ethan, relaying the CCDO (2026-09-09): the Certificate of Registration and the Notice
+ * of Award are both issued as PDFs. Accepting phone photos bought nothing and cost the
+ * HEIC case — unrenderable in every browser, and therefore an automatic rejection under
+ * the same day's "rejection is final for the term" decision.
+ */
+export const DECLARED_ALLOWED_MIME = ["application/pdf"] as const;
 
-/** 10MB. A phone photo of a Certificate of Registration is comfortably under this. */
+/** 10MB. A scanned multi-page Certificate of Registration is comfortably under this. */
 export const MAX_DECLARED_PROOF_BYTES = 10 * 1024 * 1024;
 
 /**
@@ -428,7 +430,7 @@ const proofDeclarationShape = {
   proof_file_name: requiredText("File name", 255),
   proof_mime_type: z.enum(
     DECLARED_ALLOWED_MIME,
-    "Upload a PDF, JPEG, PNG or HEIC file — that is what a phone photo or a scan produces",
+    "Upload a PDF — save or export your document as a PDF before uploading",
   ),
   proof_size_bytes: coercedInt(
     "Attach your latest registration form",
@@ -440,7 +442,7 @@ const proofDeclarationShape = {
   noa_file_name: requiredText("File name", 255),
   noa_mime_type: z.enum(
     DECLARED_ALLOWED_MIME,
-    "Upload a PDF, JPEG, PNG or HEIC file — that is what a phone photo or a scan produces",
+    "Upload a PDF — save or export your document as a PDF before uploading",
   ),
   noa_size_bytes: coercedInt(
     "Attach your Notice of Award",

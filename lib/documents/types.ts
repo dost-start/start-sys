@@ -28,22 +28,89 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * The only MIME types a proof-of-enrollment document may be.
+ * The only MIME type a proof-of-enrollment document may be: PDF.
  *
- * `image/heic` is on the list because it is what an iPhone produces by default, and a
- * phone photo of a Certificate of Registration is the single most common submission
- * (PRD Addendum). Excluding it would reject the majority case. Note that NO BROWSER
- * RENDERS HEIC — S4-T20 shows an explicit notice and a suggested rejection reason
- * rather than a broken viewer.
+ * Narrowed from four types to one on 2026-09-09 (migration 0060). Ethan, relaying the
+ * CCDO: the Certificate of Registration and the Notice of Award are both issued as PDFs
+ * — "most of the documents right now is online" — so accepting camera rolls bought
+ * nothing and cost a real failure mode.
  *
- * Mirrored — deliberately, in two places, because each is the last gate on its own side
- * of a trust boundary — by `finalize_application()` in
- * `supabase/migrations/0019_finalize_application.sql`. If you change this list, change
- * that function in a NEW migration. A gate that trusts its caller is not a gate.
+ * THE FAILURE MODE IT COST, because it is worth not re-introducing: `image/heic` was
+ * accepted because it is what an iPhone produces by default. NO BROWSER RENDERS HEIC, so
+ * the review screen could not display one, and the designed response was to reject the
+ * application and ask for a re-upload. Read together with the decision of the same day
+ * that REJECTION IS FINAL FOR THE TERM, that would have permanently rejected qualified
+ * scholars for owning an iPhone.
+ *
+ * Mirrored — deliberately, because each is the last gate on its own side of a trust
+ * boundary — by `finalize_application()` and `finalize_renewal()` (migration 0060) and
+ * by `storage.buckets.allowed_mime_types` (0021, narrowed by 0060). If you change this
+ * list, change those in a NEW migration. A gate that trusts its caller is not a gate.
  */
-export const ALLOWED_MIME = ["application/pdf", "image/jpeg", "image/png", "image/heic"] as const;
+export const ALLOWED_MIME = ["application/pdf"] as const;
 
 export type AllowedMime = (typeof ALLOWED_MIME)[number];
+
+/**
+ * What the magic-byte sniffer can RECOGNISE — deliberately wider than what we ACCEPT.
+ *
+ * The distinction earns its keep in the error message. If the sniffer only knew about
+ * PDF, a scholar who uploaded a photo would be told their file was "unidentifiable",
+ * which is both untrue and unactionable. Because the sniffer still recognises the three
+ * image types, they are told the file is an image and that only PDFs are accepted.
+ *
+ * It also keeps the mismatch check meaningful: a PNG renamed `.pdf` is caught as a PNG,
+ * not as an unreadable blob.
+ */
+export const SNIFFABLE_MIME = ["application/pdf", "image/jpeg", "image/png", "image/heic"] as const;
+
+export type SniffableMime = (typeof SNIFFABLE_MIME)[number];
+
+/**
+ * What the proof proxy will put in a `Content-Type` header — the types we can still
+ * SERVE, as distinct from the one type we still ACCEPT.
+ *
+ * WHY THIS IS SEPARATE FROM `ALLOWED_MIME`. Narrowing intake to PDF (0060) says nothing
+ * about documents that were already uploaded and accepted under the old four-type rule.
+ * Those are real Certificates of Registration belonging to real applicants, already
+ * reviewed or awaiting review. Guarding the read path on `ALLOWED_MIME` would turn every
+ * one of them into an HTTP 500 the moment the allowlist moved — a narrowing of what we
+ * accept must never retroactively destroy what we hold.
+ *
+ * WHY IT IS SEPARATE FROM `SNIFFABLE_MIME` DESPITE HAVING THE SAME MEMBERS TODAY. They
+ * answer different questions. `SNIFFABLE_MIME` is "byte signatures the sniffer can
+ * identify", which grows if we ever teach it a new format. This is "types the proxy is
+ * willing to hand a browser", which is a header-injection surface and a rendering
+ * decision. Collapsing them would mean that teaching the sniffer a new format silently
+ * widened what the proxy serves.
+ *
+ * **THIS LIST IS FROZEN AND CAN ONLY EVER SHRINK.** It is a record of what intake
+ * accepted in the past, so nothing new can enter it: a new type would have to be
+ * accepted by `ALLOWED_MIME` first, and PDF is already here. Entries leave only when no
+ * stored row can still carry them — realistically after the five-year purge
+ * (DATA_MODEL.md §8.2), not before. It is verifiably exactly these four: every database
+ * allowlist from 0019 through 0045 named the same set, so no other value can be in a
+ * stored row. (`image/heif` appears in the viewer's unviewable set but was NEVER
+ * accepted by any gate, so it is deliberately absent here.)
+ *
+ * ⚠ **NOTHING SCRIPT-BEARING MAY EVER JOIN THIS LIST.** It is the source of a
+ * `Content-Type` on a route that streams user-uploaded bytes, which is precisely a
+ * stored-XSS delivery mechanism. `image/svg+xml` and `text/html` are permanently
+ * excluded by name — an SVG is a script container, and both would execute in the
+ * viewer's origin. `x-content-type-options: nosniff` on the response is the second
+ * layer, not the first.
+ *
+ * ⚠ **NOT THE CONSTANT TO USE AT INTAKE.** `assertAcceptableUpload()` deliberately uses
+ * `ALLOWED_MIME`. Reaching for this one there "for symmetry" would silently undo the
+ * PDF-only narrowing.
+ *
+ * The read path stays as safe as it was: the value still comes from the STORED
+ * `proof_mime_type` column, checked against this allowlist, and never from the
+ * provider's response header or a query parameter.
+ */
+export const SERVABLE_MIME = ["application/pdf", "image/jpeg", "image/png", "image/heic"] as const;
+
+export type ServableMime = (typeof SERVABLE_MIME)[number];
 
 /**
  * Maximum accepted size, 10 MiB. Mirrored by the `p_size > 10485760` check in
@@ -193,7 +260,7 @@ export class DocumentRejectedError extends Error {
 }
 
 const DEFAULT_REJECTION_MESSAGE: Record<RejectionReason, string> = {
-  mime_not_allowed: "File type is not accepted for proof of enrollment.",
+  mime_not_allowed: "Only PDF files are accepted. Please upload your document as a PDF.",
   too_large: "File is larger than the 10MB limit.",
   empty_file: "File is empty.",
   mime_mismatch: "File contents do not match the declared file type.",
@@ -202,9 +269,25 @@ const DEFAULT_REJECTION_MESSAGE: Record<RejectionReason, string> = {
 
 // ── Shared pre-flight ────────────────────────────────────────────────────────
 
-/** Narrowing predicate over the allowlist. */
+/** Narrowing predicate over the allowlist — what we ACCEPT. */
 export function isAllowedMime(value: string): value is AllowedMime {
   return (ALLOWED_MIME as readonly string[]).includes(value);
+}
+
+/** Narrowing predicate over what the sniffer can RECOGNISE. Wider than the allowlist. */
+export function isSniffableMime(value: string): value is SniffableMime {
+  return (SNIFFABLE_MIME as readonly string[]).includes(value);
+}
+
+/**
+ * Narrowing predicate over what the proxy may SERVE. Wider than the allowlist because it
+ * covers documents stored before the PDF-only narrowing — see `SERVABLE_MIME`.
+ *
+ * Use this in the proof proxies. Using `isAllowedMime` there instead makes every
+ * pre-0060 document a 500.
+ */
+export function isServableMime(value: string): value is ServableMime {
+  return (SERVABLE_MIME as readonly string[]).includes(value);
 }
 
 /**
@@ -233,9 +316,6 @@ export function assertAcceptableUpload(input: CreateUploadSessionInput): Allowed
 /** The file extension each accepted type is stored with. Never taken from the client's file name. */
 const EXTENSION_FOR_MIME: Record<AllowedMime, string> = {
   "application/pdf": "pdf",
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/heic": "heic",
 };
 
 /**

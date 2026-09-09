@@ -4,9 +4,14 @@
 // SELECT authorizes (row returned ⇒ allowed; nothing ⇒ 404, never 403), the audit write
 // happens BEFORE a byte moves and fails closed, and the store's URL never leaves the server.
 // ─────────────────────────────────────────────────────────────────────────────
+// NOTE: the Content-Type guard below uses SERVABLE_MIME, not ALLOWED_MIME. That is not
+// an oversight and must not be "corrected" for symmetry with the Server Action: intake
+// is PDF-only since 0060, but a renewal submitted before that may hold a JPEG, PNG or
+// HEIC and must stay readable. See `SERVABLE_MIME` in lib/documents/types.ts.
+
 import { NextResponse } from "next/server";
 
-import { DocumentUnavailableError, getProofStream, isAllowedMime } from "@/lib/documents";
+import { DocumentUnavailableError, getProofStream, isServableMime } from "@/lib/documents";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -63,7 +68,7 @@ export async function GET(
   const storageRef = doc === "noa" ? row.noa_drive_file_id : row.proof_drive_file_id;
   const storedMime = doc === "noa" ? row.noa_mime_type : row.proof_mime_type;
   if (storageRef === null || storageRef === "") return notFound();
-  if (storedMime === null || !isAllowedMime(storedMime)) return serverError();
+  if (storedMime === null || !isServableMime(storedMime)) return serverError();
 
   // Fail closed: an unlogged view is a compliance failure (RA 10173, CBL Art. VIII §6).
   const { error: auditError } = await supabase.rpc("log_renewal_document_view", { p_id: id });

@@ -236,7 +236,7 @@ values
   ('00000000-0000-4000-8000-000000000202', pg_temp.fx_active_term(), 'pending',
    'bravo.applicant@fixture.start-sys.test', 'Bravo', 'Applicant',
    pg_temp.fx_app_payload('R07', 3, 2028),
-   'ref-review-bravo', 'image/jpeg', 6291456, now(),
+   'ref-review-bravo', 'application/pdf', 6291456, now(),
    'https://drive.example.invalid/file/ref-review-bravo/view',
    'noa-review-bravo', 'application/pdf', 131072, now(),
    null, null, null, null,

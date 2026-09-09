@@ -92,7 +92,7 @@ Everything else in this schema falls out of this one split. Get it wrong and eit
 
 | Fact | Lives on | Why |
 |---|---|---|
-| Name, birthdate, contact number, address, personal email | `people` | Properties of a human, not of a membership. |
+| Name, birthdate, contact number, address, personal email, social profile links | `people` | Properties of a human, not of a membership. The four social links (`facebook_account` required, `instagram_account` / `github_account` / `linkedin_account` optional — 0038, 0055) are contact channels and sit with the phone number, not with anything term-scoped. |
 | **Member ID (`2024-001`)** | `people` | The PRD's hard rule. See §4 — this placement *is* the enforcement. |
 | Join year | `people` | The year they first joined, forever. Also the PRD's email filter axis "year of membership". |
 | School, school ID number | `people` | Durable in practice; corrected in place on transfer rather than versioned. <!-- decision: boring option. PRD does not require school history. If a shiftee/transferee history is ever needed it is an additive `people_school_history` table, no changes elsewhere. --> |
@@ -393,6 +393,10 @@ erDiagram
         text contact_number "SENSITIVE"
         text address_line "SENSITIVE"
         text personal_email "SENSITIVE"
+        text facebook_account "SENSITIVE, required (0038)"
+        text instagram_account "SENSITIVE, optional (0055)"
+        text github_account "SENSITIVE, optional (0055)"
+        text linkedin_account "SENSITIVE, optional (0055)"
         text school "SENSITIVE"
         text school_id_no "SENSITIVE"
         timestamptz redacted_at
@@ -1365,7 +1369,7 @@ RA 10173 is not merely the applicable statute here — it is a **constitutional 
 
 | Table | Columns | Why sensitive |
 |---|---|---|
-| `people` | `birthdate`, `contact_number`, `personal_email`, `address_line`, `city_municipality`, `province`, `postal_code`, `school`, `school_id_no`, `middle_name` | Directly identifying / contact / government-scholarship-linked. |
+| `people` | `birthdate`, `contact_number`, `personal_email`, `address_line`, `city_municipality`, `province`, `postal_code`, `school`, `school_id_no`, `middle_name`, `facebook_account` (0038), **`instagram_account`, `github_account`, `linkedin_account` (0055)** | Directly identifying / contact / government-scholarship-linked. The four social links are contact channels and are treated exactly like `contact_number` — registered, masked before the audit log, ungranted by 0015, and absent from `v_member_directory`. |
 | `applications` | `applicant_email`, `payload`, `proof_web_view_link`, `proof_drive_file_id` | The raw submission plus the pointer to a Certificate of Registration (student number, address, signature). |
 | `renewal_submissions` | `payload` | Same shape as an application body. |
 | `email_recipients` | `to_email`, `merge` | A frozen copy of contact data at send time. |

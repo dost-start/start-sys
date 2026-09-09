@@ -50,18 +50,21 @@ const migration = (file: string): string =>
 // 1 — the whitelist matches update_member_record()
 // ═════════════════════════════════════════════════════════════════════════════
 
-describe("MEMBER_PATCHABLE_KEYS mirrors 0041's whitelist (update_member_record v2)", () => {
+describe("MEMBER_PATCHABLE_KEYS mirrors 0055's whitelist (update_member_record, latest)", () => {
   /**
    * Pull the `k not in ( ... )` list out of `update_member_record()`. Scoped to the text
    * after `where k not in (` so the function's other quoted literals cannot be swept in.
    */
   function whitelistFromMigration(): string[] {
-    const sql = migration("0041_approve_and_record_v2.sql");
+    // 0055 holds the LATEST `create or replace` of this function (PR C1). Parsing an
+    // older migration would compare the schema against a superseded whitelist and pass
+    // while the live function disagreed — which is the exact drift this test exists for.
+    const sql = migration("0055_optional_social_accounts.sql");
     const marker = "where k not in (";
     const start = sql.indexOf(marker);
     if (start === -1) {
       throw new Error(
-        "0041 no longer contains update_member_record()'s `where k not in (` whitelist that " +
+        "0055 no longer contains update_member_record()'s `where k not in (` whitelist that " +
           "this test parses. Restore it, or the schema/SQL parity is unguarded.",
       );
     }
@@ -81,9 +84,9 @@ describe("MEMBER_PATCHABLE_KEYS mirrors 0041's whitelist (update_member_record v
     expect([...MEMBER_PATCHABLE_KEYS].sort()).toEqual(parsed);
   });
 
-  it("has nineteen keys and no duplicates", () => {
-    expect(MEMBER_PATCHABLE_KEYS).toHaveLength(19);
-    expect(new Set(MEMBER_PATCHABLE_KEYS).size).toBe(19);
+  it("has twenty-two keys and no duplicates", () => {
+    expect(MEMBER_PATCHABLE_KEYS).toHaveLength(22);
+    expect(new Set(MEMBER_PATCHABLE_KEYS).size).toBe(22);
   });
 
   it("names none of the columns that must never be patchable", () => {

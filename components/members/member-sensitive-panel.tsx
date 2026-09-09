@@ -65,6 +65,11 @@ export function MemberSensitivePanel({
             cleared by the five-year purge. Do not re-add without checking first. */}
         <Field label="Sex" value={record.sex ? SEX_LABELS[record.sex] : null} />
         <Field label="Facebook account" value={record.facebook_account} />
+        {/* PR C1 — optional contact channels, registered sensitive like the Facebook one,
+            so they belong on THIS panel (audited, acknowledgement-gated) and nowhere else. */}
+        <Field label="Instagram" value={record.instagram_account} />
+        <Field label="GitHub" value={record.github_account} />
+        <Field label="LinkedIn" value={record.linkedin_account} />
         <Field
           label="DOST scholarship award"
           value={

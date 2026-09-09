@@ -43,6 +43,13 @@ export const SENSITIVE_KEYS = [
   "school_id_no",
   "middle_name",
   "facebook_account", // 0038 — a contact channel, registered sensitive
+  // 0055 (PR C1) — the three OPTIONAL networks, registered sensitive on the same terms.
+  // Added here in the same pass as the migration: this list is what stops a Sentry
+  // event carrying a scholar's profile links to a US error tracker, and a registered
+  // column that is missing from it is masked in the audit log but NOT in an exception.
+  "instagram_account",
+  "github_account",
+  "linkedin_account",
   // applications / renewal_submissions
   "applicant_email",
   "payload",

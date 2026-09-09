@@ -139,6 +139,12 @@ export function ApplicationDetailFields({
         <Field label="Email address" value={email} />
         <Field label="Contact number" value={text(payload, "contact_number")} />
         <Field label="Facebook account" value={text(payload, "facebook_account")} />
+        {/* PR C1 — optional, so these render "—" for most applicants. Shown anyway rather
+            than conditionally hidden: a reviewer comparing two applications should not
+            have to wonder whether a missing row means "not given" or "not asked". */}
+        <Field label="Instagram" value={text(payload, "instagram_account")} />
+        <Field label="GitHub" value={text(payload, "github_account")} />
+        <Field label="LinkedIn" value={text(payload, "linkedin_account")} />
       </Section>
 
       <Section title="Home address">

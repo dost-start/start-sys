@@ -890,9 +890,12 @@ export type Database = {
           created_at: string
           facebook_account: string | null
           family_name: string
+          github_account: string | null
           given_name: string
           id: string
+          instagram_account: string | null
           join_year: number
+          linkedin_account: string | null
           member_id: string | null
           middle_name: string | null
           personal_email: string | null
@@ -919,9 +922,12 @@ export type Database = {
           created_at?: string
           facebook_account?: string | null
           family_name: string
+          github_account?: string | null
           given_name: string
           id?: string
+          instagram_account?: string | null
           join_year: number
+          linkedin_account?: string | null
           member_id?: string | null
           middle_name?: string | null
           personal_email?: string | null
@@ -948,9 +954,12 @@ export type Database = {
           created_at?: string
           facebook_account?: string | null
           family_name?: string
+          github_account?: string | null
           given_name?: string
           id?: string
+          instagram_account?: string | null
           join_year?: number
+          linkedin_account?: string | null
           member_id?: string | null
           middle_name?: string | null
           personal_email?: string | null

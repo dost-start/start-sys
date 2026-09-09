@@ -11,6 +11,8 @@
 
 import { describe, expect, it } from "vitest";
 
+import { awardYearWindow } from "@/lib/validation/award-year";
+
 import { ALLOWED_MIME, MAX_PROOF_BYTES } from "@/lib/documents/types";
 
 import {
@@ -33,9 +35,10 @@ import {
 } from "@/lib/applications/schema";
 
 /**
- * The fifteen keys, transcribed independently from
- * `supabase/migrations/0041_approve_and_record_v2.sql` rather than imported, so the
- * assertion below compares two sources instead of comparing the module to itself.
+ * The eighteen keys, transcribed independently from
+ * `supabase/migrations/0041_approve_and_record_v2.sql` as extended by
+ * `0055_optional_social_accounts.sql`, rather than imported — so the assertion below
+ * compares two sources instead of comparing the module to itself.
  */
 const KEYS_APPROVE_APPLICATION_READS = [
   "birthdate",
@@ -45,6 +48,9 @@ const KEYS_APPROVE_APPLICATION_READS = [
   "expected_grad_year",
   "sex",
   "facebook_account",
+  "instagram_account",
+  "github_account",
+  "linkedin_account",
   "scholarship_award",
   "award_year",
   "university_id",
@@ -71,7 +77,9 @@ const VALID = {
   province: "Metro Manila",
   postal_code: "1100",
   scholarship_award: "ra_7687",
-  award_year: "2023",
+  // A6: derived, never a literal — the accepted window rolls forward every 1 July,
+  // so a hardcoded year here would silently become invalid two summers from now.
+  award_year: String(awardYearWindow().max),
   university_id: "33333333-3333-4333-8333-333333333333",
   program_id: "44444444-4444-4444-8444-444444444444",
   year_level: "2",
@@ -93,29 +101,64 @@ function firstIssuePath(input: unknown): string {
 }
 
 describe("payload keys match every key approve_application() reads", () => {
-  it("APPLICATION_PAYLOAD_KEYS is exactly the fifteen keys approve_application() reads (0041)", () => {
+  it("APPLICATION_PAYLOAD_KEYS is exactly the eighteen keys approve_application() reads (0041 + 0055)", () => {
     expect([...APPLICATION_PAYLOAD_KEYS].sort()).toEqual(
       [...KEYS_APPROVE_APPLICATION_READS].sort(),
     );
-    expect(APPLICATION_PAYLOAD_KEYS).toHaveLength(15);
+    expect(APPLICATION_PAYLOAD_KEYS).toHaveLength(18);
   });
 
-  it("every one of those fifteen is a field the form actually collects", () => {
+  it("every one of those eighteen is a field the form actually collects", () => {
     const formFields = Object.keys(applicationSubmitSchema.shape);
     for (const key of APPLICATION_PAYLOAD_KEYS) {
       expect(formFields).toContain(key);
     }
   });
 
-  it("buildApplicationPayload emits all fifteen with a non-null value", () => {
+  // The three PR C1 networks are OPTIONAL, so `null` is a legitimate emitted value for
+  // them. What must hold for every key is that it is PRESENT — a key `approve_application`
+  // reads but `buildApplicationPayload` never emits is the drift this suite exists to catch.
+  const OPTIONAL_PAYLOAD_KEYS = new Set([
+    "instagram_account",
+    "github_account",
+    "linkedin_account",
+  ]);
+
+  it("buildApplicationPayload emits all eighteen, and the fifteen required ones non-null", () => {
     const parsed = applicationSubmitSchema.parse(VALID);
     const payload = buildApplicationPayload(parsed, "2026-09-03T01:00:00.000Z");
 
     for (const key of APPLICATION_PAYLOAD_KEYS) {
       expect(Object.keys(payload)).toContain(key);
-      expect(payload[key]).not.toBeNull();
       expect(payload[key]).not.toBeUndefined();
+      if (!OPTIONAL_PAYLOAD_KEYS.has(key)) expect(payload[key]).not.toBeNull();
     }
+  });
+
+  it("carries the optional networks through when they ARE supplied, normalized", () => {
+    const parsed = applicationSubmitSchema.parse({
+      ...VALID,
+      instagram_account: "instagram.com/maria",
+      github_account: "github.com/maria",
+      linkedin_account: "linkedin.com/in/maria",
+    });
+    const payload = buildApplicationPayload(parsed, "2026-09-03T01:00:00.000Z");
+    expect(payload["instagram_account"]).toBe("https://instagram.com/maria");
+    expect(payload["github_account"]).toBe("https://github.com/maria");
+    expect(payload["linkedin_account"]).toBe("https://linkedin.com/in/maria");
+  });
+
+  it("an empty optional network is absence, not an empty string", () => {
+    const parsed = applicationSubmitSchema.parse({ ...VALID, instagram_account: "   " });
+    expect(parsed.instagram_account).toBeUndefined();
+    const payload = buildApplicationPayload(parsed, "2026-09-03T01:00:00.000Z");
+    expect(payload["instagram_account"]).toBeNull();
+  });
+
+  it("a supplied optional network on the WRONG host is refused", () => {
+    expect(firstIssuePath({ ...VALID, instagram_account: "facebook.com/maria" })).toBe(
+      "instagram_account",
+    );
   });
 
   it("keeps middle_name and suffix, and stamps the accuracy certification with the SERVER time", () => {
@@ -170,6 +213,26 @@ describe("payload keys match every key approve_application() reads", () => {
   });
 });
 
+describe("A5 — a Facebook link with no scheme (reviewer PDF 2026-09-09)", () => {
+  it("accepts what a person actually types, and stores it absolute", () => {
+    const parsed = applicationSubmitSchema.safeParse({
+      ...VALID,
+      facebook_account: "facebook.com/maria.delacruz",
+    });
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) throw new Error("unreachable");
+    // Normalized BEFORE validation, so what is stored is what was checked — the RR contact
+    // view and the member detail page render this straight into an href.
+    expect(parsed.data.facebook_account).toBe("https://facebook.com/maria.delacruz");
+  });
+
+  it("still refuses another host that was given the same courtesy", () => {
+    expect(firstIssuePath({ ...VALID, facebook_account: "twitter.com/maria" })).toBe(
+      "facebook_account",
+    );
+  });
+});
+
 describe("applicationSubmitSchema accepts a real submission", () => {
   it("parses the valid body and coerces the numeric inputs", () => {
     const parsed = applicationSubmitSchema.parse(VALID);
@@ -199,6 +262,12 @@ describe("applicationSubmitSchema rejects", () => {
     expect(firstIssuePath({ ...VALID, contact_number: "12345" })).toBe("contact_number");
     expect(firstIssuePath({ ...VALID, contact_number: "+1 415 555 0100" })).toBe("contact_number");
     expect(firstIssuePath({ ...VALID, contact_number: "091712345678" })).toBe("contact_number");
+  });
+
+  it("A6 — an award year outside the rolling five-year window", () => {
+    const { min, max } = awardYearWindow();
+    expect(firstIssuePath({ ...VALID, award_year: String(min - 1) })).toBe("award_year");
+    expect(firstIssuePath({ ...VALID, award_year: String(max + 1) })).toBe("award_year");
   });
 
   it("a Facebook link that is not a Facebook profile, on the facebook_account field", () => {

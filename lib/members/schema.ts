@@ -17,7 +17,8 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 //
 // 1. `MEMBER_PATCHABLE_KEYS` must equal `update_member_record()`'s inline whitelist
-//    (0030). A key here that the function refuses is a form field that always errors
+//    (0030, replaced by 0041, extended by 0055). A key here that the function refuses
+//    is a form field that always errors
 //    with 22023; a key the function allows but this schema strips is a field a CCDO
 //    edits and silently loses. schema.test.ts parses 0030 and asserts set equality.
 //
@@ -46,8 +47,13 @@
 import { z } from "zod";
 
 import { SCHOLARSHIP_AWARDS, SEX_OPTIONS } from "@/lib/applications/schema";
-
-const FACEBOOK_URL_RE = /^https?:\/\/(www\.|m\.|web\.)?(facebook\.com|fb\.com|fb\.me)\/.+/i;
+import {
+  isFacebookProfileUrl,
+  isGithubProfileUrl,
+  isInstagramProfileUrl,
+  isLinkedinProfileUrl,
+  normalizeProfileUrl,
+} from "@/lib/validation/social";
 
 import { MEMBERSHIP_STATUSES } from "@/lib/members/filters";
 import type { MembershipStatus } from "@/lib/members/transitions";
@@ -151,6 +157,9 @@ export const MEMBER_PATCHABLE_KEYS = [
   "school_id_no",
   "sex",
   "facebook_account",
+  "instagram_account",
+  "github_account",
+  "linkedin_account",
   "scholarship_award",
   "award_year",
   "university_id",
@@ -226,13 +235,50 @@ const patchShape = {
   // The SRS profile fields (0038, 0041). Same "clearable" contract as the rest: an empty
   // string clears the column, absence leaves it alone.
   sex: clearable(z.enum(SEX_OPTIONS, "Select an option")),
+  // A5: normalized then checked, exactly as `/apply` does it — a link CRRD can type
+  // must be a link CRRD can save, or a record approved from the public form becomes
+  // uncorrectable on the edit screen.
   facebook_account: clearable(
     z
       .string()
       .trim()
       .max(300, "Facebook account link is too long")
-      .refine((value) => FACEBOOK_URL_RE.test(value), {
-        message: "Enter the full link to the member's Facebook profile",
+      .transform(normalizeProfileUrl)
+      .refine(isFacebookProfileUrl, {
+        message: "Enter the link to the member's Facebook profile, e.g. facebook.com/name",
+      }),
+  ),
+  // PR C1 (2026-09-09): the three optional networks, on the same "clearable" contract as
+  // every other patchable field — an empty string CLEARS the column, absence leaves it
+  // alone. That distinction is the whole reason this form patches rather than replaces.
+  instagram_account: clearable(
+    z
+      .string()
+      .trim()
+      .max(300, "Instagram account link is too long")
+      .transform(normalizeProfileUrl)
+      .refine(isInstagramProfileUrl, {
+        message: "Enter the link to the member's Instagram profile, e.g. instagram.com/name",
+      }),
+  ),
+  github_account: clearable(
+    z
+      .string()
+      .trim()
+      .max(300, "GitHub account link is too long")
+      .transform(normalizeProfileUrl)
+      .refine(isGithubProfileUrl, {
+        message: "Enter the link to the member's GitHub profile, e.g. github.com/name",
+      }),
+  ),
+  linkedin_account: clearable(
+    z
+      .string()
+      .trim()
+      .max(300, "LinkedIn account link is too long")
+      .transform(normalizeProfileUrl)
+      .refine(isLinkedinProfileUrl, {
+        message: "Enter the link to the member's LinkedIn profile, e.g. linkedin.com/in/name",
       }),
   ),
   scholarship_award: clearable(z.enum(SCHOLARSHIP_AWARDS, "Select a DOST scholarship award")),

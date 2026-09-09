@@ -43,6 +43,33 @@ export const SENSITIVE_KEYS = [
   "school_id_no",
   "middle_name",
   "facebook_account", // 0038 — a contact channel, registered sensitive
+  // 0055 (PR C1) — the three OPTIONAL networks, registered sensitive on the same terms.
+  // Added here in the same pass as the migration: this list is what stops a Sentry
+  // event carrying a scholar's profile links to a US error tracker, and a registered
+  // column that is missing from it is masked in the audit log but NOT in an exception.
+  "instagram_account",
+  "github_account",
+  "linkedin_account",
+  // 0058 (PR C2) — the two PSGC-coded addresses. The CODES are here beside the names
+  // because a barangay code identifies a household as precisely as the barangay does;
+  // scrubbing the name and shipping the code would be scrubbing nothing.
+  "barangay",
+  "sub_municipality",
+  // Named `address_region`, not `region_name`: that name belongs to
+  // v_member_directory's ORG region, and two different regions under one name in one
+  // system is how somebody eventually scrubs or reads the wrong one.
+  "address_region",
+  "psgc_barangay_code",
+  "psgc_city_code",
+  "current_address_line",
+  "current_barangay",
+  "current_sub_municipality",
+  "current_city_municipality",
+  "current_province",
+  "current_address_region",
+  "current_postal_code",
+  "current_psgc_barangay_code",
+  "current_psgc_city_code",
   // applications / renewal_submissions
   "applicant_email",
   "payload",

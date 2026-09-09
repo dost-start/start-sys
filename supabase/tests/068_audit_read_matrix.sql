@@ -3,15 +3,16 @@
 --
 -- WHAT:
 --    1      POSITIVE CONTROL — the log is genuinely non-empty before any denial is trusted
---    2-3    exec_admin and tech_admin read the whole log
---    4-10   the other seven fixtures read EXACTLY ZERO, asserted one role at a time
+--    2-5    exec_admin, tech_admin and BOTH crrd_admin fixtures read the whole log (0053)
+--    6-10   the remaining five fixtures read EXACTLY ZERO, asserted one role at a time
 --   11-12   an audited UPDATE appends exactly ONE row, and exec_admin sees it immediately
 --   13-15   there is no INSERT, no UPDATE and no DELETE policy on audit_log
 --   16-21   has_table_privilege is false for UPDATE and DELETE × {authenticated, anon,
 --           service_role} — append-only enforced at the GRANT level, the strong form
 --
--- WHY:  PRD §3 v1.0 item 16 and PRD US-I1 — "the log is readable only by Executive and
---   Technical Admins" and "no user role can edit or delete an audit entry". BUILD_PLAN
+-- WHY:  PRD §3 v1.0 item 16 and PRD US-I1 — as amended 2026-09-09 (migration 0053, ADR
+--   0015), "readable by Executive, Technical and CRRD Admins" — and "no user role can edit
+--   or delete an audit entry", which is unchanged and is the half that matters. BUILD_PLAN
 --   S6-T20, which exists to make S6-T19's /admin/audit boundary a DATABASE property rather
 --   than a page behaviour: the route reads through the caller's own client, so
 --   audit_log_read (0014 §1) is the only authorization in the path and this file is what
@@ -29,11 +30,19 @@
 --   dashboard-fixtures §4. Assertion 1 is what converts every zero below from "nothing
 --   happened" into "the policy refused".
 --
--- ⚠ WHO IS EXCLUDED FROM THE LOG, AND WHY IT IS NOT AN OVERSIGHT. crrd_admin and crrd_deputy
---   are the operational tier whose reads and writes this log RECORDS. Granting them the log
---   would let the watched read the watcher — and, worse, would let them see which member
---   records another officer has been opening. exec_admin and tech_admin alone, exactly as
---   PRD US-I1 words it.
+-- ⚠ WHO IS EXCLUDED, AND THE OBJECTION THAT WAS OVERRULED. Until 0053 this file asserted
+--   that crrd_admin and crrd_deputy read ZERO, on the grounds that they are the operational
+--   tier whose reads and writes this log RECORDS — the watched reading the watcher, and
+--   seeing which member records another officer has been opening. Ethan (project head)
+--   decided on 2026-09-09 to widen it anyway; ADR 0015 records the trade. The objection is
+--   kept here rather than deleted because it is still the reason to be careful.
+--
+--   What makes the widening survivable is that NOTHING about immutability moved: no INSERT,
+--   UPDATE or DELETE policy exists for any tier (13-15 below), the GRANT-level revocations
+--   still hold (16-21), and the rows are masked before they are written. A crrd_admin can
+--   now see the record of their own document view; they still cannot remove it.
+--
+--   `officer`, both regional reps and the revoked `member` state remain at exactly zero.
 --
 -- ⚠ THE LOG HOLDS NO PII, WHICH IS WHY APPEND-ONLY AND THE FIVE-YEAR PURGE CAN COEXIST.
 --   audit_row() (0011) calls mask_sensitive() BEFORE the insert, replacing every value whose
@@ -106,7 +115,7 @@ select cmp_ok(
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════════
--- 2-3 — the two tiers PRD US-I1 admits
+-- 2-5 — the tiers PRD US-I1 admits, as amended by 0053
 -- ═══════════════════════════════════════════════════════════════════════════════════
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000001');   -- exec_admin
@@ -130,24 +139,36 @@ select is(
 );
 select pg_temp.logout();
 
+-- 4-5 — the two crrd_admin fixtures, added by 0053. BOTH are asserted, and crrd_deputy is
+-- the one that matters: it is a second crrd_admin seeded deliberately WITHOUT a
+-- confidentiality acknowledgement (helpers/fixtures.psql), so this pair also proves that
+-- audit read is gated on the ROLE alone and does not accidentally inherit the CBL Art. VIII
+-- §7.1 precondition that guards the sensitive-column RPCs. It should not: the log holds no
+-- PII to acknowledge for (mask_sensitive, 0011).
+select pg_temp.login_as('00000000-0000-4000-a000-000000000003');   -- crrd_admin
+select is(
+  (select count(*)::int from public.audit_log),
+  (select n from fx_audit_base where label = 'before'),
+  'crrd_admin reads the ENTIRE audit log — widened by 0053 (ADR 0015)'
+);
+select pg_temp.logout();
+
+select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy
+select is(
+  (select count(*)::int from public.audit_log),
+  (select n from fx_audit_base where label = 'before'),
+  'crrd_deputy reads the ENTIRE audit log — the tier grants it, not the acknowledgement'
+);
+select pg_temp.logout();
+
 
 -- ═══════════════════════════════════════════════════════════════════════════════════
--- 4-10 — everybody else reads EXACTLY ZERO
+-- 6-10 — everybody else reads EXACTLY ZERO
 --
 -- One assertion per role rather than a loop: a failure has to name the tier that gained
 -- access, and CONVENTIONS.md §8.1 requires exact counts per named fixture rather than an
 -- aggregate that could hide one role among seven.
 -- ═══════════════════════════════════════════════════════════════════════════════════
-
-select pg_temp.login_as('00000000-0000-4000-a000-000000000003');   -- crrd_admin
-select is((select count(*)::int from public.audit_log), 0,
-  'crrd_admin reads 0 audit rows — the operational tier this log RECORDS must not read it');
-select pg_temp.logout();
-
-select pg_temp.login_as('00000000-0000-4000-a000-000000000004');   -- crrd_deputy
-select is((select count(*)::int from public.audit_log), 0,
-  'crrd_deputy reads 0 audit rows — same reason as crrd_admin');
-select pg_temp.logout();
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000005');   -- officer
 select is((select count(*)::int from public.audit_log), 0,

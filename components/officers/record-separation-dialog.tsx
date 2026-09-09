@@ -125,7 +125,7 @@ export function RecordOfficerSeparationDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={onSubmit} className="space-y-5">
+        <form method="post" onSubmit={onSubmit} className="space-y-5">
           <input type="hidden" {...register("assignment_id")} />
           <input type="hidden" {...register("from_status")} />
 

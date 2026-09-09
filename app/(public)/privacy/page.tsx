@@ -16,7 +16,7 @@ import Link from "next/link";
 
 import { BrandBackground } from "@/components/brand/brand-background";
 import { Card } from "@/components/ui/card";
-import { ORG_CONTACT_EMAIL } from "@/lib/brand/org";
+import { orgContactEmail } from "@/lib/brand/org-contact";
 
 export const metadata: Metadata = {
   title: "Privacy Notice — START-DOST",
@@ -27,7 +27,18 @@ const SECTION_CLASS = "flex flex-col gap-2";
 const HEADING_CLASS = "text-brand-ink text-lg font-semibold";
 const BODY_CLASS = "text-brand-body text-sm leading-relaxed sm:text-[15px]";
 
+// A7: the contact address is resolved from the environment PER REQUEST, not baked in at
+// build time. Without this the page prerenders static, freezes whatever `MAIL_REPLY_TO`
+// held during `next build`, and keeps printing it after the org changes its mailbox —
+// which is the same class of defect as the hardcoded constant this replaced.
+export const dynamic = "force-dynamic";
+
 export default function PrivacyNoticePage() {
+  // A7: derived from the mail environment, not a constant on a domain the org does not
+  // own. The address in a privacy notice is the one a data subject exercises their RA
+  // 10173 rights through, so it has to be a mailbox somebody actually reads.
+  const contactEmail = orgContactEmail();
+
   return (
     <main className="brand-surface flex min-h-screen justify-center px-4 py-10 sm:px-8">
       <BrandBackground />
@@ -71,12 +82,34 @@ export default function PrivacyNoticePage() {
           </p>
         </section>
 
+        {/*
+          Corrected 2026-09-09: this said the documents were in Google Drive. They are not
+          — production runs DOCUMENT_STORE=supabase_storage while PRD OQ-1 is unresolved,
+          so they are in the same Singapore project as the database. If the org moves to
+          Drive, this paragraph, docs/privacy/PRIVACY_NOTICE.md and the processing register
+          change in the SAME PR as the environment variable.
+        */}
         <section className={SECTION_CLASS}>
           <h2 className={HEADING_CLASS}>Where it is stored</h2>
           <p className={BODY_CLASS}>
-            Our database and app run on servers in Singapore. Your documents are stored in
-            START-DOST&apos;s Google Drive. Emails are sent from START-DOST&apos;s Gmail account.
-            Your information is stored outside the Philippines.
+            Our database and app run on servers in Singapore, and your two documents are stored
+            there too. Emails are sent from START-DOST&apos;s Gmail account. Your information is
+            stored outside the Philippines.
+          </p>
+        </section>
+
+        {/* PR D — draft autosave puts a birthdate and an address in the applicant's own
+            browser. Disclosed here rather than left implicit. */}
+        <section className={SECTION_CLASS}>
+          <h2 className={HEADING_CLASS}>On your own device</h2>
+          <p className={BODY_CLASS}>
+            While you are filling in the application or renewal form, what you have typed is saved
+            in your own browser on the device you are using, so that you can close the page and come
+            back. This never leaves your device and START-DOST cannot see it. Your uploaded
+            documents are never saved this way. It is removed as soon as you submit, and there is a{" "}
+            <span className="text-brand-ink font-semibold">Clear the saved draft</span> button on
+            the form if you want it gone sooner — worth using if you are on a shared or public
+            computer.
           </p>
         </section>
 
@@ -94,10 +127,10 @@ export default function PrivacyNoticePage() {
             You can ask what we hold about you, ask us to correct it, object to how we use it, or
             file a complaint. These are your rights under the Data Privacy Act. Write to{" "}
             <a
-              href={`mailto:${ORG_CONTACT_EMAIL}`}
+              href={`mailto:${contactEmail}`}
               className="text-brand-link font-medium underline-offset-4 hover:underline"
             >
-              {ORG_CONTACT_EMAIL}
+              {contactEmail}
             </a>
             .
           </p>

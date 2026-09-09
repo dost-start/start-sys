@@ -321,7 +321,7 @@ export function TotpEnroll({
             </NumberedStep>
 
             <NumberedStep number={3} title="Enter the code the app shows">
-              <form id={FORM_ID} onSubmit={onVerify}>
+              <form method="post" id={FORM_ID} onSubmit={onVerify}>
                 <Field>
                   <FieldLabel htmlFor="code">Enter the 6-digit code from your app</FieldLabel>
                   <Input

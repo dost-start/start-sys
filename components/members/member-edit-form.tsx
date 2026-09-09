@@ -18,6 +18,8 @@ import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, type Resolver } from "react-hook-form";
 
+import { PsgcAddressPicker } from "@/components/applications/psgc-address-picker";
+import type { PsgcRegionOption } from "@/lib/applications/psgc-regions";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
@@ -38,7 +40,14 @@ function toDefault(value: string | null): string {
   return value ?? "";
 }
 
-export function MemberEditForm({ record }: { record: MemberRecord }) {
+export function MemberEditForm({
+  record,
+  regions,
+}: {
+  record: MemberRecord;
+  /** For the two PSGC address pickers (PR C2). Read server-side; plain reference data. */
+  regions: PsgcRegionOption[];
+}) {
   const [conflict, setConflict] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -47,6 +56,8 @@ export function MemberEditForm({ record }: { record: MemberRecord }) {
     register,
     handleSubmit,
     setError,
+    setValue,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<MemberUpdateInput>({
     // `memberUpdateSchema` preprocesses several fields (`"" -> null`), which gives it
@@ -67,9 +78,15 @@ export function MemberEditForm({ record }: { record: MemberRecord }) {
       contact_number: toDefault(record.contact_number),
       personal_email: toDefault(record.personal_email),
       address_line: toDefault(record.address_line),
-      city_municipality: toDefault(record.city_municipality),
-      province: toDefault(record.province),
       postal_code: toDefault(record.postal_code),
+      // PR C2: the picker owns the code; city and province are derived and no longer
+      // editable here, because a typed name beside a code that disagrees is a member
+      // filed under a city they do not live in.
+      psgc_barangay_code: toDefault(record.psgc_barangay_code),
+      current_address_line: toDefault(record.current_address_line),
+      current_postal_code: toDefault(record.current_postal_code),
+      current_psgc_barangay_code: toDefault(record.current_psgc_barangay_code),
+      current_address_same_as_home: record.current_address_same_as_home ? "true" : "false",
       school: toDefault(record.school),
       // School ID number removed from this form (Ethan, 2026-09-06) — UI-only. The
       // field stays in `MEMBER_PATCHABLE_KEYS` and `memberUpdateSchema` (it is
@@ -78,6 +95,10 @@ export function MemberEditForm({ record }: { record: MemberRecord }) {
       // `school_id_no` default or input back without checking with Ethan first.
       sex: (record.sex ?? "") as MemberUpdateInput["sex"],
       facebook_account: toDefault(record.facebook_account),
+      // PR C1: same "clearable" contract — an emptied input clears the column.
+      instagram_account: toDefault(record.instagram_account),
+      github_account: toDefault(record.github_account),
+      linkedin_account: toDefault(record.linkedin_account),
       scholarship_award: (record.scholarship_award ?? "") as MemberUpdateInput["scholarship_award"],
       award_year: (record.award_year === null
         ? ""
@@ -113,7 +134,7 @@ export function MemberEditForm({ record }: { record: MemberRecord }) {
 
   return (
     <Card className="p-5 sm:p-6">
-      <form onSubmit={onSubmit} className="space-y-5">
+      <form method="post" onSubmit={onSubmit} className="space-y-5">
         <CardTitle>Edit record</CardTitle>
 
         <input type="hidden" {...register("person_id")} />
@@ -168,25 +189,69 @@ export function MemberEditForm({ record }: { record: MemberRecord }) {
             <Input id="personal_email" type="email" {...register("personal_email")} />
             <FieldError message={errors.personal_email?.message} />
           </Field>
+          {/*
+            PR C2: the same cascade the public form uses, so a record approved from /apply
+            can be corrected here without the two screens disagreeing about what an address
+            is. Emptying a picker clears the code; 0059 then leaves the stored names alone
+            rather than half-clearing an address.
+          */}
+          <div className="sm:col-span-2">
+            <p className="text-brand-label mb-2 text-xs font-semibold tracking-[0.08em] uppercase">
+              Home address
+            </p>
+            <PsgcAddressPicker
+              idPrefix="member_home"
+              regions={regions}
+              required={false}
+              value={watch("psgc_barangay_code") ?? ""}
+              onChange={(code) =>
+                setValue("psgc_barangay_code", code, { shouldValidate: true, shouldDirty: true })
+              }
+              error={errors.psgc_barangay_code?.message}
+            />
+          </div>
           <Field>
             <FieldLabel htmlFor="address_line">Street address</FieldLabel>
             <Input id="address_line" {...register("address_line")} />
             <FieldError message={errors.address_line?.message} />
           </Field>
           <Field>
-            <FieldLabel htmlFor="city_municipality">City / municipality</FieldLabel>
-            <Input id="city_municipality" {...register("city_municipality")} />
-            <FieldError message={errors.city_municipality?.message} />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="province">Province</FieldLabel>
-            <Input id="province" {...register("province")} />
-            <FieldError message={errors.province?.message} />
-          </Field>
-          <Field>
             <FieldLabel htmlFor="postal_code">Postal code</FieldLabel>
             <Input id="postal_code" {...register("postal_code")} />
             <FieldError message={errors.postal_code?.message} />
+          </Field>
+
+          <div className="sm:col-span-2">
+            <p className="text-brand-label mb-2 text-xs font-semibold tracking-[0.08em] uppercase">
+              Current address
+            </p>
+            <PsgcAddressPicker
+              idPrefix="member_current"
+              regions={regions}
+              required={false}
+              value={watch("current_psgc_barangay_code") ?? ""}
+              onChange={(code) =>
+                setValue("current_psgc_barangay_code", code, {
+                  shouldValidate: true,
+                  shouldDirty: true,
+                })
+              }
+              error={errors.current_psgc_barangay_code?.message}
+            />
+          </div>
+          <Field>
+            <FieldLabel htmlFor="current_address_line" optional>
+              Current street address
+            </FieldLabel>
+            <Input id="current_address_line" {...register("current_address_line")} />
+            <FieldError message={errors.current_address_line?.message} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="current_postal_code" optional>
+              Current postal code
+            </FieldLabel>
+            <Input id="current_postal_code" {...register("current_postal_code")} />
+            <FieldError message={errors.current_postal_code?.message} />
           </Field>
           <Field>
             <FieldLabel htmlFor="school">School</FieldLabel>
@@ -215,6 +280,27 @@ export function MemberEditForm({ record }: { record: MemberRecord }) {
             <FieldLabel htmlFor="facebook_account">Facebook account link</FieldLabel>
             <Input id="facebook_account" type="url" {...register("facebook_account")} />
             <FieldError message={errors.facebook_account?.message} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="instagram_account" optional>
+              Instagram
+            </FieldLabel>
+            <Input id="instagram_account" type="url" {...register("instagram_account")} />
+            <FieldError message={errors.instagram_account?.message} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="github_account" optional>
+              GitHub
+            </FieldLabel>
+            <Input id="github_account" type="url" {...register("github_account")} />
+            <FieldError message={errors.github_account?.message} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="linkedin_account" optional>
+              LinkedIn
+            </FieldLabel>
+            <Input id="linkedin_account" type="url" {...register("linkedin_account")} />
+            <FieldError message={errors.linkedin_account?.message} />
           </Field>
           <Field>
             <FieldLabel htmlFor="scholarship_award">DOST scholarship award</FieldLabel>

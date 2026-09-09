@@ -25,6 +25,11 @@ export default tseslint.config(
   {
     ignores: [
       "node_modules/**",
+      // Agent tooling keeps git worktrees under `.claude/`, each a full copy of this repo
+      // WITH ITS OWN node_modules. Without this, `eslint .` walks a second (stale) copy of
+      // the entire codebase plus every dependency and exhausts the heap — an OOM crash
+      // that looks like a lint failure and is not one.
+      ".claude/**",
       ".next/**",
       "out/**",
       "build/**",

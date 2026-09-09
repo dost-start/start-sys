@@ -32,7 +32,7 @@ export function ConsentSection() {
   } = useFormContext<ApplicationSubmitInput>();
 
   return (
-    <FormSection title="Privacy and consent" description="Required before you can submit.">
+    <FormSection title="Privacy and Consent" description="Required before you can submit.">
       {/* Not shown to the applicant — pinned to the currently published notice. */}
       <input
         type="hidden"
@@ -57,11 +57,12 @@ export function ConsentSection() {
               >
                 privacy notice
               </Link>{" "}
-              and agree to START-DOST CRRD collecting and processing my personal and academic
-              information to review this application. I understand this information is kept for up
-              to five years after my last active term with the organization. I also understand that
-              my uploaded proof of enrollment is stored securely, is viewed only by authorized
-              reviewers, and that every view of it is recorded.
+              and agree to START-DOST collecting and processing my personal and academic information
+              to review this application. I understand this information is kept for up to five years
+              after my last active term with the organization, which is the retention period
+              START-DOST applies under the Data Privacy Act of 2012 (RA 10173), and is then deleted.
+              I also understand that my uploaded proof of enrollment is stored securely, is viewed
+              only by authorized reviewers, and that every view of it is recorded.
             </span>
           </label>
           <FieldError message={errors.consent_privacy_notice?.message} />

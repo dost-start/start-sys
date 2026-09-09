@@ -84,8 +84,8 @@ select is(
 select is((select count(*)::int from public.committees), 0,
   'BEFORE: ZERO committees — CBL Art. III §5 makes them discretionary and per-term, so the seed deliberately creates none');
 
-select is((select count(*)::int from public.sensitive_column_registry), 23,
-  'BEFORE: 23 sensitive_column_registry rows — the RA 10173 classification, as data (CBL Art. VIII §6; 0044 adds three)');
+select is((select count(*)::int from public.sensitive_column_registry), 40,
+  'BEFORE: 40 sensitive_column_registry rows — the RA 10173 classification, as data (CBL Art. VIII §6; 0044 adds three, 0055 three more, 0058 fourteen address columns)');
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════════
@@ -143,8 +143,8 @@ select is(
 select is((select count(*)::int from public.committees), 0,
   'AFTER: still ZERO committees — the seed never creates one, so a re-run cannot resurrect a dissolved committee (CBL Art. III §5.4)');
 
-select is((select count(*)::int from public.sensitive_column_registry), 23,
-  'AFTER: still 23 registry rows — a duplicated classification would double every audit mask lookup');
+select is((select count(*)::int from public.sensitive_column_registry), 40,
+  'AFTER: still 40 registry rows — a duplicated classification would double every audit mask lookup');
 
 select bag_eq(
   $$ select code, head_position from public.departments

@@ -22,6 +22,8 @@
 --   17-18  the catalog itself: officer_assignments_insert / _update now name crrd_admin
 --   19     officer_assignments_read is STILL using(true) — the org chart stays org-public
 --   20     STILL no DELETE policy on officer_assignments
+--   21-24  SPECIAL_ADVISOR is exec_admin's ALONE (0054, finding A9) — crrd_admin cannot
+--          seat it, cannot separate it, exec_admin still can, and both policies say so
 --
 -- ⚠ AN INSERT REFUSED BY RLS RAISES 42501; AN UPDATE REFUSED BY RLS AFFECTS 0 ROWS. Same
 --   asymmetry 025_org_structure_rls.sql documents and relies on — a WITH CHECK failure is
@@ -47,7 +49,7 @@ begin;
 \ir helpers/auth.psql
 \ir helpers/fixtures.psql
 
-select plan(20);
+select plan(24);
 
 
 -- SECURITY INVOKER, so the statement runs with the calling fixture's privileges.
@@ -289,6 +291,75 @@ select is(
      where schemaname = 'public' and tablename = 'officer_assignments' and cmd = 'DELETE'),
   0,
   'STILL no DELETE policy on officer_assignments — CLAUDE.md: no DELETE policy exists anywhere and none may be added');
+
+
+-- ═══════════════════════════════════════════════════════════════════════════════════
+-- 21-24 — SPECIAL_ADVISOR is the ONE seat ADR 0012 does not reach (0054, finding A9)
+--
+-- CBL Art. X §3.1 makes the Special Advisor an employee of DOST-SEI rather than a scholar,
+-- and Art. X §2.4-2.5 makes them the INDEPENDENT reviewer of appeals against the very
+-- disciplinary outcomes crrd_admin records. A tier that can seat its own appeal reviewer
+-- is not being reviewed independently, so 0054 narrows this one position back to
+-- exec_admin while leaving the other 22 exactly as ADR 0012 left them.
+--
+-- The position row itself is untouched: it is still seeded, still readable by everyone,
+-- and exec_admin still appoints and separates it. Deleting it would make a seat CBL
+-- Art. III §2.9 creates unrecordable, which is a worse defect than the one being fixed.
+-- ═══════════════════════════════════════════════════════════════════════════════════
+
+-- 21 — crrd_admin cannot seat it. INSERT refused by WITH CHECK, so this RAISES.
+select pg_temp.login_as('00000000-0000-4000-a000-000000000003');   -- crrd_admin
+select throws_ok($$
+    insert into public.officer_assignments
+      (id, person_id, term_id, role, status, is_acting, status_note)
+    select '00000000-0000-4000-f000-000000000103',
+           '00000000-0000-4000-b000-000000000005',
+           id, 'SPECIAL_ADVISOR', 'active', false,
+           'attempted Special Advisor appointment by CRRD (fixture, must be refused)'
+    from public.terms where status = 'active'
+  $$,
+  '42501'::char(5), null::text,
+  'crrd_admin CANNOT seat SPECIAL_ADVISOR — CBL Art. X §2.4-2.5 and §3.1; 0054 narrows ADR 0012 for this seat alone');
+
+-- 22 — exec_admin still can, so 21 is a narrowing and not a broken table.
+select pg_temp.logout();
+select pg_temp.login_as('00000000-0000-4000-a000-000000000001');   -- exec_admin
+select lives_ok($$
+    insert into public.officer_assignments
+      (id, person_id, term_id, role, status, is_acting, status_note)
+    select '00000000-0000-4000-f000-000000000104',
+           '00000000-0000-4000-b000-000000000005',
+           id, 'SPECIAL_ADVISOR', 'active', false,
+           'CBL Art. III §2.9 Special Advisor seated (fixture, recorded by exec_admin)'
+    from public.terms where status = 'active'
+  $$,
+  'exec_admin CAN STILL seat SPECIAL_ADVISOR — 0054 narrows crrd_admin only');
+
+-- 23 — and crrd_admin cannot separate the seat exec_admin just filled. The USING half
+-- filters the row out of the scan, so this is 0 ROWS AFFECTED rather than a raise —
+-- the same INSERT/UPDATE asymmetry this file's header documents.
+select pg_temp.logout();
+select pg_temp.login_as('00000000-0000-4000-a000-000000000003');   -- crrd_admin
+select is(pg_temp.rows_affected($$
+    update public.officer_assignments
+       set status = 'resigned',
+           status_note = 'attempted Special Advisor separation by CRRD (fixture, must be refused)'
+     where id = '00000000-0000-4000-f000-000000000104'
+  $$), 0,
+  'crrd_admin CANNOT record a separation on SPECIAL_ADVISOR — the USING half filters the row away');
+
+-- 24 — the catalog says so, so a future flat rewrite of these policies fails here rather
+-- than silently restoring the widening.
+select pg_temp.logout();
+select ok(
+  (select with_check from pg_policies
+     where schemaname = 'public' and tablename = 'officer_assignments'
+       and policyname = 'officer_assignments_insert') ~ 'SPECIAL_ADVISOR'
+  and
+  (select qual from pg_policies
+     where schemaname = 'public' and tablename = 'officer_assignments'
+       and policyname = 'officer_assignments_update') ~ 'SPECIAL_ADVISOR',
+  'both write policies name SPECIAL_ADVISOR — the narrowing is in the catalog, not only in the UI (0054)');
 
 
 select * from finish();

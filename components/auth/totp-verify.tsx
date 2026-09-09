@@ -118,7 +118,7 @@ export function TotpVerify({
         <p className="text-muted-foreground text-sm">{description}</p>
       </div>
 
-      <form id={FORM_ID} onSubmit={onSubmit} className="flex flex-col gap-5">
+      <form method="post" id={FORM_ID} onSubmit={onSubmit} className="flex flex-col gap-5">
         {factors.length > 1 ? (
           <Field>
             <FieldLabel htmlFor="factor">Authenticator</FieldLabel>

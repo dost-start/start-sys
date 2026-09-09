@@ -46,9 +46,9 @@ export function fieldClassName(hasError: boolean): string {
 
 export const FORM_STEPS = [
   "Personal",
-  "Scholarship & school",
+  "Scholarship & School",
   "Documents",
-  "Review & submit",
+  "Review & Submit",
 ] as const;
 
 export type FormStep = 1 | 2 | 3 | 4;
@@ -86,10 +86,16 @@ export const APPLICATION_STEP_FIELDS: Record<FormStep, readonly (keyof Applicati
       "applicant_email",
       "contact_number",
       "facebook_account",
+      "instagram_account",
+      "github_account",
+      "linkedin_account",
       "address_line",
-      "city_municipality",
-      "province",
       "postal_code",
+      "psgc_barangay_code",
+      "current_address_same_as_home",
+      "current_address_line",
+      "current_postal_code",
+      "current_psgc_barangay_code",
     ],
     2: [
       "scholarship_award",

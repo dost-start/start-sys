@@ -1,4 +1,10 @@
 # Dependencies
+# Both forms, and the second one is not redundant: a trailing slash matches a DIRECTORY
+# only, so a `node_modules` SYMLINK — which is exactly what an agent worktree makes when it
+# borrows the main checkout's install — slips past `node_modules/` and gets committed. CI
+# then fails on `ENOTDIR: not a directory, mkdir .../node_modules`, which names the symptom
+# and not the cause. Happened 2026-09-09.
+node_modules
 node_modules/
 
 # Next.js build output
@@ -36,3 +42,6 @@ supabase/.temp
 # Generated DB types working copy (committed copy is database.types.ts at repo root)
 database.types.generated.ts
 .vercel
+
+# Agent tooling state and its git worktrees (each carries its own node_modules).
+.claude/

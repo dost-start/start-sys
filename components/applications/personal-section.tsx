@@ -6,32 +6,47 @@
 // Field `name`s are the zod keys, which are the payload / column names — CONVENTIONS
 // §6, no mapping layer. The SRS dropped the school ID; it is not collected here any
 // more (0038) and stays removed (ADR 0013 — Ethan, 2026-09-06). Home address RETURNS
-// here (ADR 0013 §Consequences, Ethan 2026-09-06 "include home address") as four
-// required fields — the design canvas omitted them by mistake; the decision stands.
+// here (ADR 0013 §Consequences, Ethan 2026-09-06 "include home address"), and since PR C2
+// (2026-09-09) it is a PSGC CASCADE rather than typed boxes, alongside a second CURRENT
+// address for scholars who board near their university.
 // Age is computed from the birthdate at review time and never stored.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useFormContext } from "react-hook-form";
 
 import { Field, FieldError, FieldLabel, FormSection } from "@/components/applications/form-section";
+import { PsgcAddressPicker } from "@/components/applications/psgc-address-picker";
+import type { PsgcRegionOption } from "@/lib/applications/psgc-regions";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { SEX_LABELS, SEX_OPTIONS, type ApplicationSubmitInput } from "@/lib/applications/schema";
 
-export function PersonalSection() {
+export function PersonalSection({ regions }: { regions: PsgcRegionOption[] }) {
   const {
     register,
+    setValue,
+    watch,
     formState: { errors },
   } = useFormContext<ApplicationSubmitInput>();
 
+  // The cascade owns a barangay code; react-hook-form owns the field. `watch` is what
+  // keeps the two in step across a draft restore, a server field error and the "same as
+  // home" toggle.
+  const homeCode = watch("psgc_barangay_code");
+  const currentCode = watch("current_psgc_barangay_code");
+  const sameAsHome = watch("current_address_same_as_home");
+
   return (
     <FormSection
-      title="Personal information"
+      title="Personal Information"
       description="As it appears on your Notice of Award and school records."
     >
       <div className="grid gap-5 sm:grid-cols-2">
         <Field>
-          <FieldLabel htmlFor="applicant_given_name">First name</FieldLabel>
+          <FieldLabel htmlFor="applicant_given_name" required>
+            First name
+          </FieldLabel>
           <Input
             id="applicant_given_name"
             autoComplete="given-name"
@@ -53,7 +68,9 @@ export function PersonalSection() {
           <FieldError message={errors.middle_name?.message} />
         </Field>
         <Field>
-          <FieldLabel htmlFor="applicant_family_name">Last name</FieldLabel>
+          <FieldLabel htmlFor="applicant_family_name" required>
+            Last name
+          </FieldLabel>
           <Input
             id="applicant_family_name"
             autoComplete="family-name"
@@ -79,7 +96,9 @@ export function PersonalSection() {
 
       <div className="grid gap-5 sm:grid-cols-2">
         <Field>
-          <FieldLabel htmlFor="sex">Sex</FieldLabel>
+          <FieldLabel htmlFor="sex" required>
+            Sex
+          </FieldLabel>
           <NativeSelect
             id="sex"
             aria-invalid={errors.sex ? "true" : "false"}
@@ -98,7 +117,9 @@ export function PersonalSection() {
           <FieldError message={errors.sex?.message} />
         </Field>
         <Field>
-          <FieldLabel htmlFor="birthdate">Date of birth</FieldLabel>
+          <FieldLabel htmlFor="birthdate" required>
+            Date of birth
+          </FieldLabel>
           <Input
             id="birthdate"
             type="date"
@@ -111,7 +132,9 @@ export function PersonalSection() {
       </div>
 
       <Field>
-        <FieldLabel htmlFor="applicant_email">Email address</FieldLabel>
+        <FieldLabel htmlFor="applicant_email" required>
+          Email address
+        </FieldLabel>
         <Input
           id="applicant_email"
           type="email"
@@ -124,7 +147,9 @@ export function PersonalSection() {
 
       <div className="grid gap-5 sm:grid-cols-2">
         <Field>
-          <FieldLabel htmlFor="contact_number">Contact number</FieldLabel>
+          <FieldLabel htmlFor="contact_number" required>
+            Contact number
+          </FieldLabel>
           <Input
             id="contact_number"
             type="tel"
@@ -136,7 +161,9 @@ export function PersonalSection() {
           <FieldError message={errors.contact_number?.message} />
         </Field>
         <Field>
-          <FieldLabel htmlFor="facebook_account">Facebook account link</FieldLabel>
+          <FieldLabel htmlFor="facebook_account" required>
+            Facebook account link
+          </FieldLabel>
           <Input
             id="facebook_account"
             type="url"
@@ -150,43 +177,103 @@ export function PersonalSection() {
         </Field>
       </div>
 
+      {/*
+        PR C1 (Ethan, 2026-09-09): "Facebook as required, then Instagram, GitHub, and
+        LinkedIn as optional." Grouped under their own heading and marked optional rather
+        than mixed in above, so the required block above reads as required — which is the
+        whole point of A4's asterisks.
+      */}
       <div className="flex flex-col gap-5">
-        <h3 className="text-brand-ink text-base font-semibold">Home address</h3>
-
-        <Field>
-          <FieldLabel htmlFor="address_line">Street address</FieldLabel>
-          <Input
-            id="address_line"
-            autoComplete="street-address"
-            aria-invalid={errors.address_line ? "true" : "false"}
-            {...register("address_line")}
-          />
-          <FieldError message={errors.address_line?.message} />
-        </Field>
+        <h3 className="text-brand-ink text-base font-semibold">Other Profiles</h3>
+        <p className="text-muted-foreground -mt-3 text-sm">
+          All optional. Leave anything you do not use blank.
+        </p>
 
         <div className="grid gap-5 sm:grid-cols-3">
           <Field>
-            <FieldLabel htmlFor="city_municipality">City / municipality</FieldLabel>
+            <FieldLabel htmlFor="instagram_account" optional>
+              Instagram
+            </FieldLabel>
             <Input
-              id="city_municipality"
-              autoComplete="address-level2"
-              aria-invalid={errors.city_municipality ? "true" : "false"}
-              {...register("city_municipality")}
+              id="instagram_account"
+              type="url"
+              inputMode="url"
+              placeholder="instagram.com/yourname"
+              aria-invalid={errors.instagram_account ? "true" : "false"}
+              {...register("instagram_account")}
             />
-            <FieldError message={errors.city_municipality?.message} />
+            <FieldError message={errors.instagram_account?.message} />
           </Field>
           <Field>
-            <FieldLabel htmlFor="province">Province</FieldLabel>
+            <FieldLabel htmlFor="github_account" optional>
+              GitHub
+            </FieldLabel>
             <Input
-              id="province"
-              autoComplete="address-level1"
-              aria-invalid={errors.province ? "true" : "false"}
-              {...register("province")}
+              id="github_account"
+              type="url"
+              inputMode="url"
+              placeholder="github.com/yourname"
+              aria-invalid={errors.github_account ? "true" : "false"}
+              {...register("github_account")}
             />
-            <FieldError message={errors.province?.message} />
+            <FieldError message={errors.github_account?.message} />
           </Field>
           <Field>
-            <FieldLabel htmlFor="postal_code">Postal code</FieldLabel>
+            <FieldLabel htmlFor="linkedin_account" optional>
+              LinkedIn
+            </FieldLabel>
+            <Input
+              id="linkedin_account"
+              type="url"
+              inputMode="url"
+              placeholder="linkedin.com/in/yourname"
+              aria-invalid={errors.linkedin_account ? "true" : "false"}
+              {...register("linkedin_account")}
+            />
+            <FieldError message={errors.linkedin_account?.message} />
+          </Field>
+        </div>
+      </div>
+
+      {/*
+        PR C2 (2026-09-09): the two addresses. City and province are no longer typed — they
+        are ancestors of the barangay the cascade resolves, filled server-side by
+        `psgc_resolve()`. Only the street line and the postal code are still typed, which is
+        exactly what Ethan asked for.
+      */}
+      <div className="flex flex-col gap-5">
+        <h3 className="text-brand-ink text-base font-semibold">Home Address</h3>
+        <p className="text-muted-foreground -mt-3 text-sm">
+          Your permanent address. Pick each level from the list.
+        </p>
+
+        <PsgcAddressPicker
+          idPrefix="home"
+          regions={regions}
+          value={homeCode ?? ""}
+          onChange={(code) =>
+            setValue("psgc_barangay_code", code, { shouldValidate: true, shouldDirty: true })
+          }
+          error={errors.psgc_barangay_code?.message}
+        />
+
+        <div className="grid gap-5 sm:grid-cols-3">
+          <Field className="sm:col-span-2">
+            <FieldLabel htmlFor="address_line" required>
+              House number and street
+            </FieldLabel>
+            <Input
+              id="address_line"
+              autoComplete="street-address"
+              aria-invalid={errors.address_line ? "true" : "false"}
+              {...register("address_line")}
+            />
+            <FieldError message={errors.address_line?.message} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="postal_code" required>
+              Postal code
+            </FieldLabel>
             <Input
               id="postal_code"
               inputMode="numeric"
@@ -198,6 +285,72 @@ export function PersonalSection() {
             <FieldError message={errors.postal_code?.message} />
           </Field>
         </div>
+      </div>
+
+      <div className="flex flex-col gap-5">
+        <h3 className="text-brand-ink text-base font-semibold">Current Address</h3>
+        <p className="text-muted-foreground -mt-3 text-sm">
+          Where you actually live while studying — a dorm or boarding house, if that is not your
+          home address.
+        </p>
+
+        <label className="text-brand-body flex items-start gap-3 text-sm leading-relaxed">
+          <Checkbox
+            id="current_address_same_as_home"
+            {...register("current_address_same_as_home")}
+          />
+          <span>My current address is the same as my home address.</span>
+        </label>
+
+        {/*
+          Hidden rather than unmounted when the box is ticked: unmounting would unregister
+          the fields and drop whatever was already typed, so an applicant who ticks the box
+          to check something and unticks it again would find their work gone. The schema
+          ignores these three entirely while the box is ticked.
+        */}
+        {sameAsHome ? null : (
+          <>
+            <PsgcAddressPicker
+              idPrefix="current"
+              regions={regions}
+              value={currentCode ?? ""}
+              onChange={(code) =>
+                setValue("current_psgc_barangay_code", code, {
+                  shouldValidate: true,
+                  shouldDirty: true,
+                })
+              }
+              error={errors.current_psgc_barangay_code?.message}
+            />
+
+            <div className="grid gap-5 sm:grid-cols-3">
+              <Field className="sm:col-span-2">
+                <FieldLabel htmlFor="current_address_line" required>
+                  House number and street
+                </FieldLabel>
+                <Input
+                  id="current_address_line"
+                  aria-invalid={errors.current_address_line ? "true" : "false"}
+                  {...register("current_address_line")}
+                />
+                <FieldError message={errors.current_address_line?.message} />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="current_postal_code" required>
+                  Postal code
+                </FieldLabel>
+                <Input
+                  id="current_postal_code"
+                  inputMode="numeric"
+                  placeholder="1100"
+                  aria-invalid={errors.current_postal_code ? "true" : "false"}
+                  {...register("current_postal_code")}
+                />
+                <FieldError message={errors.current_postal_code?.message} />
+              </Field>
+            </div>
+          </>
+        )}
       </div>
     </FormSection>
   );

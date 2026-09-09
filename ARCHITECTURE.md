@@ -236,6 +236,22 @@ PRD flow: *portal → personal + academic data → **upload proof of enrollment*
 | 8 | CCDO or moderator | Approves → `approve_application(app_id)` (SECURITY DEFINER). In **one transaction**: allocate member ID, insert `people` (if new) + `memberships`, write audit row. | No human role has table-level INSERT on `people`. You can never get an ID without a membership or vice versa. See §6. |
 | 9 | CRRD | After the application period closes, sends the acceptance campaign. | §4.2. |
 
+> **Amended 2026-09-09 (PR C2, migrations `0057`–`0059`) — the address is a cascade.** Step 2
+> of the table above no longer accepts a typed city or province. The applicant picks
+> Region → Province → City/Municipality → Barangay from `psgc_locations`, the PSA's own
+> 43,769 rows, and types only the street line and the postal code. **Two addresses are
+> collected** — home and current, with a "same as home" tick.
+>
+> The form sends a BARANGAY CODE and nothing else about the place. Every name is resolved
+> server-side by `psgc_resolve()` and written by `apply_address_to_person()` (0059), which
+> is the single write path for an address on all three of `approve_application`,
+> `approve_renewal` and `update_member_record`. A client cannot state a place name at all,
+> so a stored code and a stored name can never disagree.
+>
+> The cascade's DEPTH is data-driven, not fixed at four: NCR has no provinces, and the City
+> of Manila has fourteen sub-municipalities between the city and the barangay. Both fall
+> out of "ask for the children of what was just picked" with no special case in the app.
+
 **Residual risk, stated plainly:** Drive does not virus-scan files under 100MB on upload. Mitigation is the MIME allowlist + server-side metadata verification, and viewing through the proxy in the browser's sandboxed PDF viewer rather than downloading. A malicious PDF remains theoretically possible.
 
 **Fallback (fully specified, no TBD):** if START-DOST has no Workspace tenant supporting Shared Drives (Workspace for Nonprofits' base tier does **not** include them), switch to a dedicated org-owned Google account (`files@<org domain>`) with a one-time OAuth consent, same `drive.file` scope, refresh token in `GOOGLE_DRIVE_REFRESH_TOKEN`. **The consent screen MUST be moved from Testing to In production** — refresh tokens issued in Testing expire after 7 days, and a Drive integration that silently dies every Monday is the most likely way this feature breaks post-handover. Everything funnels through `lib/documents/`, so this is a ~150-line change. See `openQuestions` — decide in week one, before the first real document is uploaded.
@@ -547,7 +563,7 @@ Even a panicked `psql` session at 2am cannot renumber a member. The `{3,}` regex
 | **Extensibility — upgradable without complete redevelopment** | Plain Postgres (movable to Neon or self-hosted without touching app code); stock Next.js (movable to a VPS); all Drive access behind `lib/documents/`; affiliations, regions **and committees** are **rows, not code**, so a new partnership, a new region or a new committee under CBL Art. III §5 needs no deploy and no migration (§4.4). The one deliberate exception is the seven departments of Art. III §4, which change only by constitutional amendment and therefore *should* cost a migration. | — |
 | **Compatibility — common browsers** | Stock Next.js output; no exotic APIs. The direct-PUT upload uses standard `fetch`/XHR. | Playwright across Chromium/WebKit/Firefox. |
 | **Usability — intuitive, low technical knowledge** | shadcn/ui accessible primitives, consistent tables, URL-driven filters (shareable links, working back button). `react-email dev` preview before any 600-person send. | Manual review with CRRD. |
-| **History — preserve previous term records; log significant admin actions with the responsible user** | Term rollover never moves rows (§4.3). A generic `audit_row()` **AFTER trigger** on `people`, `memberships`, `officer_assignments`, `applications`, `committee_memberships`, `department_assignments`, `user_roles`, `rr_send_grants`, `terms` and `confidentiality_acknowledgements` (the authoritative list is DATA_MODEL.md §8.3) records `auth.uid()`, actor role, table, PK, operation and an old/new jsonb diff. **Trigger-based, not application-based, so no code path can skip it** — that is what makes "including the user responsible" true rather than aspirational. Append-only at the *grant* level: `REVOKE UPDATE, DELETE ON audit_log FROM authenticated, anon, service_role`, and no UPDATE/DELETE policy exists at all. **Not even the CEO can rewrite history from the app.** SELECT restricted to exec_admin and tech_admin. | pgTAP. |
+| **History — preserve previous term records; log significant admin actions with the responsible user** | Term rollover never moves rows (§4.3). A generic `audit_row()` **AFTER trigger** on `people`, `memberships`, `officer_assignments`, `applications`, `committee_memberships`, `department_assignments`, `user_roles`, `rr_send_grants`, `terms` and `confidentiality_acknowledgements` (the authoritative list is DATA_MODEL.md §8.3) records `auth.uid()`, actor role, table, PK, operation and an old/new jsonb diff. **Trigger-based, not application-based, so no code path can skip it** — that is what makes "including the user responsible" true rather than aspirational. Append-only at the *grant* level: `REVOKE UPDATE, DELETE ON audit_log FROM authenticated, anon, service_role`, and no UPDATE/DELETE policy exists at all. **Not even the CEO can rewrite history from the app.** SELECT restricted to exec_admin, tech_admin and — since 2026-09-09, migration `0053`, ADR 0015 — crrd_admin. Widening the *read* changes no PII exposure, because `mask_sensitive()` redacts every registered column before the row is written; the append-only GRANT and the absent write policies are what the guarantee actually rests on, and neither moved. | pgTAP. |
 
 ### The single scheduler — `.github/workflows/scheduled.yml`
 

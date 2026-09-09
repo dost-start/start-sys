@@ -4,6 +4,9 @@
 
 export type NavLink = { href: string; label: string };
 
+// Rendered for exec_admin AND crrd_admin. The "Audit log" entry 404'd for crrd_admin
+// until migration 0053 widened `audit_log_read` to that tier (ADR 0015) — the link was
+// always right about the intent and the policy is what moved (A2, QA 2026-09-09).
 export const ADMIN_NAV_LINKS: ReadonlyArray<NavLink> = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/members", label: "Members" },
@@ -19,6 +22,9 @@ export const ADMIN_NAV_LINKS: ReadonlyArray<NavLink> = [
 export const TECH_ADMIN_NAV_LINKS: ReadonlyArray<NavLink> = [
   { href: "/system", label: "System" },
   { href: "/system/user-roles", label: "User roles" },
+  // A2 (QA 2026-09-09): tech_admin has held `audit_log_read` since 0014 and had no link
+  // to reach it — the read existed and the route did not appear in this tier's shell.
+  { href: "/audit", label: "Audit log" },
 ];
 
 export const OFFICER_NAV_LINKS: ReadonlyArray<NavLink> = [

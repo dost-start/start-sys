@@ -262,10 +262,10 @@ const pendingOnly = (rows: ApplicationRow[]) => rows.filter((r) => r.status === 
 // "Degree program", "Year level", "Expected year of graduation", "Region". If a label
 // changes, it changes in one place here.
 //
-// THE FORM IS FOUR STEPS (brand restyle, 2026-09-08): Personal → Scholarship & school →
-// Documents → Review & submit, over ONE <form>. Each step renders only its own fields, so
+// THE FORM IS FOUR STEPS (brand restyle, 2026-09-08): Personal → Scholarship & School →
+// Documents → Review & Submit, over ONE <form>. Each step renders only its own fields, so
 // the helpers below fill a step, click Next, and assert the stepper actually advanced.
-// The stepper's own buttons ("4 Review & submit") sit OUTSIDE the <form>, which is why the
+// The stepper's own buttons ("4 Review & Submit") sit OUTSIDE the <form>, which is why the
 // Next and Submit locators are scoped to it — an unscoped /submit/ would match the stepper.
 
 const applyScreens = {
@@ -280,16 +280,29 @@ const applyScreens = {
   birthdate: (page: Page) => page.getByLabel(/date of birth|birthdate/i),
   contactNumber: (page: Page) => page.getByLabel(/contact number|mobile/i),
   facebook: (page: Page) => page.getByLabel(/facebook/i),
-  sex: (page: Page) => page.getByLabel(/^sex$/i),
-  addressLine: (page: Page) => page.getByLabel(/street address/i),
-  cityMunicipality: (page: Page) => page.getByLabel(/city.*municipality/i),
-  province: (page: Page) => page.getByLabel(/^province$/i),
-  postalCode: (page: Page) => page.getByLabel(/postal code/i),
+  // ⚠ THE FOUR SHORT LABELS ARE ANCHORED AT THE START ONLY, NOT AT BOTH ENDS.
+  // Finding A4 (2026-09-09) appends a visually-hidden " (required)" to every required
+  // field's ACCESSIBLE NAME — deliberately, so a screen reader hears the word rather than
+  // reading the asterisk as "star". `getByLabel` matches the accessible name, so
+  // `/^sex$/` stopped matching "Sex (required)" and the whole submission bounced on a
+  // field the test had silently failed to fill. The leading anchor is what still
+  // distinguishes "Program" from "Expected year of graduation"; the trailing one was only
+  // ever guarding against a suffix that now legitimately exists.
+  sex: (page: Page) => page.getByLabel(/^sex\b/i),
+  // PR C2: the address is a CASCADE now, not three text boxes. City and province are no
+  // longer typed and have no locator — they are ancestors of the barangay the picker
+  // resolves, filled server-side. `pickPsgcAddress` below drives the whole thing.
+  addressLine: (page: Page) => page.getByLabel(/house number and street/i).first(),
+  postalCode: (page: Page) => page.getByLabel(/^postal code/i).first(),
+  psgcRegion: (page: Page, prefix: string) => page.locator(`#${prefix}_region`),
+  psgcStep: (page: Page, prefix: string, depth: number) => page.locator(`#${prefix}_psgc_${depth}`),
+  psgcHidden: (page: Page, prefix: string) =>
+    page.locator(`input[name="${prefix}_psgc_barangay_code"]`),
 
   scholarshipAward: (page: Page) => page.getByLabel(/scholarship award/i),
   awardYear: (page: Page) => page.getByLabel(/year of award/i),
-  university: (page: Page) => page.getByLabel(/^university$/i),
-  program: (page: Page) => page.getByLabel(/^program$/i),
+  university: (page: Page) => page.getByLabel(/^university\b/i),
+  program: (page: Page) => page.getByLabel(/^program\b/i),
   yearLevel: (page: Page) => page.getByLabel(/year level/i),
   expectedGradYear: (page: Page) => page.getByLabel(/graduat/i),
 
@@ -400,12 +413,46 @@ type ApplicantFields = {
 };
 
 /**
- * Fill steps 1 (Personal) and 2 (Scholarship & school) and click Next after each, so the
+ * Fill steps 1 (Personal) and 2 (Scholarship & School) and click Next after each, so the
  * page is left on step 3 (Documents) for `attachProof`. Every fill goes through
  * `fillIfPresent`, which dispatches on the tag — `fill()` throws on a <select> — and every
  * fill is asserted to have found its control: a label that stops matching must fail here,
  * by name, not three helpers later as "the success screen never appeared".
  */
+/**
+ * Drive one PSGC address picker to a barangay (PR C2).
+ *
+ * ⚠ THE NUMBER OF STEPS IS DATA-DRIVEN AND THE TEST MUST NOT ASSUME IT. NCR has no
+ * provinces, so its cities hang off the region; the City of Manila has sub-municipalities
+ * between the city and the barangay. So this picks the first real option, waits for the
+ * next select to appear, and repeats until none does — which is exactly what an applicant
+ * does, and exactly what a fixed three-step helper would get wrong for two regions.
+ *
+ * Returns whether a barangay code actually landed in the hidden field, so a picker that
+ * silently stopped early fails HERE, by name, rather than four helpers later as a bounced
+ * submission.
+ */
+async function pickPsgcAddress(page: Page, prefix: string): Promise<boolean> {
+  const region = applyScreens.psgcRegion(page, prefix);
+  if ((await region.count()) === 0) return false;
+  if (!(await selectFirstRealOption(region))) return false;
+
+  // Five is the deepest the country goes (region → province → city → district → barangay)
+  // plus one, so a cascade that never terminates fails the test instead of hanging it.
+  for (let depth = 0; depth < 6; depth += 1) {
+    const step = applyScreens.psgcStep(page, prefix, depth);
+    try {
+      await step.waitFor({ state: "visible", timeout: 5_000 });
+    } catch {
+      break; // no further level — the previous one was the barangay
+    }
+    if (!(await selectFirstRealOption(step))) return false;
+  }
+
+  const code = await applyScreens.psgcHidden(page, prefix).inputValue();
+  return /^\d{10}$/.test(code);
+}
+
 async function fillApplicationForm(page: Page, applicant: ApplicantFields): Promise<void> {
   expect(await currentStep(page)).toBe(1);
 
@@ -419,8 +466,6 @@ async function fillApplicationForm(page: Page, applicant: ApplicantFields): Prom
     [applyScreens.contactNumber(page), "09171234500"],
     [applyScreens.facebook(page), "https://facebook.com/e2e.applicant"],
     [applyScreens.addressLine(page), "159 Fixture St."],
-    [applyScreens.cityMunicipality(page), "Quezon City"],
-    [applyScreens.province(page), "Metro Manila"],
     [applyScreens.postalCode(page), "1100"],
   ];
   for (const [locator, value] of personal) {
@@ -428,18 +473,29 @@ async function fillApplicationForm(page: Page, applicant: ApplicantFields): Prom
   }
   // The SRS choice list (0038): rows, not code — pick the first real option.
   expect(await selectFirstRealOption(applyScreens.sex(page))).toBe(true);
+
+  // PR C2 — the home address cascade. "Same as home address" is ticked by default, so the
+  // current address needs no input here; the tick is the claim and the database copies
+  // home across (`apply_address_to_person`, 0059).
+  expect(await pickPsgcAddress(page, "home")).toBe(true);
+
   await nextStep(page);
 
-  // ── Step 2 — Scholarship & school, then the region ───────────────────────
+  // ── Step 2 — the region FIRST, then scholarship and school ───────────────
   // The SRS choice lists (0037/0038) and the 18 seeded regions, all populated by
   // ordinary anon reads — pick the first real option of each.
+  //
+  // ⚠ ORDER IS LOAD-BEARING (PR E, 2026-09-09). The university select offers only the
+  // schools in the CHOSEN region and is disabled until one is picked, so selecting the
+  // university before the region would find an empty, disabled control. Picking the
+  // region first is also what the form now renders first.
+  expect(await selectFirstRealOption(applyScreens.region(page))).toBe(true);
   expect(await selectFirstRealOption(applyScreens.scholarshipAward(page))).toBe(true);
   expect(await selectFirstRealOption(applyScreens.awardYear(page))).toBe(true);
   expect(await selectFirstRealOption(applyScreens.university(page))).toBe(true);
   expect(await selectFirstRealOption(applyScreens.program(page))).toBe(true);
   expect(await fillIfPresent(applyScreens.yearLevel(page), "2")).toBe(true);
   expect(await fillIfPresent(applyScreens.expectedGradYear(page), "2029")).toBe(true);
-  expect(await selectFirstRealOption(applyScreens.region(page))).toBe(true);
   await nextStep(page);
 
   // ── Step 3 — Documents: the caller attaches the files ────────────────────

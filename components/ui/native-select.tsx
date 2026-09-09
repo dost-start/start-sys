@@ -7,7 +7,7 @@ import { ChevronDownIcon } from "lucide-react";
 import { inputClassName } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
-export const selectClassName = cn(inputClassName, "appearance-none pr-10");
+export const selectClassName = cn(inputClassName, "cursor-pointer appearance-none pr-10");
 
 function NativeSelect({
   className,

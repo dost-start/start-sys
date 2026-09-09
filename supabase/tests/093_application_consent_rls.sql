@@ -131,25 +131,25 @@ select pg_temp.login_anon();
 
 select is(
   (select count(*)::int from public.privacy_notice_versions),
-  2,
-  'anon reads EXACTLY 2 privacy notice versions (v1 from 0035, v2 from 0052) — the '
-  'published text must be readable without an account or consent to it is not informed'
+  3,
+  'anon reads EXACTLY 3 privacy notice versions (v1 from 0035, v2 from 0052, v3 from 0056) '
+  '— the published text must be readable without an account or consent to it is not informed'
 );
 
 select pg_temp.logout();
 
--- 7 — the digest is the link between the row and the bytes. The CURRENT version (v2, 0052)
--- carries the sha256 of docs/privacy/PRIVACY_NOTICE.md as committed; v1 keeps the digest
--- of the bytes its applicants agreed to, which the file no longer has.
+-- 7 — the digest is the link between the row and the bytes. The CURRENT version (v3, 0056)
+-- carries the sha256 of docs/privacy/PRIVACY_NOTICE.md as committed; v1 and v2 keep the
+-- digests of the bytes THEIR applicants agreed to, which the file no longer has.
 --     shasum -a 256 docs/privacy/PRIVACY_NOTICE.md
 -- ⚠ EDITING THAT FILE IS SUPPOSED TO BREAK THIS (the CI digest guard compares the file to
 --   the newest migration's hash). A changed notice is a new version, in a new migration,
 --   with PRIVACY_NOTICE_VERSION bumped in the same commit — because the applicants who
 --   consented to a version consented to *those bytes*.
 select is(
-  (select body_sha256 from public.privacy_notice_versions where version = 'v2'),
-  '3818ed79cff8e66d5b933336a1778bb66c571f9d6cd03965ee5f3ce084651c5e',
-  'the seeded v2 digest is the sha256 of docs/privacy/PRIVACY_NOTICE.md — editing the notice '
+  (select body_sha256 from public.privacy_notice_versions where version = 'v3'),
+  '727192013e8bc57e3ed472b84433cd17527fc2eb4892b495971fec5f46a1ce53',
+  'the seeded v3 digest is the sha256 of docs/privacy/PRIVACY_NOTICE.md — editing the notice '
   'under a stale hash is meant to fail here rather than pass silently'
 );
 
@@ -294,14 +294,14 @@ select is(
   'database''s'
 );
 
--- 16 — ⚠ and 'v0' becomes 'v2' (the current version, 0052) WITHOUT tripping the foreign
+-- 16 — ⚠ and 'v0' becomes 'v3' (the current version, 0056) WITHOUT tripping the foreign
 -- key, because BEFORE triggers run before constraints are checked. See the header: this
 -- is what makes a claim of agreement to a superseded or invented text impossible rather
 -- than merely erroneous.
 select is(
   (select privacy_notice_version from public.applications
     where id = '00000000-0000-4000-8000-000000000932'),
-  'v2',
+  'v3',
   'a client-supplied version of ''v0'' is OVERWRITTEN with the server''s current version — '
   'and the bogus value never reaches the foreign key, because BEFORE triggers run first'
 );
@@ -400,7 +400,7 @@ select pg_temp.logout();
 select is(
   (select consented_at::text || '|' || privacy_notice_version
      from public.applications where id = '00000000-0000-4000-8000-000000000934'),
-  now()::text || '|v2',
+  now()::text || '|v3',
   'and the anonymous row lands with the SERVER''s clock and the SERVER''s current version, '
   'not the 1999 timestamp and the invented ''v0'' the client sent'
 );

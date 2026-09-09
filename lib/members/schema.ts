@@ -17,7 +17,9 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 //
 // 1. `MEMBER_PATCHABLE_KEYS` must equal `update_member_record()`'s inline whitelist
-//    (0030). A key here that the function refuses is a form field that always errors
+//    (0030, replaced by 0041, extended by 0055, addresses reworked by 0059). A key here
+//    that the function refuses
+//    is a form field that always errors
 //    with 22023; a key the function allows but this schema strips is a field a CCDO
 //    edits and silently loses. schema.test.ts parses 0030 and asserts set equality.
 //
@@ -46,8 +48,13 @@
 import { z } from "zod";
 
 import { SCHOLARSHIP_AWARDS, SEX_OPTIONS } from "@/lib/applications/schema";
-
-const FACEBOOK_URL_RE = /^https?:\/\/(www\.|m\.|web\.)?(facebook\.com|fb\.com|fb\.me)\/.+/i;
+import {
+  isFacebookProfileUrl,
+  isGithubProfileUrl,
+  isInstagramProfileUrl,
+  isLinkedinProfileUrl,
+  normalizeProfileUrl,
+} from "@/lib/validation/social";
 
 import { MEMBERSHIP_STATUSES } from "@/lib/members/filters";
 import type { MembershipStatus } from "@/lib/members/transitions";
@@ -144,13 +151,19 @@ export const MEMBER_PATCHABLE_KEYS = [
   "contact_number",
   "personal_email",
   "address_line",
-  "city_municipality",
-  "province",
   "postal_code",
+  "psgc_barangay_code",
+  "current_address_line",
+  "current_postal_code",
+  "current_psgc_barangay_code",
+  "current_address_same_as_home",
   "school",
   "school_id_no",
   "sex",
   "facebook_account",
+  "instagram_account",
+  "github_account",
+  "linkedin_account",
   "scholarship_award",
   "award_year",
   "university_id",
@@ -213,11 +226,36 @@ const patchShape = {
       .pipe(z.email("Enter a valid email address")),
   ),
 
+  // PR C2 (2026-09-09): the admin edit screen gets the same address shape the public form
+  // has. `city_municipality` and `province` are GONE from this patch — they are derived
+  // from the barangay code by `psgc_resolve()` (0058) and written by
+  // `apply_address_to_person()` (0059). Letting a reviewer type a city next to a code that
+  // says otherwise would put a member in a city they do not live in, with nothing to catch it.
   address_line: clearableText("Street address", 200),
-  city_municipality: clearableText("City or municipality"),
-  province: clearableText("Province"),
   postal_code: clearable(
     z.string().trim().regex(POSTAL_CODE_RE, "Enter a four-digit postal code, e.g. 1101"),
+  ),
+  psgc_barangay_code: clearable(
+    z
+      .string()
+      .trim()
+      .regex(/^\d{10}$/, "Pick the barangay from the list"),
+  ),
+
+  current_address_line: clearableText("Current street address", 200),
+  current_postal_code: clearable(
+    z.string().trim().regex(POSTAL_CODE_RE, "Enter a four-digit postal code, e.g. 1101"),
+  ),
+  current_psgc_barangay_code: clearable(
+    z
+      .string()
+      .trim()
+      .regex(/^\d{10}$/, "Pick the barangay from the list"),
+  ),
+  // A string like every other patch value — `MemberPatch` is a map of strings-or-null so
+  // the absent / null / value distinction survives the wire, and 0059 casts it.
+  current_address_same_as_home: clearable(
+    z.enum(["true", "false"], "Choose whether the current address matches the home one"),
   ),
 
   school: clearableText("School", 200),
@@ -226,13 +264,50 @@ const patchShape = {
   // The SRS profile fields (0038, 0041). Same "clearable" contract as the rest: an empty
   // string clears the column, absence leaves it alone.
   sex: clearable(z.enum(SEX_OPTIONS, "Select an option")),
+  // A5: normalized then checked, exactly as `/apply` does it — a link CRRD can type
+  // must be a link CRRD can save, or a record approved from the public form becomes
+  // uncorrectable on the edit screen.
   facebook_account: clearable(
     z
       .string()
       .trim()
       .max(300, "Facebook account link is too long")
-      .refine((value) => FACEBOOK_URL_RE.test(value), {
-        message: "Enter the full link to the member's Facebook profile",
+      .transform(normalizeProfileUrl)
+      .refine(isFacebookProfileUrl, {
+        message: "Enter the link to the member's Facebook profile, e.g. facebook.com/name",
+      }),
+  ),
+  // PR C1 (2026-09-09): the three optional networks, on the same "clearable" contract as
+  // every other patchable field — an empty string CLEARS the column, absence leaves it
+  // alone. That distinction is the whole reason this form patches rather than replaces.
+  instagram_account: clearable(
+    z
+      .string()
+      .trim()
+      .max(300, "Instagram account link is too long")
+      .transform(normalizeProfileUrl)
+      .refine(isInstagramProfileUrl, {
+        message: "Enter the link to the member's Instagram profile, e.g. instagram.com/name",
+      }),
+  ),
+  github_account: clearable(
+    z
+      .string()
+      .trim()
+      .max(300, "GitHub account link is too long")
+      .transform(normalizeProfileUrl)
+      .refine(isGithubProfileUrl, {
+        message: "Enter the link to the member's GitHub profile, e.g. github.com/name",
+      }),
+  ),
+  linkedin_account: clearable(
+    z
+      .string()
+      .trim()
+      .max(300, "LinkedIn account link is too long")
+      .transform(normalizeProfileUrl)
+      .refine(isLinkedinProfileUrl, {
+        message: "Enter the link to the member's LinkedIn profile, e.g. linkedin.com/in/name",
       }),
   ),
   scholarship_award: clearable(z.enum(SCHOLARSHIP_AWARDS, "Select a DOST scholarship award")),

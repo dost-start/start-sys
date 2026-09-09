@@ -16,7 +16,9 @@
 -- Neither is sufficient alone and neither may be widened to make a screen work.
 --
 --    1-3   positive controls, and the exact 13-column shape of v_member_directory
---    4-22  has_column_privilege for `authenticated` over the FULL 19-column people list
+--    4      the readable set derived from the CATALOG — the assertion that actually makes
+--           a new column fail (added PR C2; see the note above it)
+--    5-23   has_column_privilege for `authenticated`, column by column, by name
 --   23-41  the same 19 for `anon` — all false, at the GRANT, before RLS is consulted
 --   42-50  as EACH of the nine fixtures: `select birthdate from people` raises 42501
 --   51-59  as EACH of the nine fixtures: `select * from people` raises 42501
@@ -55,7 +57,7 @@ begin;
 \ir helpers/auth.psql
 \ir helpers/fixtures.psql
 
-select plan(68);
+select plan(69);
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════════
@@ -101,6 +103,27 @@ select columns_are(
 --     redacted_at. The GRANT is an ALLOWLIST, so a column is absent until someone argues
 --     it in.
 -- ═══════════════════════════════════════════════════════════════════════════════════
+
+-- ⚠ THE COMPLETENESS ASSERTION, ADDED 2026-09-09 (PR C2), AND IT IS THE ONE THAT MATTERS.
+-- Everything below enumerates columns BY NAME, which means a column added tomorrow is
+-- simply not asserted — the header's promise that "a twentieth sensitive column FAILS this
+-- test" was not actually kept by hand-written assertions. PR C2 added fifteen columns to
+-- `people` in one migration, every one of them an address component, and not one of them
+-- would have been noticed here.
+--
+-- This derives the readable set from the catalog instead: whatever `people` grows, the six
+-- columns `authenticated` may read are these six. A new column defaults to FAILING, which
+-- is the direction PRD Success Metric 8 requires ("0 sensitive fields returned to Officer
+-- or RR tiers") — and the fix for a legitimate new public column is one line here, argued
+-- for in a diff.
+select is(
+  (select array_agg(c.column_name::text order by c.column_name)
+     from information_schema.columns c
+    where c.table_schema = 'public' and c.table_name = 'people'
+      and has_column_privilege('authenticated', 'public.people', c.column_name, 'select')),
+  array['created_at', 'family_name', 'given_name', 'id', 'join_year', 'member_id'],
+  'authenticated reads EXACTLY these six columns of people, derived from the catalog — a '
+  'column added later is denied until someone argues it in (0015)');
 
 select ok(has_column_privilege('authenticated', 'public.people', 'id', 'select'),
   'authenticated MAY read people.id — one of the six granted columns');

@@ -11,6 +11,7 @@
 // year (that is the year the scholar joins the org).
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { useEffect, useRef } from "react";
 import { useFormContext } from "react-hook-form";
 
 import {
@@ -28,6 +29,7 @@ import {
   SCHOLARSHIP_AWARDS,
   type ApplicationSubmitInput,
 } from "@/lib/applications/schema";
+import { awardYearOptions } from "@/lib/validation/award-year";
 
 export type UniversityOption = {
   id: string;
@@ -50,12 +52,6 @@ const YEAR_LEVEL_LABELS: Record<(typeof YEAR_LEVELS)[number], string> = {
   5: "5th year",
 };
 
-/** The SRS lists 2022–2026; a scholar can hold an older award, so offer ten years back. */
-function awardYears(): number[] {
-  const current = new Date().getUTCFullYear();
-  return Array.from({ length: 11 }, (_, i) => current - i);
-}
-
 export function AcademicSection({
   universities,
   programs,
@@ -67,8 +63,22 @@ export function AcademicSection({
 }) {
   const {
     register,
+    setValue,
+    watch,
     formState: { errors },
   } = useFormContext<ApplicationSubmitInput>();
+
+  // ── PR E, and the university half of Ethan's cascade ─────────────────────────────
+  // The university list is 445 rows (0048 + 0050 — the DOST-SEI placement list plus the
+  // LUCs). Rendering all of them meant ~27KB of <option> markup in the HTML and the same
+  // list again in the RSC payload, on a form that is filled on mobile data; it also meant
+  // scrolling 445 entries to find one school.
+  //
+  // The region is already a required field on this same step, so it is the natural parent:
+  // pick a region, and the select offers that region's schools only. Same data, same
+  // props, ~20 options instead of 445 — and it is the shape PR C2's full PSGC cascade will
+  // extend rather than replace.
+  const selectedRegionId = watch("region_id");
 
   const byRegion = new Map<string, UniversityOption[]>();
   for (const u of universities) {
@@ -76,18 +86,32 @@ export function AcademicSection({
     list.push(u);
     byRegion.set(u.region_id, list);
   }
-  const groups = regions
-    .filter((r) => byRegion.has(r.id))
-    .map((r) => ({ region: r, items: byRegion.get(r.id) ?? [] }));
+  const regionUniversities = selectedRegionId ? (byRegion.get(selectedRegionId) ?? []) : [];
+  const selectedRegionName = regions.find((r) => r.id === selectedRegionId)?.name ?? null;
+
+  // A university chosen under a previous region is not a valid answer under the new one,
+  // and leaving it selected would submit a school in a region the applicant just changed
+  // away from. Cleared on the region change, not on submit, so the applicant SEES it go.
+  const lastRegionRef = useRef<string | undefined>(selectedRegionId);
+  useEffect(() => {
+    if (lastRegionRef.current === selectedRegionId) return;
+    lastRegionRef.current = selectedRegionId;
+    setValue("university_id", "" as ApplicationSubmitInput["university_id"], {
+      shouldValidate: false,
+      shouldDirty: false,
+    });
+  }, [selectedRegionId, setValue]);
 
   return (
     <FormSection
-      title="Scholarship and academic information"
+      title="Scholarship and Academic Information"
       description="From your Notice of Award and current enrollment."
     >
       <div className="grid gap-5 sm:grid-cols-2">
         <Field>
-          <FieldLabel htmlFor="scholarship_award">DOST scholarship award</FieldLabel>
+          <FieldLabel htmlFor="scholarship_award" required>
+            DOST scholarship award
+          </FieldLabel>
           <NativeSelect
             id="scholarship_award"
             aria-invalid={errors.scholarship_award ? "true" : "false"}
@@ -106,7 +130,9 @@ export function AcademicSection({
           <FieldError message={errors.scholarship_award?.message} />
         </Field>
         <Field>
-          <FieldLabel htmlFor="award_year">Year of award</FieldLabel>
+          <FieldLabel htmlFor="award_year" required>
+            Year of award
+          </FieldLabel>
           <NativeSelect
             id="award_year"
             aria-invalid={errors.award_year ? "true" : "false"}
@@ -116,7 +142,7 @@ export function AcademicSection({
             <option value="" disabled>
               Select…
             </option>
-            {awardYears().map((year) => (
+            {awardYearOptions().map((year) => (
               <option key={year} value={year}>
                 {year}
               </option>
@@ -127,32 +153,39 @@ export function AcademicSection({
       </div>
 
       <Field>
-        <FieldLabel htmlFor="university_id">University</FieldLabel>
+        <FieldLabel htmlFor="university_id" required>
+          University
+        </FieldLabel>
         <NativeSelect
           id="university_id"
           aria-invalid={errors.university_id ? "true" : "false"}
           defaultValue=""
+          disabled={!selectedRegionId}
           {...register("university_id")}
         >
           <option value="" disabled>
-            Select your university…
+            {selectedRegionId ? "Select your university…" : "Choose your region first…"}
           </option>
-          {groups.map(({ region, items }) => (
-            <optgroup key={region.id} label={region.name}>
-              {items.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name}
-                  {u.city_municipality ? ` — ${u.city_municipality}` : ""}
-                </option>
-              ))}
-            </optgroup>
+          {regionUniversities.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.name}
+              {u.city_municipality ? ` — ${u.city_municipality}` : ""}
+            </option>
           ))}
         </NativeSelect>
+        {selectedRegionId && regionUniversities.length === 0 ? (
+          <FieldHint>
+            No DOST-SEI listed school is recorded for {selectedRegionName ?? "this region"} yet.
+            Choose the region your school is in, or contact CRRD.
+          </FieldHint>
+        ) : null}
         <FieldError message={errors.university_id?.message} />
       </Field>
 
       <Field>
-        <FieldLabel htmlFor="program_id">Program</FieldLabel>
+        <FieldLabel htmlFor="program_id" required>
+          Program
+        </FieldLabel>
         <NativeSelect
           id="program_id"
           aria-invalid={errors.program_id ? "true" : "false"}
@@ -173,7 +206,9 @@ export function AcademicSection({
 
       <div className="grid gap-5 sm:grid-cols-2">
         <Field>
-          <FieldLabel htmlFor="year_level">Year level</FieldLabel>
+          <FieldLabel htmlFor="year_level" required>
+            Year level
+          </FieldLabel>
           <NativeSelect
             id="year_level"
             aria-invalid={errors.year_level ? "true" : "false"}
@@ -192,7 +227,9 @@ export function AcademicSection({
           <FieldError message={errors.year_level?.message} />
         </Field>
         <Field>
-          <FieldLabel htmlFor="expected_grad_year">Expected year of graduation</FieldLabel>
+          <FieldLabel htmlFor="expected_grad_year" required>
+            Expected year of graduation
+          </FieldLabel>
           <Input
             id="expected_grad_year"
             inputMode="numeric"

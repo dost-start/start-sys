@@ -72,7 +72,7 @@ export function ResetPasswordForm({ homePath }: { homePath: string }) {
         <p className="text-muted-foreground text-sm">Use at least 12 characters.</p>
       </div>
 
-      <form onSubmit={onSubmit} className="flex flex-col gap-5">
+      <form method="post" onSubmit={onSubmit} className="flex flex-col gap-5">
         <Field>
           <FieldLabel htmlFor="password">New password</FieldLabel>
           <Input

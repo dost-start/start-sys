@@ -188,6 +188,15 @@ Format: `As a <role>, I can <action> so that <outcome>.` Every story is testable
 - All required fields are validated for presence and format before the submission is accepted.
 - A submitted application is persisted with status **Pending** and is visible to CRRD immediately.
 - No third-party form tool is involved in the path.
+- **Address is picked, not typed (2026-09-09, PR C2).** Region → Province →
+  City/Municipality → Barangay come from the PSA's Philippine Standard Geographic Code
+  (`psgc_locations`, 43,769 rows, publication pinned in migration `0057`); only the street
+  line and the postal code are typed. **Two addresses** are collected — home, and the
+  current address the scholar lives at while studying — with a "same as home" tick. The
+  form submits a barangay code; every place name is resolved server-side, so a submitted
+  record cannot name a city its code disagrees with. This is what makes "validated for
+  presence and format" true of an address rather than aspirational: "Q.C.", "Quezon City"
+  and "quezon city" used to be three different cities to every filter.
 
 **US-B2 — Upload proof of enrollment.** *(Amended 2026-09-05: TWO documents — the latest registration form and the DOST-SEI Notice of Award — both required, both verified server-side, both served only through the audited proxy; migration `0040`.)* As an applicant, I can upload my Certificate of Registration, scholar ID or equivalent as part of the application, so that CRRD can verify my scholar status. *(PDF Addendum)*
 - Accepted formats and a maximum size are enforced, and enforcement is server-side — a client that claims a different type or size is rejected.
@@ -409,7 +418,14 @@ Format: `As a <role>, I can <action> so that <outcome>.` Every story is testable
 - Membership status updates, officer role changes, application decisions, permission grants and document views are all logged.
 - Each entry names the acting user, the affected record, the action, the timestamp, and what changed.
 - No user role can edit or delete an audit entry.
-- The log is readable only by Executive and Technical Admins.
+- The log is readable by Executive, Technical **and CRRD** Admins. *(Amended 2026-09-09 —
+  migration `0053`, ADR 0015. The original wording was "only by Executive and Technical
+  Admins"; CRRD was added because they operate the records surface the log records and
+  had no way to answer "who changed this" about their own department's work. The
+  objection — the watched reading the watcher — is recorded in the ADR rather than
+  dismissed. Immutability is what makes the log trustworthy and immutability did not
+  move: still no INSERT, UPDATE or DELETE policy for any tier, still masked before
+  write, so widening the read widens no PII.)*
 
 **US-I2 — Search members.** As an authorized user, I can search for a specific member record by name or member ID, so that I can find a person in seconds instead of scrolling a spreadsheet. *(PDF Specific Problem 2)*
 - Partial-name search returns matches; search is case- and accent-tolerant.

@@ -52,6 +52,46 @@ credential lives only in the vendor's own auth flow, e.g. TOTP).
 
 ---
 
+## `APP_BASE_URL` — not a secret, and that is exactly why it was missed
+
+**Added 2026-09-09 (PR F).** Every job in `.github/workflows/scheduled.yml` that calls the
+app calls it at `APP_BASE_URL`. It is a repository **secret** in the workflow (so it is
+absent-checked the same way as the real secrets) but it holds no credential — it is a
+hostname. It is therefore not in the eleven-secret inventory above, was not on anyone's
+rotation checklist, and was **never set on this repository at all**.
+
+The consequence was not a loud failure. It was silence in the right shape: the sweep job
+fails its preflight, `purge_abandoned_drafts()` never runs, and **abandoned application
+drafts keep a real person's birthdate, address and contact number indefinitely** —
+alongside their uploaded documents. The RA 10173 retention rule the privacy notice
+publishes ("an application you start but do not finish is cleared after 30 days") is a
+promise the system was not keeping.
+
+Set both, once, then dispatch the job by hand:
+
+```bash
+gh secret set APP_BASE_URL --repo dost-start/start-sys --body "https://start-sys-pi.vercel.app"
+gh secret set JOB_SHARED_SECRET --repo dost-start/start-sys   # paste the value from Vercel; must match exactly
+gh workflow run scheduled.yml --repo dost-start/start-sys -f job=purge-abandoned-drafts
+gh run watch --repo dost-start/start-sys
+```
+
+**Three things to check in that run's log, in order.**
+
+1. The `Sweeping: …` line names the **live** deployment. The org moved from
+   `start-sys.vercel.app` to `start-sys-pi.vercel.app`, and Supabase projects, on the same
+   day. A stale host sweeps the *old* project and returns a healthy 200 — a wrong sweep and
+   a clean one are indistinguishable without this line, which is why the job prints it.
+2. The counts are printed. `redacted=0` on the first run is a finding, not a pass, if you
+   know there are abandoned drafts — check the host again.
+3. `JOB_SHARED_SECRET` matches the Vercel Production value exactly. A mismatch is a 401,
+   which `--fail-with-body` turns into a red run rather than a silent skip.
+
+Nothing here is Vercel-side: `APP_BASE_URL` is not read by the application and must not be
+added to the Vercel environment.
+
+---
+
 ## How to verify it worked
 
 Per-row above, but the general pattern: **rotate, confirm the new value works end to

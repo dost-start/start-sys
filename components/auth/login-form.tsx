@@ -7,7 +7,8 @@
 //
 // No "create account" affordance anywhere in this file. Accounts are invite-only.
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,14 @@ import { type SignInInput, signInSchema } from "@/lib/auth/schema";
 
 export function LoginForm({ next }: { next?: string }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // ⚠ A1 — see the `method="post"` note on the <form> below. The submit control stays
+  // disabled until this effect runs, which is the moment React has hydrated and
+  // `onSubmit` is live. Before that there is no JS handler, so a fast submit on a slow
+  // connection would be a NATIVE submit. The disabled button is UX; `method="post"` is
+  // the actual guarantee, because a determined Enter keypress can still submit a form
+  // whose button is disabled.
+  const [isHydrated, setIsHydrated] = useState(false);
+  useEffect(() => setIsHydrated(true), []);
   const {
     register,
     handleSubmit,
@@ -60,8 +69,23 @@ export function LoginForm({ next }: { next?: string }) {
   // Field-level messages stay plain paragraphs (no `role="alert"`): e2e/fixtures/auth.ts
   // reads the ONE form-level alert below, and a second alert on the page would make
   // that lookup ambiguous. The inputs carry `aria-invalid` either way.
+  // ⚠ A1 — CREDENTIAL EXPOSURE, found in QA 2026-09-09. This form carried no `method`,
+  // so a submit landing before React hydrated performed the HTML default: a GET, which
+  // puts `?email=…&password=…` in the address bar, in browser history, in the `Referer`
+  // header of the next navigation, and in the hosting provider's access log. Observed
+  // live as `/login?email=demo.ccdo%40start-sys.test&password=ccdo123`.
+  //
+  // `method="post"` makes the pre-hydration fallback a POST to this same route, which is
+  // a Server Component page with no POST handler — so it fails with a 405 and the
+  // credentials never leave the request body. Failing loudly is the correct outcome;
+  // leaking quietly is not. DO NOT REMOVE THIS ATTRIBUTE.
   return (
-    <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
+    <form
+      method="post"
+      onSubmit={handleSubmit(onSubmit)}
+      noValidate
+      className="flex flex-col gap-5"
+    >
       <Field>
         <FieldLabel htmlFor="email">Email address</FieldLabel>
         <Input
@@ -93,11 +117,29 @@ export function LoginForm({ next }: { next?: string }) {
       )}
 
       <div className="flex flex-col items-center gap-3.5 pt-1.5">
-        <Button type="submit" className="mx-auto w-full sm:w-[320px]" disabled={isSubmitting}>
+        <Button
+          type="submit"
+          className="mx-auto w-full sm:w-[320px]"
+          disabled={isSubmitting || !isHydrated}
+        >
           {isSubmitting ? "Signing in…" : "Log in"}
         </Button>
+        {/*
+          A8 (reviewer PDF 2026-09-09): applicants were reaching /login looking for the
+          application form and finding no way onward. This points them at /apply. It is
+          NOT a signup affordance — /apply creates an application, never an account, and
+          the wording deliberately avoids "sign up", "register" and "create an account"
+          so `e2e/login.spec.ts` case 3 keeps passing.
+        */}
         <p className="text-muted-foreground text-center text-xs">
-          Officer accounts are created by invitation.
+          Applying for membership?{" "}
+          <Link
+            href="/apply"
+            className="text-brand-link font-medium underline-offset-4 hover:underline"
+          >
+            Go to the application form
+          </Link>
+          .
         </p>
       </div>
     </form>

@@ -13,9 +13,18 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // ⚠ THE CONTRACT THAT MUST NOT DRIFT — APPLICATION_PAYLOAD_KEYS
 // ═══════════════════════════════════════════════════════════════════════════════
-// `approve_application()` (0041) reads FIFTEEN keys out of `applications.payload` with
-// `payload->>'…'` and writes them onto the new `people` and `memberships` rows. Those
-// fifteen strings are spelled HERE and nowhere else.
+// `approve_application()` (0041, extended by 0055) and `apply_address_to_person()` (0059,
+// which it calls) read TWENTY-ONE keys out of `applications.payload` with `payload->>'…'`
+// and write them onto the new `people` and `memberships` rows. Those twenty-one strings
+// are spelled HERE and nowhere else.
+//
+// PR C2 (2026-09-09) removed `city_municipality` and `province` — a client no longer
+// supplies a place NAME at all — and added the two barangay codes plus the current
+// address's typed parts.
+//
+// PR C1 (2026-09-09) added the last three: `instagram_account`, `github_account`,
+// `linkedin_account` — optional, but on the same contract, because a key that is only
+// SOMETIMES present is still a key `approve_application()` has to spell identically.
 //
 // ADR 0013 (2026-09-06, "Consequences"): home address returns to the form —
 // `address_line`, `city_municipality`, `province`, `postal_code` — as four REQUIRED
@@ -45,6 +54,15 @@
 
 import { z } from "zod";
 
+import { awardYearWindow } from "@/lib/validation/award-year";
+import {
+  isFacebookProfileUrl,
+  isGithubProfileUrl,
+  isInstagramProfileUrl,
+  isLinkedinProfileUrl,
+  normalizeProfileUrl,
+} from "@/lib/validation/social";
+
 // ── Formats ──────────────────────────────────────────────────────────────────
 
 /**
@@ -60,14 +78,10 @@ const PH_MOBILE_RE = /^(?:\+63|0)9\d{9}$/;
 /** Everything a human puts between the digits of a phone number. */
 const PHONE_SEPARATORS_RE = /[\s()\-.]/g;
 
-const FACEBOOK_URL_RE = /^https?:\/\/(www\.|m\.|web\.)?(facebook\.com|fb\.com|fb\.me)\/.+/i;
-
 /** Philippine ZIP code: exactly four digits (ADR 0013 — home address returns to the form). */
 const POSTAL_CODE_RE = /^\d{4}$/;
 const YEAR_MIN = 2000;
 const YEAR_MAX = 2100;
-const AWARD_YEAR_MIN = 2000;
-const AWARD_YEAR_MAX = new Date().getUTCFullYear();
 
 /** SRS 2026-09-05 — the `sex_option` enum (0038), in display order. */
 export const SEX_OPTIONS = ["male", "female", "prefer_not_to_say"] as const;
@@ -126,12 +140,65 @@ export const DECLARED_ALLOWED_MIME = [
 /** 10MB. A phone photo of a Certificate of Registration is comfortably under this. */
 export const MAX_DECLARED_PROOF_BYTES = 10 * 1024 * 1024;
 
+/**
+ * A PSGC barangay code: the PSA's ten digits, and the leaf of the address cascade.
+ *
+ * Shape only. That the code EXISTS and is genuinely a barangay is checked by the database
+ * — a foreign key to `psgc_locations` plus `psgc_resolve()`, which raises on a code that
+ * names a city. Re-checking existence here would mean shipping 43,769 rows to the browser
+ * to answer a question the database answers for free.
+ */
+const PSGC_CODE_RE = /^\d{10}$/;
+
+const psgcBarangayCode = (message: string) =>
+  z.string().trim().min(1, message).regex(PSGC_CODE_RE, message);
+
+/** The same, optional — the current address is only required when it differs from home. */
+const optionalPsgcBarangayCode = () =>
+  z
+    .string()
+    .trim()
+    .regex(PSGC_CODE_RE, "Select the barangay from the list")
+    .optional()
+    .or(z.literal("").transform(() => undefined));
+
+const optionalPostalCode = () =>
+  z
+    .string()
+    .trim()
+    .regex(POSTAL_CODE_RE, "Enter a 4-digit postal code")
+    .optional()
+    .or(z.literal("").transform(() => undefined));
+
 const requiredText = (label: string, max = 120) =>
   z
     .string()
     .trim()
     .min(1, `${label} is required`)
     .max(max, `${label} must be ${max} characters or fewer`);
+
+/**
+ * An OPTIONAL social profile link (PR C1).
+ *
+ * Blank is absence and short-circuits to `undefined` BEFORE the host check, so leaving
+ * the box empty is never an error; anything actually typed is normalized (a scheme is
+ * added) and then has to be a profile on the right host. Written as a `superRefine` on a
+ * transformed string rather than `.optional()` on a refined one because the transform has
+ * to run first — otherwise `instagram.com/name` fails the host check for want of a scheme,
+ * which is the exact defect A5 fixed on the required field.
+ */
+const optionalProfile = (isOn: (value: string) => boolean, message: string) =>
+  z
+    .string()
+    .trim()
+    .max(300, "That link is too long")
+    .transform((value) => (value === "" ? undefined : normalizeProfileUrl(value)))
+    .superRefine((value, ctx) => {
+      if (value !== undefined && !isOn(value)) {
+        ctx.addIssue({ code: "custom", message });
+      }
+    })
+    .optional();
 
 /** An untouched optional input arrives as `""`, which is absence, not a value. */
 const optionalText = (max = 120) =>
@@ -188,32 +255,88 @@ const personalShape = {
       message: "Enter a Philippine mobile number, e.g. 09171234567 or +639171234567",
     }),
   // SRS: "Facebook Account Link" — a contact channel, sensitive (RA 10173), registered.
+  //
+  // A5 (reviewer PDF 2026-09-09): `facebook.com/name` was refused because the check
+  // demanded a scheme nobody types. `normalizeProfileUrl` adds `https://` when there is
+  // no scheme and NEVER rewrites a host, so the value stored is always absolute (the RR
+  // contact view renders it as an href unchanged) while `https://twitter.com/x` still
+  // fails. The transform runs before the refine, so what is validated is what is stored.
   facebook_account: z
     .string()
     .trim()
     .min(1, "Facebook account link is required")
     .max(300, "Facebook account link is too long")
-    .refine((value) => FACEBOOK_URL_RE.test(value), {
-      message: "Enter the full link to your Facebook profile, e.g. https://facebook.com/yourname",
+    .transform(normalizeProfileUrl)
+    .refine(isFacebookProfileUrl, {
+      message: "Enter the link to your Facebook profile, e.g. facebook.com/yourname",
     }),
-  // ADR 0013 (2026-09-06, "Consequences"): home address returns to the form. Required,
-  // not legacy-optional this time — `approve_application()` (0041) already reads all
-  // four `payload->>'…'` keys onto `people`, and they were simply null for every
-  // SRS-era submission until now.
+  // PR C1 (Ethan, 2026-09-09): "Facebook as required, then Instagram, GitHub, and
+  // LinkedIn as optional." Same normalize-then-check shape as the required one, so a
+  // typed `instagram.com/name` works and `facebook.com/name` in the Instagram box does
+  // not. Untouched means absent, never `""` — `optionalProfile` returns undefined for a
+  // blank so the column is left null rather than holding an empty string.
+  instagram_account: optionalProfile(
+    isInstagramProfileUrl,
+    "Enter the link to your Instagram profile, e.g. instagram.com/yourname",
+  ),
+  github_account: optionalProfile(
+    isGithubProfileUrl,
+    "Enter the link to your GitHub profile, e.g. github.com/yourname",
+  ),
+  linkedin_account: optionalProfile(
+    isLinkedinProfileUrl,
+    "Enter the link to your LinkedIn profile, e.g. linkedin.com/in/yourname",
+  ),
+  // ── The two addresses (PR C2, 2026-09-09) ─────────────────────────────────
+  //
+  // Ethan: "let's make it drop down with drop down filter instead of typing it … the only
+  // thing that they will type is their address and postal code." So `city_municipality`
+  // and `province` are GONE from this form — they are derived server-side from the
+  // barangay code by `psgc_resolve()` (0058) and written by `apply_address_to_person()`
+  // (0059). A client cannot supply a place name at all any more, which is the point: a
+  // code and a name that disagree would be undetectable, and "Q.C." / "Quezon City" /
+  // "quezon city" were three different cities as far as any filter was concerned.
+  //
+  // ⚠ THE STORED SHAPE IS WIDER THAN THIS. `people` keeps the resolved names next to the
+  // codes so exports and the RR contact view need no join, and so a later PSA rename
+  // cannot re-word a member's historical record. Those columns are written by the
+  // database, never by this schema — see 0058's header.
   address_line: requiredText("Street address", 200),
-  city_municipality: requiredText("City or municipality", 120),
-  province: requiredText("Province", 120),
   postal_code: z.string().trim().regex(POSTAL_CODE_RE, "Enter a 4-digit postal code"),
+  psgc_barangay_code: psgcBarangayCode("Select your home barangay"),
+
+  // The 2026-09-08 meeting put the CURRENT address back on the form: where the scholar
+  // actually lives while studying, which for most of them is not home. The tick is a
+  // claim, not a shortcut — `apply_address_to_person()` copies home into current when it
+  // is set, so the stored current address is always a complete, readable address rather
+  // than a pointer to another column.
+  current_address_same_as_home: z.coerce.boolean(),
+  current_address_line: optionalText(200),
+  current_postal_code: optionalPostalCode(),
+  current_psgc_barangay_code: optionalPsgcBarangayCode(),
 };
 
 const academicShape = {
   // SRS: "DOST Scholarship Award" and "Year of Award" — the scholarship, not the org.
   scholarship_award: z.enum(SCHOLARSHIP_AWARDS, "Select your DOST scholarship award"),
-  award_year: coercedInt(
-    "Enter the year of your award",
-    `Enter a four-digit year between ${AWARD_YEAR_MIN} and ${AWARD_YEAR_MAX}`,
-    AWARD_YEAR_MIN,
-    AWARD_YEAR_MAX,
+  // A6: a rolling five-year window that turns over on 1 July (lib/validation/award-year).
+  // The bounds are read INSIDE the refine rather than captured as module constants —
+  // a Vercel function can stay warm across a turnover, and a constant evaluated at
+  // import time would keep offering last season's window until the next deploy.
+  award_year: z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+    z.coerce
+      .number("Enter the year of your award")
+      .int("Enter a four-digit year")
+      .superRefine((value, ctx) => {
+        const { min, max } = awardYearWindow();
+        if (value < min || value > max) {
+          ctx.addIssue({
+            code: "custom",
+            message: `Enter a year between ${min} and ${max}`,
+          });
+        }
+      }),
   ),
   // SRS: closed lists, rows not code (0037). The ids are validated against the tables by
   // the FK on approval; here they are checked for shape only.
@@ -271,7 +394,22 @@ export const applicationSubmitSchema = z
     ...membershipShape,
     ...consentShape,
   })
-  .strict();
+  .strict()
+  // PR C2: "same as home" unticked means the current address is a real, separate address
+  // and all three of its parts are required. Ticked means they are ignored entirely — the
+  // database copies home across, so a half-filled current address left behind by someone
+  // who ticked the box afterwards cannot be stored.
+  .superRefine((value, ctx) => {
+    if (value.current_address_same_as_home) return;
+    const required = [
+      ["current_address_line", "Enter your current street address"],
+      ["current_postal_code", "Enter a 4-digit postal code"],
+      ["current_psgc_barangay_code", "Select your current barangay"],
+    ] as const;
+    for (const [field, message] of required) {
+      if (!value[field]) ctx.addIssue({ code: "custom", path: [field], message });
+    }
+  });
 
 export type ApplicationSubmitInput = z.infer<typeof applicationSubmitSchema>;
 
@@ -352,14 +490,20 @@ export const APPLICATION_PAYLOAD_KEYS = [
   "expected_grad_year",
   "sex",
   "facebook_account",
+  "instagram_account",
+  "github_account",
+  "linkedin_account",
   "scholarship_award",
   "award_year",
   "university_id",
   "program_id",
   "address_line",
-  "city_municipality",
-  "province",
   "postal_code",
+  "psgc_barangay_code",
+  "current_address_same_as_home",
+  "current_address_line",
+  "current_postal_code",
+  "current_psgc_barangay_code",
 ] as const;
 export type ApplicationPayloadKey = (typeof APPLICATION_PAYLOAD_KEYS)[number];
 
@@ -375,7 +519,7 @@ export type ApplicationPayload = Record<string, string | number | null>;
 /**
  * Build the `applications.payload` jsonb from a validated body.
  *
- * Contains the fifteen keys above VERBATIM, plus `middle_name` and `suffix` (0041
+ * Contains the twenty-one keys above VERBATIM, plus `middle_name` and `suffix` (0041
  * copies both onto `people` too, though they are not part of the payload contract
  * this module asserts) so that nothing an applicant typed is thrown away, plus the
  * consent record.
@@ -400,14 +544,23 @@ export function buildApplicationPayload(
     expected_grad_year: data.expected_grad_year,
     sex: data.sex,
     facebook_account: data.facebook_account,
+    instagram_account: data.instagram_account ?? null,
+    github_account: data.github_account ?? null,
+    linkedin_account: data.linkedin_account ?? null,
     scholarship_award: data.scholarship_award,
     award_year: data.award_year,
     university_id: data.university_id,
     program_id: data.program_id,
     address_line: data.address_line,
-    city_municipality: data.city_municipality,
-    province: data.province,
     postal_code: data.postal_code,
+    psgc_barangay_code: data.psgc_barangay_code,
+    // Emitted as a STRING because `ApplicationPayload` is scalar-by-construction and
+    // `apply_address_to_person()` reads it with `->>` and casts. A boolean in the jsonb
+    // would read back as `"true"` either way; being explicit keeps the two in step.
+    current_address_same_as_home: data.current_address_same_as_home ? "true" : "false",
+    current_address_line: data.current_address_line ?? null,
+    current_postal_code: data.current_postal_code ?? null,
+    current_psgc_barangay_code: data.current_psgc_barangay_code ?? null,
     middle_name: data.middle_name ?? null,
     suffix: data.suffix ?? null,
     consent_privacy_notice_version: data.consent_privacy_notice_version,

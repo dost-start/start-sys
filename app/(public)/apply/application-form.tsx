@@ -37,6 +37,7 @@ import {
   type ProgramOption,
   type UniversityOption,
 } from "@/components/applications/academic-section";
+import { toPsgcRegions } from "@/lib/applications/psgc-regions";
 import { ApplicationSuccess } from "@/components/applications/application-success";
 import { ConsentSection } from "@/components/applications/consent-section";
 import {
@@ -62,6 +63,9 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Stepper } from "@/components/ui/stepper";
 import { type ActionError, isErr } from "@/lib/action-result";
+import { ACTION_UNREACHABLE_MESSAGE, callAction } from "@/lib/applications/call-action";
+import { DraftNotice } from "@/components/applications/draft-notice";
+import { useFormDraft } from "@/components/applications/use-form-draft";
 import {
   finalizeApplication,
   startApplication,
@@ -88,8 +92,6 @@ const KNOWN_FIELDS = new Set<string>([
   "contact_number",
   "facebook_account",
   "address_line",
-  "city_municipality",
-  "province",
   "postal_code",
   "scholarship_award",
   "award_year",
@@ -153,12 +155,19 @@ export function ApplicationForm({
   regions,
   universities,
   programs,
+  contactEmail,
 }: {
   /** The page hero, rendered above the card while the form is open and dropped on success. */
   hero: ReactNode;
   regions: RegionOption[];
   universities: UniversityOption[];
   programs: ProgramOption[];
+  /**
+   * The org's public contact address, resolved on the server (A7). Threaded through
+   * rather than imported: `lib/brand/org-contact.ts` is `server-only` and this file is
+   * a client component.
+   */
+  contactEmail: string;
 }) {
   const [succeeded, setSucceeded] = useState(false);
   const [phase, setPhase] = useState<Phase>("form");
@@ -187,9 +196,14 @@ export function ApplicationForm({
       contact_number: "",
       facebook_account: "",
       address_line: "",
-      city_municipality: "",
-      province: "",
       postal_code: "",
+      // PR C2: the cascade writes these through `setValue`; they are declared here so the
+      // field is registered from the first render and a restored draft has somewhere to land.
+      psgc_barangay_code: "",
+      current_address_same_as_home: true,
+      current_address_line: "",
+      current_postal_code: "",
+      current_psgc_barangay_code: "",
       scholarship_award: "" as unknown as ApplicationSubmitInput["scholarship_award"],
       award_year: "",
       university_id: "",
@@ -202,6 +216,10 @@ export function ApplicationForm({
       certify_accuracy: false as unknown as true,
     },
   });
+
+  // PR D: restore on mount, save (debounced) on every change. Files and the consent
+  // boxes are never stored — see `lib/applications/draft-storage`.
+  const draft = useFormDraft("apply", form);
 
   function patchDoc(key: DocKey, patch: Partial<DocState>) {
     setDocs((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
@@ -344,14 +362,29 @@ export function ApplicationForm({
     }
 
     setPhase("finalizing");
-    const finalizeResult = await finalizeApplication({
-      application_id: pending.applicationId,
-      upload_token: pending.uploadToken,
-      storage_ref: pending.storageRef,
-      noa_storage_ref: pending.noaStorageRef,
-    });
+    // A10: wrapped, so a rejected or never-settling POST becomes an ActionResult failure
+    // instead of an unhandled rejection that leaves this screen on "Finishing up…" forever.
+    const finalizeResult = await callAction(() =>
+      finalizeApplication({
+        application_id: pending.applicationId,
+        upload_token: pending.uploadToken,
+        storage_ref: pending.storageRef,
+        noa_storage_ref: pending.noaStorageRef,
+      }),
+    );
 
     if (isErr(finalizeResult)) {
+      // A10: the call never reached a decision — a redeploy, a dropped connection, a
+      // deadline. The uploads SUCCEEDED and `pendingRef` still holds the submit token, so
+      // the applicant keeps every field and every file and Submit simply runs finalize
+      // again. `finalize_application()` (0019) is idempotent on the same token and refs,
+      // so a retry after a response lost in transit is a no-op, not a second application.
+      if (finalizeResult.error.code === "upstream") {
+        setRootError(finalizeResult.error.message || ACTION_UNREACHABLE_MESSAGE);
+        setPhase("form");
+        showStep(LAST_STEP);
+        return;
+      }
       if (finalizeResult.error.code === "validation") {
         // One of the two files failed the server-side sniff. Both are cleared: the
         // response deliberately does not say which, and a fresh pair is the safe retry.
@@ -376,6 +409,9 @@ export function ApplicationForm({
 
     pendingRef.current = null;
     filesRef.current = { registration: null, noa: null };
+    // PR D: the submission is in; the local copy of this scholar's PII goes now,
+    // without waiting for an expiry, and without the applicant having to ask.
+    draft.clear();
     setSucceeded(true);
   }
 
@@ -399,16 +435,31 @@ export function ApplicationForm({
     const noa = filesRef.current.noa;
     if (!registration || !noa) return;
 
+    // ── A10, the retry path ──────────────────────────────────────────────────
+    // A previous attempt already created the draft row and PUT both documents; only the
+    // finalize call was lost (a redeploy, a dropped connection, the deadline). Resume from
+    // the pending state instead of calling `startApplication` again, which would create a
+    // SECOND draft holding the same person's PII and, once the first is swept, an orphaned
+    // pair of objects. `runUploads` skips whichever uploads already succeeded and re-runs
+    // finalize, which is idempotent on the same token (0019).
+    const resumable = pendingRef.current;
+    if (resumable !== null) {
+      await runUploads(resumable);
+      return;
+    }
+
     setPhase("starting");
-    const startResult = await startApplication({
-      ...values,
-      proof_file_name: registration.name,
-      proof_mime_type: registration.type,
-      proof_size_bytes: registration.size,
-      noa_file_name: noa.name,
-      noa_mime_type: noa.type,
-      noa_size_bytes: noa.size,
-    });
+    const startResult = await callAction(() =>
+      startApplication({
+        ...values,
+        proof_file_name: registration.name,
+        proof_mime_type: registration.type,
+        proof_size_bytes: registration.size,
+        noa_file_name: noa.name,
+        noa_mime_type: noa.type,
+        noa_size_bytes: noa.size,
+      }),
+    );
 
     if (isErr(startResult)) {
       setPhase("form");
@@ -499,7 +550,7 @@ export function ApplicationForm({
   if (succeeded) {
     return (
       <div className="flex flex-1 items-center justify-center px-4 py-16 sm:px-10">
-        <ApplicationSuccess />
+        <ApplicationSuccess contactEmail={contactEmail} />
       </div>
     );
   }
@@ -524,8 +575,11 @@ export function ApplicationForm({
 
           <Stepper steps={FORM_STEPS} current={step} onSelect={submitting ? undefined : goBackTo} />
 
+          <DraftNotice restored={draft.restored} onClear={draft.clear} />
+
           <FormProvider {...form}>
             <form
+              method="post"
               onSubmit={form.handleSubmit(onValid, onInvalid)}
               onKeyDown={handleKeyDown}
               noValidate
@@ -546,16 +600,19 @@ export function ApplicationForm({
                 />
               </div>
 
-              {step === 1 ? <PersonalSection /> : null}
+              {step === 1 ? <PersonalSection regions={toPsgcRegions(regions)} /> : null}
 
               {step === 2 ? (
                 <>
+                  {/* PR E: region first — the university select now offers that region's
+                      schools only (445 rows down to ~20), so asking for the region after
+                      the school would leave the applicant staring at a disabled control. */}
+                  <MembershipSection regions={regions} />
                   <AcademicSection
                     universities={universities}
                     programs={programs}
                     regions={regions}
                   />
-                  <MembershipSection regions={regions} />
                 </>
               ) : null}
 
@@ -584,7 +641,7 @@ export function ApplicationForm({
               {step === 4 ? (
                 <>
                   <FormSection
-                    title="Review and submit"
+                    title="Review and Submit"
                     description="Check your answers. Use Back to change anything."
                   >
                     <dl className="bg-brand-field rounded-form grid gap-x-6 gap-y-4 p-5 sm:grid-cols-3">

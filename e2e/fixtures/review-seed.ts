@@ -230,7 +230,8 @@ function uniqueEmail(label: string): string {
 /**
  * Insert one `pending` application, ready to be decided.
  *
- * ⚠ THE PAYLOAD'S ELEVEN KEYS ARE A CONTRACT WITH `approve_application()`. It reads
+ * ⚠ THE PAYLOAD'S KEYS ARE A CONTRACT WITH `approve_application()` and, since PR C2,
+ * with `apply_address_to_person()` (0059) which it calls. Both read
  * them with `payload->>'…'` and writes them onto the new `people` and `memberships`
  * rows (`lib/applications/schema.ts` — `APPLICATION_PAYLOAD_KEYS`). A key misspelled
  * here produces a `people` row full of NULLs and a NOT NULL violation on
@@ -273,7 +274,7 @@ export async function seedPendingApplication(
     applicant_given_name: givenName,
     applicant_family_name: familyName,
     payload: {
-      // The eleven, exactly as approve_application() reads them.
+      // Exactly as the approval path reads them.
       birthdate: "2004-02-29",
       contact_number: "+639171230000",
       facebook_account: "https://facebook.com/seeded.review",
@@ -283,6 +284,13 @@ export async function seedPendingApplication(
       region_id: regionId,
       year_level: 2,
       expected_grad_year: 2029,
+      // PR C2: a real PSGC barangay — "Barangay 287" in Binondo, the deepest chain in the
+      // country. Seeded so that approving this row actually exercises
+      // `apply_address_to_person()` rather than skipping it on a null code.
+      address_line: "159 Seeded St.",
+      postal_code: "1006",
+      psgc_barangay_code: "1380602001",
+      current_address_same_as_home: "true",
       // Carried but not read by approve_application() today.
       middle_name: "Seed",
       suffix: null,

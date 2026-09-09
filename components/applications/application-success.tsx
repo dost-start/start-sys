@@ -16,7 +16,7 @@ import { CheckIcon } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
 
-export function ApplicationSuccess() {
+export function ApplicationSuccess({ contactEmail }: { contactEmail: string }) {
   return (
     <Card
       radius="hero"
@@ -44,7 +44,7 @@ export function ApplicationSuccess() {
       <p className="text-brand-body text-sm">
         Made a mistake, or need to change something?{" "}
         <a
-          href="mailto:crrd@start-dost.org"
+          href={`mailto:${contactEmail}`}
           className="text-brand-link font-medium underline underline-offset-4"
         >
           Contact CRRD

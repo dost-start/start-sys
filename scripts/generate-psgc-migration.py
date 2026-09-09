@@ -50,6 +50,10 @@ LEVELS = {
 # Classified here rather than skipped, because their descendants are real addresses.
 UNLEVELLED_AS_PROVINCE = {"0990100000", "1999900000"}
 
+# Rows per INSERT statement. Small enough that one statement stays readable in a diff and
+# well inside any parser limit; large enough that the file is ~90 statements, not 43,769.
+BATCH = 500
+
 # PSA region code -> our `regions.code` (DATA_MODEL §6/0016, 18 rows incl. RA 12000's NIR).
 # ⚠ 16 is Caraga, which we seed as `R13` (Region XIII) — the PSA's numbering and the
 # region's Roman numeral disagree, and this is the one row where a careless mapping would
@@ -129,16 +133,16 @@ def derive_parent(code: str, known: set[str]) -> str | None:
     return None
 
 
-def sql_copy_value(value: str | None) -> str:
-    r"""A COPY ... FROM stdin field: backslash-escaped, `\N` for null."""
+def sql_literal(value: str | None) -> str:
+    """A single-quoted SQL literal, or NULL.
+
+    `standard_conforming_strings` is on, so a backslash is an ordinary character and only
+    the quote needs doubling. PSA place names genuinely contain apostrophes
+    (`Bo. Obrero`, `Sto. Niño`, `Balite 1st`), so this is exercised, not theoretical.
+    """
     if value is None:
-        return r"\N"
-    return (
-        value.replace("\\", "\\\\")
-        .replace("\t", "\\t")
-        .replace("\n", "\\n")
-        .replace("\r", "\\r")
-    )
+        return "NULL"
+    return "'" + value.replace("'", "''") + "'"
 
 
 def main() -> None:
@@ -277,28 +281,32 @@ revoke all on public.psgc_locations from anon, authenticated;
 grant select on public.psgc_locations to anon, authenticated;
 
 -- ── The data ────────────────────────────────────────────────────────────────────────
--- COPY ... FROM stdin rather than {len(prepared):,} INSERT statements: one statement, one
--- parse, and a file a maintainer can actually diff between quarters.
+-- ⚠ MULTI-ROW INSERTS, NOT `COPY ... FROM stdin`, AND THIS IS NOT A STYLE CHOICE.
+-- `COPY ... FROM stdin` needs the psql FRONTEND PROTOCOL to stream the rows after the
+-- statement. The Supabase CLI applies migrations over an ordinary Postgres connection, so
+-- it sends the whole file as SQL and the server answers
+-- `unexpected message type 0x50 during COPY from stdin (08P01)`. Discovered in CI on
+-- 2026-09-09; `supabase db reset` locally uses psql and would have hidden it.
+--
+-- Batched {BATCH:,} rows to a statement: one parse per batch instead of {len(prepared):,},
+-- and a file that still diffs line-by-line between quarters.
 --
 -- Parents are ordered before children by construction (the codes sort that way), so the
 -- self-referencing FK is satisfied row by row without deferring it.
-copy public.psgc_locations (code, name, level, parent_code) from stdin;
 """
 
     lines = [header]
-    for code, name, level, parent in prepared:
+    for start in range(0, len(prepared), BATCH):
+        chunk = prepared[start : start + BATCH]
         lines.append(
-            "\t".join(
-                (
-                    sql_copy_value(code),
-                    sql_copy_value(name),
-                    sql_copy_value(level),
-                    sql_copy_value(parent),
-                )
-            )
+            "insert into public.psgc_locations (code, name, level, parent_code) values"
         )
-    lines.append("\\.")
-    lines.append("")
+        rows = [
+            f"  ({sql_literal(code)}, {sql_literal(name)}, {sql_literal(level)}, {sql_literal(parent)})"
+            for code, name, level, parent in chunk
+        ]
+        lines.append(",\n".join(rows) + ";")
+        lines.append("")
 
     footer = """
 -- ── 2. Our eighteen regions gain their PSA code ─────────────────────────────────────

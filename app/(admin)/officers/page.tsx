@@ -26,6 +26,7 @@ import { AppointOfficerDialog } from "@/components/officers/appoint-officer-dial
 import { RecordOfficerSeparationDialog } from "@/components/officers/record-separation-dialog";
 import { getSessionContext } from "@/lib/auth/queries";
 import { homeForRole, LOGIN_PATH } from "@/lib/auth/route-access";
+import { canSeatPosition } from "@/lib/officers/positions";
 import { listOfficerRoster } from "@/lib/officers/queries";
 import {
   OFFICER_ASSIGNMENT_STATUS_LABELS,
@@ -110,10 +111,21 @@ export default async function OfficersPage() {
                           Vacant
                         </TableCell>
                         <TableCell>
-                          <AppointOfficerDialog
-                            positionCode={position.code}
-                            positionTitle={position.title}
-                          />
+                          {/*
+                            A9 / 0054: crrd_admin gets no Appoint control on SPECIAL_ADVISOR.
+                            The ROW still renders — CRRD can see the seat and who holds it —
+                            only the write control goes. The database refuses the write
+                            independently (`officer_assignments_insert`), so this is UX, not
+                            the permission.
+                          */}
+                          {canSeatPosition(ctx.role, position.code) ? (
+                            <AppointOfficerDialog
+                              positionCode={position.code}
+                              positionTitle={position.title}
+                            />
+                          ) : (
+                            <span className="text-brand-label text-xs">Executive Admin only</span>
+                          )}
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -145,18 +157,26 @@ export default async function OfficersPage() {
                           </TableCell>
                           <TableCell>
                             <div className="flex flex-wrap gap-2">
-                              <RecordOfficerSeparationDialog
-                                assignmentId={holder.assignment_id}
-                                holderName={`${holder.person.given_name} ${holder.person.family_name}`}
-                                fromStatus={holder.status}
-                              />
-                              {position.code === "REGIONAL_REP" ||
-                              position.code === "COMMITTEE_MEMBER" ? (
-                                <AppointOfficerDialog
-                                  positionCode={position.code}
-                                  positionTitle={position.title}
-                                />
-                              ) : null}
+                              {canSeatPosition(ctx.role, position.code) ? (
+                                <>
+                                  <RecordOfficerSeparationDialog
+                                    assignmentId={holder.assignment_id}
+                                    holderName={`${holder.person.given_name} ${holder.person.family_name}`}
+                                    fromStatus={holder.status}
+                                  />
+                                  {position.code === "REGIONAL_REP" ||
+                                  position.code === "COMMITTEE_MEMBER" ? (
+                                    <AppointOfficerDialog
+                                      positionCode={position.code}
+                                      positionTitle={position.title}
+                                    />
+                                  ) : null}
+                                </>
+                              ) : (
+                                <span className="text-brand-label text-xs">
+                                  Executive Admin only
+                                </span>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>

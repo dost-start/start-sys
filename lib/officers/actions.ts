@@ -39,6 +39,7 @@ import { revalidatePath } from "next/cache";
 
 import { err, mapDbError, ok, validationFailure } from "@/lib/action-result";
 import { withRole } from "@/lib/auth/with-role";
+import { canSeatPosition, SPECIAL_ADVISOR_REFUSAL } from "@/lib/officers/positions";
 import {
   officerAppointSchema,
   officerLookupSchema,
@@ -104,6 +105,13 @@ export const appointOfficer = withRole<OfficerAppointInput, AppointOfficerResult
   async (ctx, input) => {
     const parsed = officerAppointSchema.safeParse(input);
     if (!parsed.success) return validationFailure<AppointOfficerResult>(parsed.error);
+
+    // A9 / 0054: SPECIAL_ADVISOR is exec_admin's alone. `officer_assignments_insert`
+    // refuses this identical INSERT for crrd_admin regardless — this check exists only so
+    // the caller gets the constitutional reason instead of a bare permission error.
+    if (!canSeatPosition(ctx.role, parsed.data.position_code)) {
+      return err<AppointOfficerResult>("unauthorized", SPECIAL_ADVISOR_REFUSAL);
+    }
 
     const { data: termId, error: termError } = await ctx.supabase.rpc("current_term_id");
     if (termError) return { ok: false, error: mapDbError(termError) };

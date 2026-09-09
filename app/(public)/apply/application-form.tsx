@@ -37,6 +37,7 @@ import {
   type ProgramOption,
   type UniversityOption,
 } from "@/components/applications/academic-section";
+import { toPsgcRegions } from "@/components/applications/psgc-address-picker";
 import { ApplicationSuccess } from "@/components/applications/application-success";
 import { ConsentSection } from "@/components/applications/consent-section";
 import {
@@ -599,7 +600,7 @@ export function ApplicationForm({
                 />
               </div>
 
-              {step === 1 ? <PersonalSection regions={regions} /> : null}
+              {step === 1 ? <PersonalSection regions={toPsgcRegions(regions)} /> : null}
 
               {step === 2 ? (
                 <>

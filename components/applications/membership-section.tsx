@@ -20,8 +20,11 @@ export type RegionOption = {
    * The PSA's two-digit region code (0057 §2). Carried here so the address cascade can
    * start from OUR eighteen regions — the same list this section's dropdown offers —
    * rather than from a nineteenth copy read out of `psgc_locations`.
+   *
+   * Nullable because the column is (0057) — a region added before the PSA publishes one
+   * has no code. `toPsgcRegions()` filters those out at the picker's boundary.
    */
-  psgc_code: string;
+  psgc_code: string | null;
 };
 
 export function MembershipSection({ regions }: { regions: RegionOption[] }) {

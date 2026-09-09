@@ -239,7 +239,11 @@ select throws_ok(
   $$ select public.update_member_record(
        '00000000-0000-4000-b000-000000000001',
        '{"city_municipality":"Somewhere Else"}'::jsonb,
-       (select updated_at from public.people where id = '00000000-0000-4000-b000-000000000001')) $$,
+       -- Any timestamp: the whitelist check runs BEFORE the optimistic-concurrency
+       -- comparison, so this never reaches it. Reading the real `updated_at` here would
+       -- raise 42501 first — `authenticated` holds SELECT on six columns of `people` and
+       -- `updated_at` is not one of them (0015), which is the boundary 029 asserts.
+       now()) $$,
   '22023'::char(5), null::text,
   'city_municipality is NO LONGER PATCHABLE — the place names are derived from the '
   'barangay code, never typed beside it (0059)');

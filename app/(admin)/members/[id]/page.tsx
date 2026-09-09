@@ -18,6 +18,7 @@
 import { notFound, redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
+import { toPsgcRegions } from "@/components/applications/psgc-address-picker";
 import { MemberAuditTrail } from "@/components/members/member-audit-trail";
 import { MemberEditForm } from "@/components/members/member-edit-form";
 import { MemberSensitivePanel } from "@/components/members/member-sensitive-panel";
@@ -176,7 +177,7 @@ export default async function MemberDetailPage({ params }: { params: Promise<{ i
       ) : null}
 
       <MemberSensitivePanel record={record} lookups={lookups} />
-      <MemberEditForm record={record} regions={psgcRegions} />
+      <MemberEditForm record={record} regions={toPsgcRegions(psgcRegions)} />
       <MemberTermHistory memberId={record.member_id} rows={termHistory} />
       <MemberAuditTrail entries={auditTrail} />
     </div>

@@ -28,6 +28,7 @@ import {
   type ProgramOption,
   type UniversityOption,
 } from "@/components/applications/academic-section";
+import { toPsgcRegions } from "@/components/applications/psgc-address-picker";
 import { ConsentSection } from "@/components/applications/consent-section";
 import {
   APPLICATION_STEP_FIELDS,
@@ -580,7 +581,7 @@ export function RenewalForm({
               {step === 1 ? (
                 <>
                   <RenewalIdentitySection />
-                  <PersonalSection regions={regions} />
+                  <PersonalSection regions={toPsgcRegions(regions)} />
                 </>
               ) : null}
 

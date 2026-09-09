@@ -1180,7 +1180,7 @@ export type Database = {
           id: string
           island_group: Database["public"]["Enums"]["island_group"]
           name: string
-          psgc_code: string
+          psgc_code: string | null
           sort_order: number
         }
         Insert: {
@@ -1188,7 +1188,7 @@ export type Database = {
           id?: string
           island_group: Database["public"]["Enums"]["island_group"]
           name: string
-          psgc_code: string
+          psgc_code?: string | null
           sort_order: number
         }
         Update: {
@@ -1196,7 +1196,7 @@ export type Database = {
           id?: string
           island_group?: Database["public"]["Enums"]["island_group"]
           name?: string
-          psgc_code?: string
+          psgc_code?: string | null
           sort_order?: number
         }
         Relationships: []
@@ -1930,6 +1930,17 @@ export type Database = {
       pg_version: { Args: never; Returns: string }
       pg_version_num: { Args: never; Returns: number }
       pgtap_version: { Args: never; Returns: number }
+      psgc_resolve: {
+        Args: { p_code: string }
+        Returns: {
+          barangay_name: string
+          city_code: string
+          city_name: string
+          province_name: string
+          region_name: string
+          sub_municipality_name: string
+        }[]
+      }
       purge_abandoned_drafts: {
         Args: { p_age?: string }
         Returns: {
@@ -1943,17 +1954,6 @@ export type Database = {
           noa_ref: string
           renewal_id: string
           storage_ref: string
-        }[]
-      }
-      psgc_resolve: {
-        Args: { p_code: string }
-        Returns: {
-          barangay_name: string
-          city_code: string
-          city_name: string
-          province_name: string
-          region_name: string
-          sub_municipality_name: string
         }[]
       }
       reject_application: {

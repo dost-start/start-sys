@@ -93,7 +93,7 @@ export function InviteUserDialog({ regions }: { regions: readonly RegionOption[]
           </DialogDescription>
         </DialogHeader>
 
-        <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)} noValidate>
+        <form method="post" className="space-y-5" onSubmit={form.handleSubmit(onSubmit)} noValidate>
           <Field>
             <FieldLabel htmlFor="invite-email">Email</FieldLabel>
             <Input id="invite-email" type="email" {...form.register("email")} />

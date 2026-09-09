@@ -92,7 +92,7 @@ export function RejectRenewalDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={onSubmit} className="space-y-4">
+        <form method="post" onSubmit={onSubmit} className="space-y-4">
           <input type="hidden" {...register("id")} />
           <Field>
             <FieldLabel htmlFor="review_note">Reason</FieldLabel>

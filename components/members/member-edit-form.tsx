@@ -78,6 +78,10 @@ export function MemberEditForm({ record }: { record: MemberRecord }) {
       // `school_id_no` default or input back without checking with Ethan first.
       sex: (record.sex ?? "") as MemberUpdateInput["sex"],
       facebook_account: toDefault(record.facebook_account),
+      // PR C1: same "clearable" contract — an emptied input clears the column.
+      instagram_account: toDefault(record.instagram_account),
+      github_account: toDefault(record.github_account),
+      linkedin_account: toDefault(record.linkedin_account),
       scholarship_award: (record.scholarship_award ?? "") as MemberUpdateInput["scholarship_award"],
       award_year: (record.award_year === null
         ? ""
@@ -113,7 +117,7 @@ export function MemberEditForm({ record }: { record: MemberRecord }) {
 
   return (
     <Card className="p-5 sm:p-6">
-      <form onSubmit={onSubmit} className="space-y-5">
+      <form method="post" onSubmit={onSubmit} className="space-y-5">
         <CardTitle>Edit record</CardTitle>
 
         <input type="hidden" {...register("person_id")} />
@@ -215,6 +219,27 @@ export function MemberEditForm({ record }: { record: MemberRecord }) {
             <FieldLabel htmlFor="facebook_account">Facebook account link</FieldLabel>
             <Input id="facebook_account" type="url" {...register("facebook_account")} />
             <FieldError message={errors.facebook_account?.message} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="instagram_account" optional>
+              Instagram
+            </FieldLabel>
+            <Input id="instagram_account" type="url" {...register("instagram_account")} />
+            <FieldError message={errors.instagram_account?.message} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="github_account" optional>
+              GitHub
+            </FieldLabel>
+            <Input id="github_account" type="url" {...register("github_account")} />
+            <FieldError message={errors.github_account?.message} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="linkedin_account" optional>
+              LinkedIn
+            </FieldLabel>
+            <Input id="linkedin_account" type="url" {...register("linkedin_account")} />
+            <FieldError message={errors.linkedin_account?.message} />
           </Field>
           <Field>
             <FieldLabel htmlFor="scholarship_award">DOST scholarship award</FieldLabel>

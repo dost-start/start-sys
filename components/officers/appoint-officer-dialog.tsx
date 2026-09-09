@@ -146,7 +146,7 @@ export function AppointOfficerDialog({
             Appointment recorded.
           </Alert>
         ) : (
-          <form onSubmit={onSubmit} className="space-y-5">
+          <form method="post" onSubmit={onSubmit} className="space-y-5">
             <input type="hidden" {...register("position_code")} />
             <input type="hidden" {...register("person_id")} />
 

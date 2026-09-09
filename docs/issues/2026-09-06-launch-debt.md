@@ -266,6 +266,40 @@ env var and redeploying is the whole revert; no code change.
 
 ---
 
+## 11. The scheduled jobs have never run — `APP_BASE_URL` was never set ⚠️ **RA 10173**
+
+**Found 2026-09-09 (PR F), in QA of the org deployment.** An aborted application run left
+exactly the state the nightly sweep exists to clear: a `draft` row holding a real
+birthdate, address and contact number, plus two 7.4MB uploaded objects with no database
+pointer to them, because the upload succeeded and `finalizeApplication` never did.
+
+`purge_abandoned_drafts()` (migration `0020`), its renewal counterpart (`0044`), the orphan
+reconciliation pass and the job endpoint at `/api/jobs/purge-abandoned-drafts` all exist and
+are complete. **Nothing calls them.** `.github/workflows/scheduled.yml` reads `APP_BASE_URL`
+and `JOB_SHARED_SECRET` from repository secrets, and neither has ever been set on
+`dost-start/start-sys`.
+
+The failure mode is the quiet kind. The job fails its own preflight and exits non-zero — by
+design, it never skips silently — but if nobody is watching the Actions tab, the visible
+symptom is nothing at all. Meanwhile the privacy notice tells every applicant, in writing,
+that *"an application you start but do not finish is cleared after 30 days"*, and it is not.
+That is a published RA 10173 retention commitment the system is not keeping.
+
+**The fix is two repository secrets and one manual dispatch**, spelled out with the exact
+commands and the three things to check in the run log in
+`docs/runbooks/03-CREDENTIAL_ROTATION.md` → "`APP_BASE_URL` — not a secret, and that is
+exactly why it was missed".
+
+⚠️ **Set the host to the LIVE deployment.** The org moved from `start-sys.vercel.app` to
+`start-sys-pi.vercel.app`, and to a new Supabase project, on the same day. A stale
+`APP_BASE_URL` sweeps the *old* project and returns a healthy 200; the job now prints the
+host it swept precisely so that a wrong sweep and a clean one are not the same log.
+
+Once this is set, verify the same day that the aborted QA run's draft and its two orphaned
+objects are gone. That is the check that proves the wiring, not the green run.
+
+---
+
 ## 10. Open questions that gate real data
 
 Restated from `PRD.md` §7 with only the launch-gating subset. Each is a fact about the

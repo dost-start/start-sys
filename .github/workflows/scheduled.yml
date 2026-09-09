@@ -413,6 +413,13 @@ jobs:
           # The secret goes in a HEADER, never in the URL: a query string lands in access
           # logs, proxy logs and browser history (CLAUDE.md "Privacy").
           # -sS keeps the log quiet on success but keeps real errors visible.
+          # PR F (2026-09-09): print the HOST being swept. The org moved deployments
+          # (start-sys.vercel.app -> start-sys-pi.vercel.app) and Supabase projects on the
+          # same day; a stale APP_BASE_URL would sweep the OLD project's drafts and return
+          # a perfectly healthy 200 while the live project's PII sat untouched for months.
+          # Nothing else in this job would say so. The secret itself is never echoed.
+          echo "Sweeping: ${APP_BASE_URL%/}"
+
           curl --fail-with-body -sS -X POST \
             -H "x-job-secret: ${JOB_SHARED_SECRET}" \
             -H "content-length: 0" \
@@ -420,6 +427,9 @@ jobs:
 
           echo ""
           echo "Sweep complete. Counts above; the per-row record is in audit_log."
+          echo "If the counts are always zero, check the host printed above is the LIVE"
+          echo "deployment — a sweep of the wrong project is indistinguishable from a"
+          echo "healthy one with nothing to sweep."
 
       - name: Notify on failure
         if: failure()

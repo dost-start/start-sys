@@ -300,6 +300,33 @@ objects are gone. That is the check that proves the wiring, not the green run.
 
 ---
 
+## 12. Migrations are pushed by hand, and three documents claimed otherwise
+
+**Found 2026-09-09,** when PR #22 merged seven migrations (`0053`–`0059`) to `main` and the
+live schema did not move. `ARCHITECTURE.md` §8 stated *"Migrations apply automatically on
+merge to main"*, and `DATA_MODEL.md` and `CLAUDE.md` repeated it. None of it was true:
+`ci.yml` runs on push to `main` but only against an ephemeral container, and neither workflow
+file contains `supabase db push`, `supabase link`, or a deploy step. Nothing in CI holds a
+credential for the production database.
+
+The documents are corrected and `docs/RUNBOOK.md` now carries the real sequence. **The
+automation itself is still owed**, and it is worth building rather than living with:
+
+- **The failure mode is silent and ordered.** Deploying before the schema is pushed leaves the
+  app calling columns and functions that do not exist. It surfaces as a form refusing to save,
+  never as anything naming a missing migration.
+- **It depends on one person remembering, at the moment they are most likely to be tired** —
+  the end of a merge, often late, often the same person who wrote the change.
+- **It is exactly the class of undocumented manual step the handover NFR exists to remove**
+  (PRD Success Metric 7: an incoming officer completes the work from runbooks alone).
+
+What it needs: a `deploy.yml` gated on `ci.yml` going green, with `SUPABASE_ACCESS_TOKEN` and
+the project ref as repository secrets. Related debt: the database password currently lives
+only in the CTO's macOS Keychain (item 1), so today nobody else could run the manual push
+either.
+
+---
+
 ## 10. Open questions that gate real data
 
 Restated from `PRD.md` §7 with only the launch-gating subset. Each is a fact about the

@@ -35,31 +35,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { NativeSelect } from "@/components/ui/native-select";
+import type { PsgcRegionOption } from "@/lib/applications/psgc-regions";
 import { createBrowserSupabase } from "@/lib/supabase/client";
-
-export type PsgcRegionOption = {
-  /** Our `regions.psgc_code` — the PSA's two digits. */
-  psgc_code: string;
-  name: string;
-};
-
-/**
- * Drop any region the PSA has not given a code, so the picker never offers a top level it
- * cannot descend from.
- *
- * `regions.psgc_code` is nullable on purpose (0057): `021_reference_rls.sql` asserts that
- * tech_admin may add a nineteenth region, and a region the PSA has not yet published has
- * no code to give it. All eighteen seeded regions carry one, so in practice this filters
- * nothing — it is here so that the day a nineteenth is added, the picker degrades by
- * omitting it rather than by rendering an option that leads nowhere.
- */
-export function toPsgcRegions(
-  regions: ReadonlyArray<{ psgc_code: string | null; name: string }>,
-): PsgcRegionOption[] {
-  return regions
-    .filter((r): r is { psgc_code: string; name: string } => r.psgc_code !== null)
-    .map((r) => ({ psgc_code: r.psgc_code, name: r.name }));
-}
 
 type Node = { code: string; name: string; level: string };
 

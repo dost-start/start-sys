@@ -15,10 +15,8 @@
 import { useFormContext } from "react-hook-form";
 
 import { Field, FieldError, FieldLabel, FormSection } from "@/components/applications/form-section";
-import {
-  PsgcAddressPicker,
-  type PsgcRegionOption,
-} from "@/components/applications/psgc-address-picker";
+import { PsgcAddressPicker } from "@/components/applications/psgc-address-picker";
+import type { PsgcRegionOption } from "@/lib/applications/psgc-regions";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";

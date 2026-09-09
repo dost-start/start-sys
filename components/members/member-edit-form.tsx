@@ -18,10 +18,8 @@ import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, type Resolver } from "react-hook-form";
 
-import {
-  PsgcAddressPicker,
-  type PsgcRegionOption,
-} from "@/components/applications/psgc-address-picker";
+import { PsgcAddressPicker } from "@/components/applications/psgc-address-picker";
+import type { PsgcRegionOption } from "@/lib/applications/psgc-regions";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";

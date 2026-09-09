@@ -37,7 +37,7 @@ import {
   type ProgramOption,
   type UniversityOption,
 } from "@/components/applications/academic-section";
-import { toPsgcRegions } from "@/components/applications/psgc-address-picker";
+import { toPsgcRegions } from "@/lib/applications/psgc-regions";
 import { ApplicationSuccess } from "@/components/applications/application-success";
 import { ConsentSection } from "@/components/applications/consent-section";
 import {

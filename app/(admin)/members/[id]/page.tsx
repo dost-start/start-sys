@@ -18,7 +18,7 @@
 import { notFound, redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { toPsgcRegions } from "@/components/applications/psgc-address-picker";
+import { toPsgcRegions } from "@/lib/applications/psgc-regions";
 import { MemberAuditTrail } from "@/components/members/member-audit-trail";
 import { MemberEditForm } from "@/components/members/member-edit-form";
 import { MemberSensitivePanel } from "@/components/members/member-sensitive-panel";

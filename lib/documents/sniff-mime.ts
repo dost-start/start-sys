@@ -14,7 +14,7 @@
 // than downloading (S4-T20) — not this function.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { type AllowedMime, isAllowedMime } from "./types";
+import { type AllowedMime, type SniffableMime, isAllowedMime, isSniffableMime } from "./types";
 
 /** `%PDF-` — the PDF header, per ISO 32000-1 §7.5.2. */
 const PDF_SIGNATURE = [0x25, 0x50, 0x44, 0x46, 0x2d];
@@ -70,10 +70,15 @@ function asciiAt(bytes: Uint8Array, start: number, length: number): string | nul
  *
  * @param bytes the first bytes of the object. `SNIFF_BYTES` (512) is plenty — every
  *              signature checked here lives in the first 12.
- * @returns the identified MIME type, or `null` when the bytes are not one of the four
- *          accepted formats. **`null` means reject** — never "probably fine".
+ * @returns the identified MIME type, or `null` when the bytes are none of the four
+ *          RECOGNISED formats. **`null` means reject** — never "probably fine".
+ *
+ * Note the return type is `SniffableMime`, not `AllowedMime`: since 0060 we accept only
+ * PDF, but we still recognise the three image types so that a scholar who uploads a
+ * photo is told it is an image rather than told it is unreadable. Deciding whether a
+ * recognised type is ACCEPTABLE is `resolveVerifiedMime`'s job, not this function's.
  */
-export function sniffMime(bytes: Uint8Array): AllowedMime | null {
+export function sniffMime(bytes: Uint8Array): SniffableMime | null {
   if (startsWith(bytes, PDF_SIGNATURE)) return "application/pdf";
   if (startsWith(bytes, PNG_SIGNATURE)) return "image/png";
   if (startsWith(bytes, JPEG_SIGNATURE)) return "image/jpeg";
@@ -113,16 +118,29 @@ export function sniffMime(bytes: Uint8Array): AllowedMime | null {
  */
 export function resolveVerifiedMime(
   providerMime: string | null | undefined,
-  sniffed: AllowedMime | null,
-): { ok: true; mimeType: AllowedMime } | { ok: false; reason: "unidentifiable" | "mime_mismatch" } {
+  sniffed: SniffableMime | null,
+):
+  | { ok: true; mimeType: AllowedMime }
+  | { ok: false; reason: "unidentifiable" | "mime_mismatch" | "mime_not_allowed" } {
   if (sniffed === null) {
     return { ok: false, reason: "unidentifiable" };
   }
 
   const declared = (providerMime ?? "").split(";")[0]?.trim().toLowerCase() ?? "";
 
-  if (declared !== "" && isAllowedMime(declared) && declared !== sniffed) {
+  // Rule 3, checked against what the sniffer RECOGNISES rather than what we accept: a
+  // JPEG declared `image/png` is a contradiction worth naming as a mismatch, even though
+  // neither type is acceptable any more. Checking `isAllowedMime` here instead would
+  // collapse every image-vs-image contradiction into the vaguer "not allowed".
+  if (declared !== "" && isSniffableMime(declared) && declared !== sniffed) {
     return { ok: false, reason: "mime_mismatch" };
+  }
+
+  // Rule 4, added by 0060: recognised, self-consistent, and still not something we take.
+  // A distinct reason from `unidentifiable` because the applicant can act on it — "that
+  // is a photo, send the PDF" — where "we could not read your file" leaves them guessing.
+  if (!isAllowedMime(sniffed)) {
+    return { ok: false, reason: "mime_not_allowed" };
   }
 
   return { ok: true, mimeType: sniffed };

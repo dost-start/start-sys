@@ -31,7 +31,7 @@ begin;
 \ir helpers/auth.psql
 \ir helpers/fixtures.psql
 
-select plan(23);
+select plan(24);
 
 -- The token the "browser" holds, and its digest the row stores.
 create temp table fx_tok on commit drop as
@@ -121,6 +121,16 @@ select throws_ok(
        'renewals/cor.pdf', 'application/pdf', 1024, 'renewals/noa.pdf', 'application/pdf', 2048) $$,
   '42501'::char(5), null::text,
   'a wrong token is refused (42501) and the row is untouched');
+
+-- 0060: the PDF-only narrowing reaches finalize_renewal() too, not just the application
+-- path. Asserted with the CORRECT token so this cannot be mistaken for the token check
+-- above — the row is still a draft here, and it stays one.
+select throws_ok(
+  $$ select public.finalize_renewal((select id from fx_renewal), (select plain from fx_tok),
+       'renewals/cor.jpg', 'image/jpeg', 1024, 'renewals/noa.pdf', 'application/pdf', 2048) $$,
+  '23514'::char(5), null::text,
+  'image/jpeg raises 23514 WITH a valid token — a renewing scholar is held to the same '
+  'PDF-only rule as a new applicant, at the data layer');
 
 select lives_ok(
   $$ select public.finalize_renewal((select id from fx_renewal), (select plain from fx_tok),
@@ -215,7 +225,7 @@ grant select on fx_renewal2 to public;
 select pg_temp.login_anon();
 do $$ begin
   perform public.finalize_renewal((select id from fx_renewal2),
-    (select plain from fx_tok), 'renewals/cor2.pdf', 'image/jpeg', 100, 'renewals/noa2.pdf', 'image/png', 200);
+    (select plain from fx_tok), 'renewals/cor2.pdf', 'application/pdf', 100, 'renewals/noa2.pdf', 'application/pdf', 200);
 end $$;
 select pg_temp.logout();
 

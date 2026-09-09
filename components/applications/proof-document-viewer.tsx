@@ -20,8 +20,16 @@ import { useState } from "react";
 
 const PDF_MIME = "application/pdf";
 const IMAGE_MIMES = new Set(["image/jpeg", "image/png"]);
-/** No browser renders HEIC/HEIF natively. An iPhone photo of a CoR is the single most
- *  likely upload, so this is an expected branch, not an edge case (S4 risk table). */
+/**
+ * No browser renders HEIC/HEIF natively.
+ *
+ * ⚠️ KEPT DELIBERATELY AFTER THE PDF-ONLY NARROWING (0060), and NOT dead code. New
+ * submissions can no longer be HEIC, but rows submitted BEFORE 0060 can be, and neither
+ * the proxy nor `verifyUpload` re-checks a stored document's type on read — the proxy
+ * guards on SERVABLE_MIME, which still carries the historical four precisely so these
+ * rows stay reviewable. Remove this only once no pre-0060 application remains readable,
+ * i.e. after the five-year purge (DATA_MODEL.md §8.2), not before.
+ */
 const UNVIEWABLE_MIMES = new Set(["image/heic", "image/heif"]);
 
 export function ProofDocumentViewer({
@@ -98,7 +106,7 @@ export function ProofDocumentViewer({
       {unviewable ? (
         <p className="text-brand-label text-xs">
           Suggested rejection reason: &ldquo;Your Certificate of Registration could not be displayed
-          for review — please re-upload as a PDF, JPEG or PNG.&rdquo;
+          for review — please re-upload it as a PDF.&rdquo;
         </p>
       ) : null}
     </div>

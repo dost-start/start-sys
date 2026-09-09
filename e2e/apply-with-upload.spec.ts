@@ -77,6 +77,7 @@ import {
   cleanupCorFixtures,
   makeCorPhoto,
   makeDisguisedTextAsPdf,
+  makeGenuineJpeg,
   makeOversizeCor,
   type GeneratedProofFile,
 } from "./fixtures/make-cor-fixture";
@@ -679,7 +680,7 @@ test.describe("Epic B — public application intake", () => {
         // declares a size too, and if that claim were trusted this number could be
         // anything (S3-T16 rule 3).
         expect(row.proof_size_bytes).toBe(cor.byteLength);
-        expect(row.proof_mime_type).toBe("image/jpeg");
+        expect(row.proof_mime_type).toBe("application/pdf");
         expect(row.proof_drive_file_id).not.toBeNull();
         expect(row.noa_drive_file_id).not.toBeNull();
         expect(row.noa_drive_file_id).not.toBe(row.proof_drive_file_id);
@@ -815,6 +816,49 @@ test.describe("Epic B — public application intake", () => {
 
       // NO ROW. Not a draft, not a pending — nothing was created, no submit token was
       // minted, no upload session was requested and no provider quota was spent.
+      await waitOutHoneypotFloor(page);
+      expect(await applicationsFor(admin, applicantEmail)).toHaveLength(0);
+    });
+  });
+
+  // 0060 — the PDF-only narrowing, from the applicant's side.
+  //
+  // Distinct from the disguised-text case below, and the distinction is the point: this
+  // file is entirely honest. Real JPEG bytes, matching extension, matching declared type.
+  // It is refused solely because intake narrowed to PDF, and it must be refused by the
+  // FORM — before a row, a submit token, an upload session or a provider call exists.
+  //
+  // The message matters as much as the refusal. Under the same day's "rejection is final
+  // for the term" decision, an applicant who cannot tell WHY their file was refused has
+  // no second chance to get it right.
+  test("a genuine JPEG is refused client-side with the PDF-only message and creates no row", async ({
+    page,
+  }) => {
+    await withWindowLock(async () => {
+      const admin = adminClient();
+      await openWindow(admin);
+
+      const applicantEmail = uniqueApplicantEmail("jpeg-refused");
+      const jpeg = await makeGenuineJpeg();
+
+      await page.goto("/apply");
+      await expect(applyScreens.email(page).first()).toBeVisible();
+      await fillApplicationForm(page, { email: applicantEmail });
+      await attachProof(page, jpeg);
+
+      // Matched on "PDF", not on a generic failure: the applicant has to be told what to
+      // do about it, not merely that something went wrong.
+      await expect(
+        page
+          .getByRole("alert")
+          .filter({ hasText: /only pdf|as a pdf/i })
+          .first(),
+      ).toBeVisible({ timeout: 30_000 });
+
+      // Still on the Documents step with the file unaccepted, so they can pick another
+      // without re-entering anything they already typed.
+      expect(await currentStep(page)).toBe(3);
+
       await waitOutHoneypotFloor(page);
       expect(await applicationsFor(admin, applicantEmail)).toHaveLength(0);
     });

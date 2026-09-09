@@ -163,9 +163,9 @@ describe.each(drivers)("DocumentStore contract — $name", (driver) => {
   function session(overrides: Partial<Parameters<DocumentStore["createUploadSession"]>[0]> = {}) {
     return {
       applicationId: randomUUID(),
-      fileName: "cor.jpg",
-      mimeType: "image/jpeg",
-      sizeBytes: JPEG.byteLength,
+      fileName: "cor.pdf",
+      mimeType: "application/pdf",
+      sizeBytes: PDF.byteLength,
       ...overrides,
     };
   }
@@ -201,20 +201,48 @@ describe.each(drivers)("DocumentStore contract — $name", (driver) => {
     }
   });
 
+  // Case 2b — the PDF-only narrowing (0060), at the driver boundary.
+  //
+  // These three were accepted until 2026-09-09 and are still SERVABLE, because rows
+  // submitted under the old rule must stay readable (see SERVABLE_MIME). They are no
+  // longer ACCEPTABLE, and the two facts have to be able to coexist without one quietly
+  // becoming the other — which is what this case pins down on the intake side.
+  it("no longer accepts the image types, even though the proxy can still serve them", async () => {
+    for (const mimeType of ["image/jpeg", "image/png", "image/heic"]) {
+      await expect(
+        store.createUploadSession(session({ mimeType, fileName: "cor" })),
+      ).rejects.toMatchObject({ reason: "mime_not_allowed" });
+    }
+  });
+
+  // …and the refusal happens before the provider is contacted, so genuine JPEG bytes
+  // never reach the store to be cleaned up later.
+  it("refuses a real JPEG without creating anything to clean up", async () => {
+    const before = await store.listOrphans([]);
+
+    await expect(
+      store.createUploadSession(
+        session({ mimeType: "image/jpeg", fileName: "cor.jpg", sizeBytes: JPEG.byteLength }),
+      ),
+    ).rejects.toMatchObject({ reason: "mime_not_allowed" });
+
+    expect(await store.listOrphans([])).toHaveLength(before.length);
+  });
+
   // Case 3 — THE ONE THAT MATTERS MOST. The client declares a size; the client is not
   // believed. `verifyUpload` reports the provider's own byte count. Without this, a
   // 6MB file declared as 2MB would be recorded as 2MB and the size cap would be advisory.
   it("verifyUpload returns the REAL size, not the size the client claimed", async () => {
     const uploaded = await store.createUploadSession(
-      session({ sizeBytes: 1024 }), // a lie: the real file is 4096 bytes
+      session({ sizeBytes: 512 }), // a lie: the real file is 1024 bytes
     );
-    await driver.put(uploaded, JPEG, "image/jpeg");
+    await driver.put(uploaded, PDF, "application/pdf");
 
     const verified = await store.verifyUpload(uploaded.storageRef);
 
-    expect(verified.sizeBytes).toBe(JPEG.byteLength);
-    expect(verified.sizeBytes).not.toBe(1024);
-    expect(verified.mimeType).toBe("image/jpeg");
+    expect(verified.sizeBytes).toBe(PDF.byteLength);
+    expect(verified.sizeBytes).not.toBe(512);
+    expect(verified.mimeType).toBe("application/pdf");
   });
 
   // Case 4 — deleting an object that is already gone is a success. The abandoned-draft
@@ -222,7 +250,7 @@ describe.each(drivers)("DocumentStore contract — $name", (driver) => {
   // the whole job over one of them.
   it("deleteDocument is idempotent", async () => {
     const uploaded = await store.createUploadSession(session());
-    await driver.put(uploaded, JPEG, "image/jpeg");
+    await driver.put(uploaded, PDF, "application/pdf");
 
     await expect(store.deleteDocument(uploaded.storageRef)).resolves.toBeUndefined();
     await expect(store.deleteDocument(uploaded.storageRef)).resolves.toBeUndefined();
@@ -279,7 +307,7 @@ describe.each(drivers)("DocumentStore contract — $name", (driver) => {
   // response.
   it("streamDocument returns the stored bytes", async () => {
     const uploaded = await store.createUploadSession(session());
-    await driver.put(uploaded, JPEG, "image/jpeg");
+    await driver.put(uploaded, PDF, "application/pdf");
 
     const { stream, contentLength } = await store.streamDocument(uploaded.storageRef);
 
@@ -292,8 +320,8 @@ describe.each(drivers)("DocumentStore contract — $name", (driver) => {
     }
     const total = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
 
-    expect(total).toBe(JPEG.byteLength);
-    expect(contentLength).toBe(JPEG.byteLength);
+    expect(total).toBe(PDF.byteLength);
+    expect(contentLength).toBe(PDF.byteLength);
   });
 
   // The orphan case this exists for: the PUT succeeded but finalize never ran, so the
@@ -301,7 +329,7 @@ describe.each(drivers)("DocumentStore contract — $name", (driver) => {
   it("listOrphans returns refs the caller does not know about", async () => {
     const known = await store.createUploadSession(session());
     const orphan = await store.createUploadSession(session());
-    await driver.put(known, JPEG, "image/jpeg");
+    await driver.put(known, PDF, "application/pdf");
     await driver.put(orphan, PDF, "application/pdf");
 
     const orphans = await store.listOrphans([known.storageRef]);

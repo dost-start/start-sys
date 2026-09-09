@@ -103,15 +103,37 @@ describe("resolveVerifiedMime", () => {
   });
 
   it("trusts the bytes when the provider reports a type outside the allowlist", () => {
-    // Drive and Supabase Storage both fall back to octet-stream for HEIC. There is no
-    // contradiction to detect, so the sniff stands alone.
-    expect(resolveVerifiedMime("application/octet-stream", "image/heic")).toEqual({
+    // Drive and Supabase Storage both fall back to octet-stream. There is no
+    // contradiction to detect, so the sniff stands alone and the type is accepted.
+    expect(resolveVerifiedMime("application/octet-stream", "application/pdf")).toEqual({
       ok: true,
-      mimeType: "image/heic",
+      mimeType: "application/pdf",
     });
-    expect(resolveVerifiedMime(undefined, "image/jpeg")).toEqual({
+    expect(resolveVerifiedMime(undefined, "application/pdf")).toEqual({
       ok: true,
-      mimeType: "image/jpeg",
+      mimeType: "application/pdf",
+    });
+  });
+
+  it("recognises the image types but refuses them — a distinct reason from unreadable", () => {
+    // The point of keeping SNIFFABLE_MIME wider than ALLOWED_MIME (0060). If the sniffer
+    // only knew about PDF, a scholar who uploaded a photo would be told their file was
+    // "unidentifiable" — untrue, and unactionable. Instead we can tell them it is an
+    // image and that only PDFs are accepted.
+    for (const sniffed of ["image/jpeg", "image/png", "image/heic"] as const) {
+      expect(resolveVerifiedMime("application/octet-stream", sniffed)).toEqual({
+        ok: false,
+        reason: "mime_not_allowed",
+      });
+    }
+  });
+
+  it("still calls a self-contradicting file a mismatch, not merely disallowed", () => {
+    // JPEG bytes declared image/png: both are refused types now, but the CONTRADICTION
+    // is the more specific and more useful finding, so rule 3 must win over rule 4.
+    expect(resolveVerifiedMime("image/png", "image/jpeg")).toEqual({
+      ok: false,
+      reason: "mime_mismatch",
     });
   });
 

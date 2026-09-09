@@ -40,10 +40,16 @@ export {
   assertAcceptableUpload,
   extensionForMime,
   isAllowedMime,
+  isServableMime,
+  isSniffableMime,
+  SERVABLE_MIME,
+  SNIFFABLE_MIME,
 } from "./types";
 
 export type {
   AllowedMime,
+  ServableMime,
+  SniffableMime,
   CreateUploadSessionInput,
   DocumentStore,
   DocumentStream,

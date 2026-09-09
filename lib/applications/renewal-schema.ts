@@ -29,10 +29,16 @@ export type RenewalSubmitInput = z.infer<typeof renewalSubmitSchema>;
 
 const proofDeclarationShape = {
   proof_file_name: z.string().trim().min(1).max(255),
-  proof_mime_type: z.enum(DECLARED_ALLOWED_MIME, "Upload a PDF, JPEG, PNG or HEIC file"),
+  proof_mime_type: z.enum(
+    DECLARED_ALLOWED_MIME,
+    "Upload a PDF — save or export your document as a PDF before uploading",
+  ),
   proof_size_bytes: z.number().int().positive().max(MAX_DECLARED_PROOF_BYTES),
   noa_file_name: z.string().trim().min(1).max(255),
-  noa_mime_type: z.enum(DECLARED_ALLOWED_MIME, "Upload a PDF, JPEG, PNG or HEIC file"),
+  noa_mime_type: z.enum(
+    DECLARED_ALLOWED_MIME,
+    "Upload a PDF — save or export your document as a PDF before uploading",
+  ),
   noa_size_bytes: z.number().int().positive().max(MAX_DECLARED_PROOF_BYTES),
 };
 

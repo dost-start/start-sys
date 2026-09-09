@@ -499,12 +499,48 @@ afterwards — but do not reverse it.
 
 ## Still owed by Ethan
 
-1. **The social URLs** — exact Facebook / Instagram / LinkedIn. `ORG_SOCIAL_LINKS` is one
-   array; nothing else changes. Blocks the visual half of A7.
-2. **The two GitHub secrets** — `APP_BASE_URL` (the **live** host) and `JOB_SHARED_SECRET`.
-   Until then abandoned drafts keep their PII against a published retention promise.
-3. ~~The PSGC workbook~~ — **supplied 2026-09-09; PR C2 shipped.**
-4. **Confirm `DOCUMENT_STORE=supabase_storage`** is set on the org deployment — the privacy
-   notice now states it as fact.
-5. **Delete the Sydney project** `krizhwugzrnlkxsixnde` once the org deployment is confirmed;
-   it still holds the reviewers' real test submissions and their uploaded documents.
+Five items when this report was written on 2026-09-09; **two closed the same day.**
+
+1. **The social URLs** — the exact Facebook / Instagram / LinkedIn addresses.
+   `ORG_SOCIAL_LINKS` in `lib/brand/org-contact.ts` is one array and nothing else changes.
+   It is deliberately EMPTY, and the footer renders no social row at all rather than dead
+   icons: a guessed link on the org's own footer sends scholars to somebody else's page.
+   Blocks the visual half of A7. *(The email address half is already fixed — it is derived
+   from the mail environment and renders `startdost.community@gmail.com`.)*
+
+2. ~~The two GitHub secrets~~ — **DONE 2026-09-09.** `APP_BASE_URL` and
+   `JOB_SHARED_SECRET` are set on `dost-start/start-sys`, and the sweep was dispatched by
+   hand: run `34330468811`, green, returning
+
+       {"redacted":0,"documentsDeleted":0,"orphansDeleted":2}
+
+   `orphansDeleted: 2` is the proof, and it is worth recording why: those are the exact two
+   7.4MB objects the aborted QA run left with no database pointer. Nothing else on that
+   Supabase project could have produced that number, so it confirms both that the wiring
+   works AND that `APP_BASE_URL` names the right deployment.
+
+   `redacted: 0` is CORRECT, not a miss — `purge_abandoned_drafts()` filters
+   `created_at < now() - interval '30 days'` and that draft is a day old. It is redacted
+   around 9 October. The orphan pass is deliberately not age-gated, which is the right
+   split: the bytes go as soon as nothing references them, the row keeps its PII for
+   exactly the thirty days the privacy notice promises.
+
+3. ~~The PSGC workbook~~ — **DONE 2026-09-09.** Supplied by hand (`PSGC Q4 2025 Updates.xlsx`,
+   publication 31 December 2025); PR C2 shipped as migrations `0057`–`0059`.
+
+4. **Confirm `DOCUMENT_STORE=supabase_storage`** on the org deployment. The privacy notice
+   (`v3`, migration `0056`) now states as fact that the uploaded documents live in the same
+   Singapore project as the database, so this is a claim to a data subject rather than a
+   configuration detail.
+
+   ⚠ **Now entangled with other work.** A concurrent branch (`feat/two-store-documents`,
+   local-only as of 2026-09-09) is changing the document store and adding a Google Drive
+   setup runbook for the CCDO — i.e. reopening PRD OQ-1. If that lands, **the privacy
+   notice's storage paragraph and the processing register change in the same pull request
+   as the environment variable**, and that is a new notice version, not an edit. Decide the
+   store first; the notice follows it.
+
+5. **Delete the Sydney project** `krizhwugzrnlkxsixnde` once the org deployment is
+   confirmed. It still holds the reviewers' real test submissions and their uploaded
+   documents — live PII in a project nothing points at any more, which is the worst kind
+   to forget about.

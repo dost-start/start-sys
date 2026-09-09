@@ -54,6 +54,9 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Stepper } from "@/components/ui/stepper";
 import { type ActionError, isErr } from "@/lib/action-result";
+import { ACTION_UNREACHABLE_MESSAGE, callAction } from "@/lib/applications/call-action";
+import { DraftNotice } from "@/components/applications/draft-notice";
+import { useFormDraft } from "@/components/applications/use-form-draft";
 import {
   finalizeRenewal,
   startRenewal,
@@ -199,6 +202,10 @@ export function RenewalForm({
     },
   });
 
+  // PR D: restore on mount, save (debounced) on every change. Files and the consent
+  // boxes are never stored — see `lib/applications/draft-storage`.
+  const draft = useFormDraft("renew", form);
+
   function patchDoc(key: DocKey, patch: Partial<DocState>) {
     setDocs((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
   }
@@ -336,14 +343,27 @@ export function RenewalForm({
     }
 
     setPhase("finalizing");
-    const finalizeResult = await finalizeRenewal({
-      renewal_id: pending.renewalId,
-      upload_token: pending.uploadToken,
-      storage_ref: pending.storageRef,
-      noa_storage_ref: pending.noaStorageRef,
-    });
+    // A10: wrapped, so a rejected or never-settling POST becomes an ActionResult failure
+    // instead of an unhandled rejection that strands this screen on "Finishing up…".
+    const finalizeResult = await callAction(() =>
+      finalizeRenewal({
+        renewal_id: pending.renewalId,
+        upload_token: pending.uploadToken,
+        storage_ref: pending.storageRef,
+        noa_storage_ref: pending.noaStorageRef,
+      }),
+    );
 
     if (isErr(finalizeResult)) {
+      // A10: the call never reached a decision. Both documents are already uploaded and
+      // `pendingRef` still holds the submit token, so Submit resumes rather than restarts;
+      // `finalize_renewal()` (0044) is idempotent on the same token.
+      if (finalizeResult.error.code === "upstream") {
+        setRootError(finalizeResult.error.message || ACTION_UNREACHABLE_MESSAGE);
+        setPhase("form");
+        showStep(LAST_STEP);
+        return;
+      }
       if (finalizeResult.error.code === "validation") {
         filesRef.current = { registration: null, noa: null };
         setDocs({
@@ -366,6 +386,9 @@ export function RenewalForm({
 
     pendingRef.current = null;
     filesRef.current = { registration: null, noa: null };
+    // PR D: the submission is in; the local copy of this scholar's PII goes now,
+    // without waiting for an expiry, and without the applicant having to ask.
+    draft.clear();
     setSucceeded(true);
   }
 
@@ -389,16 +412,28 @@ export function RenewalForm({
     const noa = filesRef.current.noa;
     if (!registration || !noa) return;
 
+    // ── A10, the retry path ──────────────────────────────────────────────────
+    // A previous attempt already created the draft and PUT both documents; only finalize
+    // was lost. Resume rather than calling `startRenewal` again, which would create a
+    // second draft holding the same scholar's PII plus a pair of orphaned objects.
+    const resumable = pendingRef.current;
+    if (resumable !== null) {
+      await runUploads(resumable);
+      return;
+    }
+
     setPhase("starting");
-    const startResult = await startRenewal({
-      ...values,
-      proof_file_name: registration.name,
-      proof_mime_type: registration.type,
-      proof_size_bytes: registration.size,
-      noa_file_name: noa.name,
-      noa_mime_type: noa.type,
-      noa_size_bytes: noa.size,
-    });
+    const startResult = await callAction(() =>
+      startRenewal({
+        ...values,
+        proof_file_name: registration.name,
+        proof_mime_type: registration.type,
+        proof_size_bytes: registration.size,
+        noa_file_name: noa.name,
+        noa_mime_type: noa.type,
+        noa_size_bytes: noa.size,
+      }),
+    );
 
     if (isErr(startResult)) {
       setPhase("form");
@@ -515,8 +550,11 @@ export function RenewalForm({
 
           <Stepper steps={FORM_STEPS} current={step} onSelect={submitting ? undefined : goBackTo} />
 
+          <DraftNotice restored={draft.restored} onClear={draft.clear} />
+
           <FormProvider {...form}>
             <form
+              method="post"
               onSubmit={form.handleSubmit(onValid, onInvalid)}
               onKeyDown={handleKeyDown}
               noValidate
@@ -545,12 +583,15 @@ export function RenewalForm({
 
               {step === 2 ? (
                 <>
+                  {/* PR E: region first — the university select now offers that region's
+                      schools only (445 rows down to ~20), so asking for the region after
+                      the school would leave the applicant staring at a disabled control. */}
+                  <MembershipSection regions={regions} />
                   <AcademicSection
                     universities={universities}
                     programs={programs}
                     regions={regions}
                   />
-                  <MembershipSection regions={regions} />
                 </>
               ) : null}
 
@@ -579,7 +620,7 @@ export function RenewalForm({
               {step === 4 ? (
                 <>
                   <FormSection
-                    title="Review and submit"
+                    title="Review and Submit"
                     description="Check your answers. Use Back to change anything."
                   >
                     <dl className="bg-brand-field rounded-form grid gap-x-6 gap-y-4 p-5 sm:grid-cols-3">

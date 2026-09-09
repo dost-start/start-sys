@@ -19,7 +19,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** The version an applicant's consent checkbox currently agrees to. Max 32 chars — see `consentShape` in `lib/applications/schema.ts`. */
-export const PRIVACY_NOTICE_VERSION = "v2";
+export const PRIVACY_NOTICE_VERSION = "v3";
 
-/** When this version took effect. The 2026-09-08 rewrite of the notice in plain words (brand restyle). */
-export const PRIVACY_NOTICE_EFFECTIVE_DATE = "2026-09-08";
+/**
+ * When this version took effect. `v3` (2026-09-09) corrects the storage paragraph — the
+ * uploaded documents are in the Singapore project, not Google Drive — and discloses the
+ * draft autosave added in PR D, which keeps what an applicant typed in their own browser.
+ */
+export const PRIVACY_NOTICE_EFFECTIVE_DATE = "2026-09-09";

@@ -36,3 +36,6 @@ supabase/.temp
 # Generated DB types working copy (committed copy is database.types.ts at repo root)
 database.types.generated.ts
 .vercel
+
+# Agent tooling state and its git worktrees (each carries its own node_modules).
+.claude/

@@ -14,16 +14,33 @@ function FieldLabel({
   htmlFor,
   children,
   optional,
+  required,
   className,
 }: {
   htmlFor: string;
   children: ReactNode;
   optional?: boolean;
+  /**
+   * Marks the field required with an asterisk (PDF review 2026-09-09, Danielle and Aira:
+   * "required fields carry no asterisk"). The asterisk is `aria-hidden` and paired with
+   * visually-hidden " (required)" text, so the accessible name gains the word rather than
+   * a punctuation mark a screen reader would read as "star" — and `getByLabel("First
+   * name")` in e2e/ still matches, because the substring is unchanged.
+   */
+  required?: boolean;
   className?: string;
 }) {
   return (
     <Label htmlFor={htmlFor} className={className}>
       {children}
+      {required ? (
+        <>
+          <span aria-hidden="true" className="text-destructive font-semibold">
+            *
+          </span>
+          <span className="sr-only">(required)</span>
+        </>
+      ) : null}
       {optional ? (
         <span className="text-brand-label font-medium normal-case">(optional)</span>
       ) : null}

@@ -27,7 +27,9 @@ export function MembershipSection({ regions }: { regions: RegionOption[] }) {
   return (
     <FormSection title="Region" description="Which region are you applying under?">
       <Field>
-        <FieldLabel htmlFor="region_id">Region</FieldLabel>
+        <FieldLabel htmlFor="region_id" required>
+          Region
+        </FieldLabel>
         <NativeSelect
           id="region_id"
           aria-invalid={errors.region_id ? "true" : "false"}

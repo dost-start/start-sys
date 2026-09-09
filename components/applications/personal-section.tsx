@@ -26,12 +26,14 @@ export function PersonalSection() {
 
   return (
     <FormSection
-      title="Personal information"
+      title="Personal Information"
       description="As it appears on your Notice of Award and school records."
     >
       <div className="grid gap-5 sm:grid-cols-2">
         <Field>
-          <FieldLabel htmlFor="applicant_given_name">First name</FieldLabel>
+          <FieldLabel htmlFor="applicant_given_name" required>
+            First name
+          </FieldLabel>
           <Input
             id="applicant_given_name"
             autoComplete="given-name"
@@ -53,7 +55,9 @@ export function PersonalSection() {
           <FieldError message={errors.middle_name?.message} />
         </Field>
         <Field>
-          <FieldLabel htmlFor="applicant_family_name">Last name</FieldLabel>
+          <FieldLabel htmlFor="applicant_family_name" required>
+            Last name
+          </FieldLabel>
           <Input
             id="applicant_family_name"
             autoComplete="family-name"
@@ -79,7 +83,9 @@ export function PersonalSection() {
 
       <div className="grid gap-5 sm:grid-cols-2">
         <Field>
-          <FieldLabel htmlFor="sex">Sex</FieldLabel>
+          <FieldLabel htmlFor="sex" required>
+            Sex
+          </FieldLabel>
           <NativeSelect
             id="sex"
             aria-invalid={errors.sex ? "true" : "false"}
@@ -98,7 +104,9 @@ export function PersonalSection() {
           <FieldError message={errors.sex?.message} />
         </Field>
         <Field>
-          <FieldLabel htmlFor="birthdate">Date of birth</FieldLabel>
+          <FieldLabel htmlFor="birthdate" required>
+            Date of birth
+          </FieldLabel>
           <Input
             id="birthdate"
             type="date"
@@ -111,7 +119,9 @@ export function PersonalSection() {
       </div>
 
       <Field>
-        <FieldLabel htmlFor="applicant_email">Email address</FieldLabel>
+        <FieldLabel htmlFor="applicant_email" required>
+          Email address
+        </FieldLabel>
         <Input
           id="applicant_email"
           type="email"
@@ -124,7 +134,9 @@ export function PersonalSection() {
 
       <div className="grid gap-5 sm:grid-cols-2">
         <Field>
-          <FieldLabel htmlFor="contact_number">Contact number</FieldLabel>
+          <FieldLabel htmlFor="contact_number" required>
+            Contact number
+          </FieldLabel>
           <Input
             id="contact_number"
             type="tel"
@@ -136,7 +148,9 @@ export function PersonalSection() {
           <FieldError message={errors.contact_number?.message} />
         </Field>
         <Field>
-          <FieldLabel htmlFor="facebook_account">Facebook account link</FieldLabel>
+          <FieldLabel htmlFor="facebook_account" required>
+            Facebook account link
+          </FieldLabel>
           <Input
             id="facebook_account"
             type="url"
@@ -150,11 +164,71 @@ export function PersonalSection() {
         </Field>
       </div>
 
+      {/*
+        PR C1 (Ethan, 2026-09-09): "Facebook as required, then Instagram, GitHub, and
+        LinkedIn as optional." Grouped under their own heading and marked optional rather
+        than mixed in above, so the required block above reads as required — which is the
+        whole point of A4's asterisks.
+      */}
       <div className="flex flex-col gap-5">
-        <h3 className="text-brand-ink text-base font-semibold">Home address</h3>
+        <h3 className="text-brand-ink text-base font-semibold">Other Profiles</h3>
+        <p className="text-muted-foreground -mt-3 text-sm">
+          All optional. Leave anything you do not use blank.
+        </p>
+
+        <div className="grid gap-5 sm:grid-cols-3">
+          <Field>
+            <FieldLabel htmlFor="instagram_account" optional>
+              Instagram
+            </FieldLabel>
+            <Input
+              id="instagram_account"
+              type="url"
+              inputMode="url"
+              placeholder="instagram.com/yourname"
+              aria-invalid={errors.instagram_account ? "true" : "false"}
+              {...register("instagram_account")}
+            />
+            <FieldError message={errors.instagram_account?.message} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="github_account" optional>
+              GitHub
+            </FieldLabel>
+            <Input
+              id="github_account"
+              type="url"
+              inputMode="url"
+              placeholder="github.com/yourname"
+              aria-invalid={errors.github_account ? "true" : "false"}
+              {...register("github_account")}
+            />
+            <FieldError message={errors.github_account?.message} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="linkedin_account" optional>
+              LinkedIn
+            </FieldLabel>
+            <Input
+              id="linkedin_account"
+              type="url"
+              inputMode="url"
+              placeholder="linkedin.com/in/yourname"
+              aria-invalid={errors.linkedin_account ? "true" : "false"}
+              {...register("linkedin_account")}
+            />
+            <FieldError message={errors.linkedin_account?.message} />
+          </Field>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-5">
+        <h3 className="text-brand-ink text-base font-semibold">Home Address</h3>
 
         <Field>
-          <FieldLabel htmlFor="address_line">Street address</FieldLabel>
+          <FieldLabel htmlFor="address_line" required>
+            Street address
+          </FieldLabel>
           <Input
             id="address_line"
             autoComplete="street-address"
@@ -166,7 +240,9 @@ export function PersonalSection() {
 
         <div className="grid gap-5 sm:grid-cols-3">
           <Field>
-            <FieldLabel htmlFor="city_municipality">City / municipality</FieldLabel>
+            <FieldLabel htmlFor="city_municipality" required>
+              City / municipality
+            </FieldLabel>
             <Input
               id="city_municipality"
               autoComplete="address-level2"
@@ -176,7 +252,9 @@ export function PersonalSection() {
             <FieldError message={errors.city_municipality?.message} />
           </Field>
           <Field>
-            <FieldLabel htmlFor="province">Province</FieldLabel>
+            <FieldLabel htmlFor="province" required>
+              Province
+            </FieldLabel>
             <Input
               id="province"
               autoComplete="address-level1"
@@ -186,7 +264,9 @@ export function PersonalSection() {
             <FieldError message={errors.province?.message} />
           </Field>
           <Field>
-            <FieldLabel htmlFor="postal_code">Postal code</FieldLabel>
+            <FieldLabel htmlFor="postal_code" required>
+              Postal code
+            </FieldLabel>
             <Input
               id="postal_code"
               inputMode="numeric"

@@ -25,12 +25,14 @@ export function RenewalIdentitySection() {
 
   return (
     <FormSection
-      title="Your membership"
+      title="Your Membership"
       description="Your member ID, as issued when you joined. It never changes — a 2024 member renews as 2024-xxxx."
     >
       <div className="grid gap-5 sm:grid-cols-2">
         <Field>
-          <FieldLabel htmlFor="member_id">Member ID</FieldLabel>
+          <FieldLabel htmlFor="member_id" required>
+            Member ID
+          </FieldLabel>
           <Input
             id="member_id"
             inputMode="numeric"

@@ -499,14 +499,21 @@ afterwards — but do not reverse it.
 
 ## Still owed by Ethan
 
-Five items when this report was written on 2026-09-09; **two closed the same day.**
+Five items when this report was written on 2026-09-09; **three closed the same day.**
 
-1. **The social URLs** — the exact Facebook / Instagram / LinkedIn addresses.
-   `ORG_SOCIAL_LINKS` in `lib/brand/org-contact.ts` is one array and nothing else changes.
-   It is deliberately EMPTY, and the footer renders no social row at all rather than dead
-   icons: a guessed link on the org's own footer sends scholars to somebody else's page.
-   Blocks the visual half of A7. *(The email address half is already fixed — it is derived
-   from the mail environment and renders `startdost.community@gmail.com`.)*
+1. ~~The social URLs~~ — **DONE 2026-09-09.** Facebook, Instagram and LinkedIn are in
+   `ORG_SOCIAL_LINKS` and the footer now renders the row. **A7 is closed in full**, both
+   halves: the address is derived from the mail environment
+   (`startdost.community@gmail.com`) and the social links are real.
+
+   Stored CANONICAL — the LinkedIn address was given as `/company/startdost/posts/?feedView=all`
+   and is stored as `/company/startdost/`, because `feedView` is browser view-state and
+   `/posts/` is a subpage. A footer link is a front door, and a query string copied out of
+   an address bar is the kind of thing that quietly stops working.
+
+   Guarded by `org-contact.test.ts`, which runs the org's own links through the SAME host
+   checks `/apply` applies to an applicant's. A typo now fails a test instead of silently
+   sending scholars to a page the org does not control.
 
 2. ~~The two GitHub secrets~~ — **DONE 2026-09-09.** `APP_BASE_URL` and
    `JOB_SHARED_SECRET` are set on `dost-start/start-sys`, and the sweep was dispatched by
@@ -528,17 +535,24 @@ Five items when this report was written on 2026-09-09; **two closed the same day
 3. ~~The PSGC workbook~~ — **DONE 2026-09-09.** Supplied by hand (`PSGC Q4 2025 Updates.xlsx`,
    publication 31 December 2025); PR C2 shipped as migrations `0057`–`0059`.
 
-4. **Confirm `DOCUMENT_STORE=supabase_storage`** on the org deployment. The privacy notice
-   (`v3`, migration `0056`) now states as fact that the uploaded documents live in the same
-   Singapore project as the database, so this is a claim to a data subject rather than a
-   configuration detail.
+4. **The document store — NOT owed by Ethan; owned by the Google Drive work** (Ethan,
+   2026-09-09: "other sessions are working on it, we're setting up google, so let it be").
+   PRD OQ-1 is being answered on a separate branch. Nothing in PR #22 depends on the
+   outcome — `lib/documents/` is the swap point and this PR does not touch it.
 
-   ⚠ **Now entangled with other work.** A concurrent branch (`feat/two-store-documents`,
-   local-only as of 2026-09-09) is changing the document store and adding a Google Drive
-   setup runbook for the CCDO — i.e. reopening PRD OQ-1. If that lands, **the privacy
-   notice's storage paragraph and the processing register change in the same pull request
-   as the environment variable**, and that is a new notice version, not an edit. Decide the
-   store first; the notice follows it.
+   ⚠ ONE THING THAT PR MUST CARRY, flagged here because it is easy to miss from inside a
+   document-store change: **the privacy notice states where the documents live, as a fact,
+   to a data subject.** `v3` (migration `0056`) says they are in the same Singapore project
+   as the database, which is true of `DOCUMENT_STORE=supabase_storage` and becomes FALSE the
+   moment Drive is switched on.
+
+   `privacy_notice_versions` is append-only by design — the applicants who ticked the box
+   under `v3` consented to *those bytes* — so this is a **v4 row in a new migration**, not an
+   edit, with `PRIVACY_NOTICE_VERSION` bumped, `app/(public)/privacy/page.tsx` updated word
+   for word, and the processing register's processor row changed. The CI digest guard fails
+   until all of it lands together, which is the point. Correcting exactly this kind of drift
+   is why `v3` exists at all: the notice had claimed Google Drive while production ran on
+   Storage.
 
 5. **Delete the Sydney project** `krizhwugzrnlkxsixnde` once the org deployment is
    confirmed. It still holds the reviewers' real test submissions and their uploaded

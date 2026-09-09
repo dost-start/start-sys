@@ -67,12 +67,21 @@ export type OrgSocialLink = { label: string; href: string };
 /**
  * The org's public social profiles, rendered by the footer.
  *
- * ⚠ STILL EMPTY, AND THAT IS THE HONEST STATE. Ethan owes the exact Facebook, Instagram
- * and LinkedIn URLs (open item, brand restyle plan 2026-09-08; reviewer PDF A7). The
- * footer renders nothing at all while this list is empty rather than showing dead icons,
- * and adding them later is this one array — no component change, no layout change.
+ * Supplied by Ethan on 2026-09-09, closing the visual half of finding A7. Adding or
+ * changing one is this array and nothing else — no component change, no layout change;
+ * the footer renders the row only when the list is non-empty.
  *
- * Guessing a URL is not an option: a wrong link on the org's own footer sends scholars
- * to somebody else's page.
+ * ⚠ CANONICAL URLS ONLY — no tracking parameters, no subpages. The LinkedIn address was
+ * given as `/company/startdost/posts/?feedView=all`; `feedView` is a view-state parameter
+ * the browser adds and `/posts/` is a subpage, so what is stored is the company page
+ * itself. A footer link should be the front door, and a query string copied out of
+ * somebody's address bar is the kind of thing that quietly stops working.
+ *
+ * Asserted in `org-contact.test.ts` against the SAME host checks `/apply` uses, so a typo
+ * here fails a test rather than sending scholars to somebody else's page.
  */
-export const ORG_SOCIAL_LINKS: ReadonlyArray<OrgSocialLink> = [];
+export const ORG_SOCIAL_LINKS: ReadonlyArray<OrgSocialLink> = [
+  { label: "Facebook", href: "https://www.facebook.com/STARTDOST" },
+  { label: "Instagram", href: "https://www.instagram.com/start_dost/" },
+  { label: "LinkedIn", href: "https://www.linkedin.com/company/startdost/" },
+];

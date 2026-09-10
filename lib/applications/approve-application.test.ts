@@ -78,12 +78,17 @@ const RACE_TIMEOUT_MS = 180_000;
 // not be able to become guaranteed-by-review without anyone noticing.
 // QA 2026-09-10, ISSUE-010.
 // ═══════════════════════════════════════════════════════════════════════════════
-if (process.env.CI && !DB_TEST_ENV_READY) {
+// Keyed on REQUIRE_DB_TESTS, set only by ci.yml's "DB-backed vitest" step — NOT on `CI`.
+// The `js` job runs this same file inside `pnpm test` with no Supabase stack running, and
+// skipping there is correct; only the job that stood a database up has any business
+// demanding that the race actually ran.
+if (process.env.REQUIRE_DB_TESTS === "1" && !DB_TEST_ENV_READY) {
   throw new Error(
     "approve_application() concurrency suite cannot run: NEXT_PUBLIC_SUPABASE_URL, " +
       "NEXT_PUBLIC_SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY must all be set. " +
-      "In CI the `db` job exports them from `supabase status` — if this fires, that step " +
-      "is broken and the member-ID race is unproven. Do not silence it by skipping.",
+      "The `db` job exports them from `supabase status` — if this fires, that step is " +
+      "broken and the member-ID race is unproven. Do not silence it by unsetting " +
+      "REQUIRE_DB_TESTS.",
   );
 }
 

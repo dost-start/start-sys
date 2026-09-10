@@ -201,8 +201,16 @@ jobs:
           echo "SUPABASE_SERVICE_ROLE_KEY=$service" >> "$GITHUB_ENV"
 
       - name: DB-backed vitest (member-ID concurrency)
-        # If the suite reports "skipped" here, the environment did not reach it and the
-        # race was NOT proved. Treat that as a failure to investigate, not as a pass.
+        # A skip here means the environment did not reach the suite and the race was NOT
+        # proved. That used to be a comment, and a comment cannot fail a build —
+        # `describe.skipIf` exits 0, so if the key export above ever broke this file would
+        # go silently quiet and the job would stay green.
+        #
+        # `REQUIRE_DB_TESTS` turns the skip into a hard failure, and it is scoped to THIS
+        # step rather than keyed on `CI`: the `js` job runs the same file as part of
+        # `pnpm test` with no Supabase stack, and skipping is the correct behaviour there.
+        env:
+          REQUIRE_DB_TESTS: "1"
         run: pnpm vitest run lib/applications/approve-application.test.ts
 
       - name: Stop the Supabase stack

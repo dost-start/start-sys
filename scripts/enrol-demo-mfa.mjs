@@ -100,7 +100,11 @@ const results = [];
 for (const [email, password] of accounts) {
   const result = await enrol(email, password);
   results.push(result);
-  console.log(result.error ? `  ${email.padEnd(30)} FAILED: ${result.error}` : `  ${email.padEnd(30)} enrolled`);
+  console.log(
+    result.error
+      ? `  ${email.padEnd(30)} FAILED: ${result.error}`
+      : `  ${email.padEnd(30)} enrolled`,
+  );
 }
 
 const ok = results.filter((r) => !r.error);

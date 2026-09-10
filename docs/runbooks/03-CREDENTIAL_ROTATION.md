@@ -107,3 +107,30 @@ cannot use to diagnose a rotation gone wrong.
 - **If you cannot find a secret's Bitwarden item**, do not create a new ad-hoc one —
   check this table for the exact item name expected, and if it genuinely does not
   exist, that is itself a finding: file it in `docs/issues/` before continuing.
+
+
+---
+
+## Google Drive — OAuth refresh token (added 2026-09-10, ADR 0018)
+
+**Bitwarden item:** "Google — START-SYS Drive — OAuth client"
+**Env vars:** `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`,
+`GOOGLE_DRIVE_REFRESH_TOKEN`, `GOOGLE_DRIVE_PROOF_FOLDER_ID`
+
+⚠️ **A stale refresh token fails silently.** Uploads simply stop; nobody is told. Check
+`/api/health/drive` — it reports `{"status":"ok","driver":"drive"}` when the credential,
+the folder and the storage quota are all good.
+
+**To rotate:**
+1. Follow `06-GOOGLE-DRIVE-SETUP-FOR-CCDO.md` Parts 4-5 to mint a new client and token.
+2. Update the three values in Vercel Production **and** `.env.local`, then redeploy.
+3. Confirm with `/api/health/drive` before deleting the old client in Google Cloud.
+
+**Do NOT touch `GOOGLE_DRIVE_PROOF_FOLDER_ID` during a rotation.** The folder was created
+by the app; the `drive.file` scope means a *new* OAuth client cannot see a folder an older
+one created, so changing the client means the app creates a fresh folder and **the existing
+documents become unreachable through the app**. If you must rotate the client, move the old
+files into the new folder from the Drive web UI first, then re-point the variable.
+
+⚠️ **Do not set the OAuth consent screen back to "Testing".** Google expires refresh
+tokens after 7 days in that state. The button sits right under the publishing status.

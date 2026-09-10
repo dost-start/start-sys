@@ -48,3 +48,24 @@ as the corresponding runbook is executed.
 Outgoing CTO signature / date: ______________________
 
 Incoming CTO signature / date: ______________________
+
+
+---
+
+## Google Drive account (added 2026-09-10, ADR 0018)
+
+Every scholar's proof-of-enrollment document is stored in the Drive of the START-DOST
+Google account (`startdost.community@gmail.com`), owned by that account and consuming its
+quota. **If the incoming officers cannot sign in to that account, every document in the
+system is unreachable and the app has no recovery path.**
+
+Handover checklist:
+- [ ] Incoming CTO can sign in to the START-DOST Google account
+- [ ] The account's recovery phone and email are org-controlled, not a graduating student's
+- [ ] `/api/health/drive` returns `{"status":"ok","driver":"drive"}`
+- [ ] The OAuth consent screen still reads **In production** (on "Testing" the token dies
+      after 7 days, silently)
+- [ ] The folder **START-SYS Member Documents** is visible in that account's Drive
+
+This is the personal-account-ownership risk `ARCHITECTURE.md` §10 names as the likeliest
+cause of system death at handover. It is mitigated only by the account being org-owned.

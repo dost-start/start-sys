@@ -1,158 +1,170 @@
-# Setting up the Google Drive connection — step by step
+# Connecting START-SYS to Google Drive
 
-**Who this is for:** Danielle (CCDO). No technical background needed.
-**How long:** about 20 minutes.
-**What you need:** the START-DOST Gmail account — the same one the system sends email from.
-**What you'll end up with:** three values to send Ethan.
+**Who this is for:** the CCDO, or whoever holds the START-DOST Google account.
+**How long:** about 15 minutes.
+**What you need:** the START-DOST Google account — the same one the system sends email from.
+**What you'll end up with:** three values to send the CTO.
 
-At the end, START-SYS will be able to place approved members' documents into a Google
-Drive folder that you own and can open normally.
+> **Rewritten 2026-09-10 after an outage.** The previous version of this page produced a
+> credential the code cannot use and a folder the code cannot see, and applications were
+> unsubmittable for eleven hours as a result. Two things changed, and both matter:
+>
+> 1. **You create a *Web application* client, not a Desktop one.** Google removed the flow
+>    desktop clients used for this.
+> 2. **You do NOT create the Drive folder yourself.** The app creates it. A folder made by
+>    hand in the Drive website is invisible to the app — it can only see files it made —
+>    and every call returns `404 File not found`. The folder still shows up in your Drive
+>    normally and you can open, rename and move it.
+>
+> Full reasoning: `docs/decisions/0018-drive-oauth-user-credential.md`.
 
 > **Before you start:** make sure you are signed into Google as the **START-DOST account**,
-> not your personal one. Everything below attaches to whichever account you're signed in
-> as, and it is very hard to move afterwards. If you're not sure, sign out of everything
-> and sign back in with just the org account.
+> not your personal one. Everything below attaches to whichever account you're signed in as,
+> and it is very hard to move afterwards. If you're not sure, sign out of everything and
+> sign back in with just the org account.
 
 ---
 
-## Part 1 — Make the folder (2 minutes)
-
-1. Go to **drive.google.com**
-2. Click **+ New** → **New folder**
-3. Name it **START-SYS Member Documents**
-4. Open the folder by double-clicking it
-5. Look at the web address bar at the top of your browser. It looks like:
-
-   ```
-   https://drive.google.com/drive/folders/1a2B3cD4eFgHiJkLmNoPqRsTuVwXyZ
-   ```
-
-6. **Copy the part after `folders/`** — in the example that's `1a2B3cD4eFgHiJkLmNoPqRsTuVwXyZ`
-
-   Paste it somewhere safe. This is **Value 1 — Folder ID**.
-
-Leave the folder empty. The system fills it.
-
----
-
-## Part 2 — Create the project (3 minutes)
+## Part 1 — Open the project (1 minute)
 
 1. Go to **console.cloud.google.com**
-2. If it asks you to agree to terms, agree
-3. At the very top of the page, next to "Google Cloud", click the **project dropdown**
-   (it may say "Select a project")
-4. Click **NEW PROJECT** in the top right of the popup
-5. Project name: **START-SYS**
-6. Leave everything else as it is. Click **CREATE**
-7. Wait about 20 seconds. A notification appears when it's done — click **SELECT PROJECT**
+2. At the very top, click the **project dropdown** and pick **START-SYS**
 
-You should now see "START-SYS" at the top of the page. If you don't, click the project
-dropdown again and pick it. **Nothing below works unless START-SYS is the selected project.**
+If START-SYS isn't there, it was created on a different account. Stop and check before
+making a second one.
 
 ---
 
-## Part 3 — Turn on Google Drive access (2 minutes)
+## Part 2 — Turn on Google Drive access (2 minutes)
 
-1. In the search bar at the very top, type **Google Drive API**
-2. Click the result named **Google Drive API** (under "Marketplace")
+1. In the search bar at the top, type **Google Drive API**
+2. Click the result named **Google Drive API**
 3. Click the blue **ENABLE** button
-4. Wait for it to finish
+
+If it already says **MANAGE** or "API enabled", it's on. Move on.
 
 ---
 
-## Part 4 — Set up the permission screen (6 minutes)
+## Part 3 — The permission screen (5 minutes)
 
-This is the screen that appears once, later, asking permission for START-SYS to use Drive.
+Search for **OAuth consent screen**. Google is part-way through a redesign, so you'll land
+on one of two things: an older single page, or **Google Auth Platform** with **Branding**,
+**Audience** and **Data Access** in the left sidebar. Three things to get right either way.
 
-1. In the search bar at the top, type **OAuth consent screen** and click that result
-2. Choose **External**, then click **CREATE**
+**3a — User type must be External.**
+(New UI: *Audience*. Old UI: the External/Internal radio.) External sounds wrong but is
+correct — "Internal" only exists for paid Google Workspace accounts, and ours is a regular
+Gmail account.
 
-   *(External sounds wrong but is correct — "Internal" only exists for paid Google
-   Workspace accounts, and ours is a regular Gmail account.)*
+**3b — Publishing status must be "In production".** ⚠️ **This is the one that bites.**
+(New UI: *Audience*. Old UI: top of the consent screen page.) If it says **Testing**, click
+**PUBLISH APP → CONFIRM**.
 
-3. Fill in the form:
-   - **App name:** `START-SYS`
-   - **User support email:** pick the START-DOST address from the dropdown
-   - Skip the logo and all the optional boxes
-   - **Developer contact information:** type the START-DOST email address again
-4. Click **SAVE AND CONTINUE**
-5. On the **Scopes** page, click **ADD OR REMOVE SCOPES**
-6. In the filter box, type: `drive.file`
-7. Tick the checkbox on the row that ends in **`.../auth/drive.file`**
+> On "Testing", Google throws the connection away after **7 days**. There is no error and
+> no email — uploads simply start failing again. If you ever see a button that says
+> **"Back to testing"**, that means you are correctly published. Do not press it.
 
-   The description reads roughly *"See, edit, create and delete only the specific Google
-   Drive files you use with this app."* That is exactly what we want — it means START-SYS
-   can only touch files it created itself, and can never see the rest of your Drive.
+**3c — The scope must be `drive.file`, and nothing else.**
+(New UI: *Data Access → ADD OR REMOVE SCOPES*. Old UI: the Scopes section.) Filter for
+`drive.file` and tick the row ending `.../auth/drive.file`. Then **UPDATE → SAVE**.
 
-   > ⚠️ Do **not** tick any other Drive row. The ones called `drive` or `drive.readonly`
-   > give access to your whole Drive and we specifically don't want that.
+The description reads roughly *"See, edit, create and delete only the specific Google Drive
+files you use with this app"* — which is exactly right. It means START-SYS can only ever
+touch files it created, and can never see the rest of your Drive.
 
-8. Click **UPDATE**, then **SAVE AND CONTINUE**
-9. On the **Test users** page, just click **SAVE AND CONTINUE**
-10. Click **BACK TO DASHBOARD**
+> ⚠️ Do **not** tick `drive` or `drive.readonly`. Both hand over your entire Drive, and
+> both force a Google review that takes days.
 
----
-
-## Part 5 — Publish it ⚠️ (1 minute — do not skip)
-
-**This is the most important step on the page.** If it's skipped, the connection silently
-stops working after 7 days and nobody gets an error message.
-
-1. You should be on the **OAuth consent screen** page
-2. Find **Publishing status**. It currently says **Testing**
-3. Click **PUBLISH APP**
-4. A confirmation box appears — click **CONFIRM**
-5. Check that Publishing status now says **In production**
-
-If it asks anything about "verification" or "submit for verification" — **ignore it and
-close it.** We don't need verification, because the permission we asked for in Part 4 is
-a limited one. The app works published-but-unverified.
+**If you see a banner saying the app "requires verification" — ignore it.** With only
+`drive.file` there is nothing to submit, and it blocks nothing. Do not go to the
+Verification Center.
 
 ---
 
-## Part 6 — Create the keys (4 minutes)
+## Part 4 — Create the credential (3 minutes)
 
-1. In the search bar at the top, type **Credentials** and click that result
-2. Click **+ CREATE CREDENTIALS** at the top → choose **OAuth client ID**
-3. **Application type:** choose **Desktop app**
-4. **Name:** `START-SYS Setup`
-5. Click **CREATE**
-6. A box pops up showing **Client ID** and **Client secret**
+1. Search for **Credentials** (new UI: **Clients** in the left sidebar)
+2. **+ CREATE CREDENTIALS → OAuth client ID** (new UI: **+ CREATE CLIENT**)
+3. **Application type: Web application** ← not Desktop
+4. **Name:** `START-SYS Drive`
+5. Scroll to **Authorised redirect URIs** → **+ ADD URI** → paste exactly:
 
-   Copy both.
-   - **Value 2 — Client ID** (long, ends in `.apps.googleusercontent.com`)
-   - **Value 3 — Client secret** (shorter, usually starts `GOCSPX-`)
+   ```
+   https://developers.google.com/oauthplayground
+   ```
 
-   You can also click **DOWNLOAD JSON** to save them. If you lose them, come back to this
-   Credentials page and click the client name — the Client ID is always visible and you
-   can generate a new secret.
+   No trailing slash. A slash gives you `redirect_uri_mismatch` in the next part.
+
+6. Leave **Authorised JavaScript origins** empty
+7. Click **CREATE**
+
+A box appears with **Client ID** and **Client secret**. Copy both now — the secret is only
+shown once. If you lose it, reopen the client and add a new secret.
+
+- **Value 1 — Client ID** (long, ends `.apps.googleusercontent.com`)
+- **Value 2 — Client secret** (starts `GOCSPX-`)
 
 ---
 
-## Part 7 — Send Ethan the three values
+## Part 5 — Get the long-lived key (4 minutes)
 
-Send these **privately** — a direct message to Ethan, not a group chat, not a Messenger
-group, not a public channel:
+1. Go to **developers.google.com/oauthplayground**
+2. Click the **gear icon** at the top right. Set:
+   - ✅ **Use your own OAuth credentials** — then paste the Client ID and secret from Part 4
+   - **Access type: Offline** ← without this you get no long-lived key at all
+   - ✅ **Force prompt: Consent screen**
+3. In the left panel, scroll to the bottom box labelled **"Input your own scopes"** and paste:
 
-1. **Folder ID** (from Part 1)
-2. **Client ID** (from Part 6)
-3. **Client secret** (from Part 6)
+   ```
+   https://www.googleapis.com/auth/drive.file
+   ```
 
-The Client secret is a password. Anyone who has it plus the Client ID can ask for access
-to that Drive folder. Treat it the way you'd treat the account password.
+4. Click **Authorize APIs**, and sign in as the **START-DOST account**
+5. Approve the permission screen
+6. Back on the Playground, click **Exchange authorization code for tokens**
+7. Copy the **Refresh token** — it starts `1//`
+
+- **Value 3 — Refresh token**
+
+**Check before you move on:** in the Request/Response panel on the right, the `client_id=`
+must be **your** Client ID from Part 4. If it says `407408718192`, the gear setting in step
+2 didn't take — set it again and redo from step 4.
+
+**If the Refresh token box comes back empty:** this account has already approved the app
+once, and Google only issues the long-lived key on a fresh approval. Go to
+**myaccount.google.com → Security → Your connections to third-party apps**, remove
+**START-SYS**, then redo from step 4.
+
+**Leave "Auto-refresh the token before it expires" unticked.** It only affects the
+Playground's own browser tab.
+
+---
+
+## Part 6 — Send the CTO three values
+
+1. **Client ID**
+2. **Client secret**
+3. **Refresh token**
+
+Send these **privately** — a direct message, not a group chat, not Messenger, not a public
+channel. The secret and the refresh token together are full access to the folder the app
+creates. Treat them the way you'd treat the account password.
+
+**Do not send a folder ID, and do not create a folder.** The app makes its own the first
+time it runs, and tells the CTO the id. It will appear in your Drive as
+**START-SYS Member Documents**.
 
 ---
 
 ## What happens next
 
-Ethan runs a one-time step that opens a Google permission page. You may need to be signed
-in as the START-DOST account for that, or hand him access — coordinate with him.
+The CTO puts the three values into the system's settings. From then on, every scholar's
+registration form and Notice of Award lands in that folder automatically. You can open it
+like any other Drive folder.
 
-On that page you'll see **"Google hasn't verified this app."** This is expected. Click
-**Advanced**, then **Go to START-SYS (unsafe)**. It is safe — it's the app you just
-created, and it can only touch its own files.
-
-After that it's done permanently. No weekly renewal, no re-doing this.
+Nobody outside START-SYS can reach those documents: they are never shared, never given a
+public link, and inside the system they can only be opened by a reviewer who is signed in —
+and every single view is written to the audit log.
 
 ---
 
@@ -160,8 +172,10 @@ After that it's done permanently. No weekly renewal, no re-doing this.
 
 | What you see | What it means | Fix |
 |---|---|---|
-| "To view this page, select a project" | START-SYS isn't the selected project | Click the project dropdown at the top and pick START-SYS |
-| Publishing status still says **Testing** | Part 5 didn't take | Redo Part 5. This one matters — it breaks after 7 days otherwise |
-| Can't find `drive.file` in the scopes list | Drive API isn't enabled | Redo Part 3, then come back |
-| Asked to "submit for verification" | Normal for our kind of app | Close it. Not needed |
-| You accidentally used your personal account | Everything attached to the wrong account | Tell Ethan before going further — easier to redo than to move |
+| `redirect_uri_mismatch` | The URI in Part 4 has a typo or a trailing slash | Fix it, wait two minutes, retry |
+| `client_id=407408718192` in the Playground | The gear setting didn't take | Part 5 step 2, then redo from step 4 |
+| Refresh token box empty | This account already approved the app once | Revoke at myaccount.google.com, then redo Part 5 |
+| `unauthorized_client` | You changed the credentials but reused the old code | Redo **Authorize APIs**, then Exchange straight away — codes expire in about 60 seconds |
+| Only Client ID shows, no secret | The box was closed | Reopen the client → **ADD SECRET** |
+| Uploads worked, then stopped about a week later | Publishing status went back to "Testing" | Part 3b. Then redo Part 5 — the old key is dead |
+| "Your app requires verification" banner | Normal for `drive.file` | Ignore it. Do not submit for review |

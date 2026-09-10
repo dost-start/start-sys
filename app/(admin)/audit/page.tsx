@@ -77,8 +77,11 @@ const FILTER_LABEL_CLASS =
   "text-brand-label w-14 shrink-0 text-xs font-semibold tracking-[0.08em] uppercase";
 
 /** Canonical link, defaults omitted — the same discipline as the member contract. */
-function auditHref(filters: Partial<AuditFilters>): string {
+function auditHref(filters: Partial<AuditFilters>, raw = false): string {
   const params = new URLSearchParams();
+  // Deliberately NOT part of `AuditFilters`: it changes how rows are displayed, never
+  // which rows are fetched, so it must not be able to reach the query builder.
+  if (raw) params.set("raw", "1");
   if (filters.operation) params.set("operation", filters.operation);
   if (filters.table_name) params.set("table_name", filters.table_name);
   if (filters.actor_user_id) params.set("actor_user_id", filters.actor_user_id);
@@ -106,6 +109,7 @@ export default async function AuditPage({
 
   const params = await searchParams;
   const filters = parseAuditFilters(params);
+  const rawRows = one(params.raw) === "1";
 
   const [page, facets] = await Promise.all([listAuditEntries(ctx, filters), listAuditFacets(ctx)]);
 
@@ -190,13 +194,25 @@ export default async function AuditPage({
         ) : null}
       </div>
 
-      <AuditLogTable entries={page.entries} />
+      {/* Repeated reads by one actor are folded for READING only — nothing is written
+          differently and nothing is dropped. One toggle away from the raw rows, because
+          "the log is complete" has to stay verifiable by looking (QA ISSUE-008). */}
+      <div className="flex items-center justify-end">
+        <a
+          href={auditHref({ ...filters, cursor: null }, !rawRows)}
+          className="text-brand-link text-xs underline underline-offset-2"
+        >
+          {rawRows ? "Fold repeated views" : "Show every entry, unfolded"}
+        </a>
+      </div>
+
+      <AuditLogTable entries={page.entries} collapseRepeats={!rawRows} />
 
       {/* Cursor pagination: forward only. An `offset` on a table receiving inserts while
           you page skips and repeats rows (lib/audit/queries.ts). */}
       {page.nextCursor !== null ? (
         <a
-          href={auditHref({ ...filters, cursor: page.nextCursor })}
+          href={auditHref({ ...filters, cursor: page.nextCursor }, rawRows)}
           className="text-brand-link inline-block text-sm font-medium underline-offset-2 hover:underline"
         >
           Older entries →

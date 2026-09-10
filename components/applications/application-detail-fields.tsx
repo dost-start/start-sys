@@ -230,7 +230,9 @@ export function ApplicationDetailFields({
       </Section>
 
       <Section title="Membership information">
-        <Field label="Region" value={regionName} />
+        {/* The ORG region (drives RR scoping + the member ID prefix), not the home
+            address region rendered above. QA 2026-09-10, ISSUE-013. */}
+        <Field label="START-DOST region" value={regionName} />
       </Section>
 
       {legacy.length > 0 ? (

@@ -21,7 +21,7 @@ does not restate the column list, because a restated list is a list that drifts.
 | **Data categories** | Identity (name), contact (email, phone, address), academic (school, school ID, program, year level), a proof-of-enrollment document. Full column list: `DATA_MODEL.md` §8.1 row `applications`. |
 | **Legal basis** | Consent, captured at submission against a specific notice version (`docs/privacy/PRIVACY_NOTICE.md`, `applications.consented_at` / `privacy_notice_version`) |
 | **Recipients inside the org** | CCDO, CEO, COO, and Moderators reviewing that term's applications — column-GRANTed and RLS-scoped, per `ARCHITECTURE.md` §5 |
-| **Processors** | Supabase (Singapore) — the application row; Google Drive **or** Supabase Storage — the proof document; Vercel (Singapore) — transiently, while handling the request |
+| **Processors** | Supabase (Singapore) — the application row; **Google (Drive)** — the proof documents, live since 2026-09-10 (ADR 0018); Vercel (Singapore) — transiently, while handling the request. The register names the driver that is actually running, never an "or" — `/api/health/drive` reports it |
 | **Retention** | Unfinished ("draft") submissions: 30 days, then redacted (`purge_abandoned_drafts()`, `DATA_MODEL.md` §6/0008 family). Decided applications: retained as part of the resulting member record (see §2) or, if rejected, per the general application retention below. |
 | **System mechanism** | `supabase/migrations/0008_applications.sql` onward; anon INSERT policy gated on an open `application_windows` row |
 

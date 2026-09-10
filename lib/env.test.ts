@@ -43,8 +43,9 @@ const VALID_SERVER = {
   DOCUMENT_STORE: "fake",
   JOB_SHARED_SECRET: "job-secret-placeholder",
   RATE_LIMIT_HMAC_KEY: "hmac-placeholder",
-  GOOGLE_SA_CLIENT_EMAIL: "sa@example.iam.gserviceaccount.com",
-  GOOGLE_SA_PRIVATE_KEY: "key-placeholder",
+  GOOGLE_OAUTH_CLIENT_ID: "1234-abc.apps.googleusercontent.com",
+  GOOGLE_OAUTH_CLIENT_SECRET: "secret-placeholder",
+  GOOGLE_DRIVE_REFRESH_TOKEN: "refresh-placeholder",
   GOOGLE_DRIVE_SHARED_DRIVE_ID: "drive-placeholder",
   GOOGLE_DRIVE_PROOF_FOLDER_ID: "folder-placeholder",
   SENTRY_DSN: "https://example.ingest.sentry.io/1",
@@ -137,7 +138,7 @@ describe("parseServerEnv", () => {
     };
 
     const parsed = parseServerEnv(withoutGoogle);
-    expect(parsed.GOOGLE_SA_PRIVATE_KEY).toBeUndefined();
+    expect(parsed.GOOGLE_DRIVE_REFRESH_TOKEN).toBeUndefined();
     expect(parsed.DOCUMENT_STORE).toBe("supabase_storage");
   });
 
@@ -188,14 +189,14 @@ describe("assertSecretsAreNotPublic", () => {
     try {
       assertSecretsAreNotPublic([
         "SUPABASE_SERVICE_ROLE_KEY",
-        "NEXT_PUBLIC_GOOGLE_SA_PRIVATE_KEY",
+        "NEXT_PUBLIC_GOOGLE_DRIVE_REFRESH_TOKEN",
         "NEXT_PUBLIC_JOB_SHARED_SECRET",
       ]);
     } catch (error) {
       message = error instanceof Error ? error.message : String(error);
     }
 
-    expect(message).toContain("NEXT_PUBLIC_GOOGLE_SA_PRIVATE_KEY");
+    expect(message).toContain("NEXT_PUBLIC_GOOGLE_DRIVE_REFRESH_TOKEN");
     expect(message).toContain("NEXT_PUBLIC_JOB_SHARED_SECRET");
     // The compliant name must not be reported as an offender.
     expect(message).not.toContain("SUPABASE_SERVICE_ROLE_KEY,");

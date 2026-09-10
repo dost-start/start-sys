@@ -122,6 +122,27 @@ export default tseslint.config(
     },
   },
 
+  // ── Node scripts ───────────────────────────────────────────────────────────
+  // Plain ESM run by `node`, never bundled and never imported by the app. Without the
+  // Node globals declared, `no-undef` from eslint:recommended flags `console` and
+  // `process` in every operational script — which reads as a lint failure and is not one.
+  {
+    files: ["scripts/**/*.{mjs,mts}"],
+    languageOptions: {
+      globals: {
+        console: "readonly",
+        process: "readonly",
+        Buffer: "readonly",
+        fetch: "readonly",
+        URL: "readonly",
+        TextEncoder: "readonly",
+        TextDecoder: "readonly",
+        __dirname: "readonly",
+        setTimeout: "readonly",
+      },
+    },
+  },
+
   // eslint-config-prettier must come last: it disables stylistic rules that conflict
   // with Prettier, which owns formatting.
   prettier,

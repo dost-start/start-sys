@@ -50,6 +50,7 @@ import { NextResponse } from "next/server";
 
 import { DocumentUnavailableError, getProofStream, isServableMime } from "@/lib/documents";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { reportError } from "@/instrumentation";
 
 /** Streams live data under the caller's session; never prerendered, never cached. */
 export const dynamic = "force-dynamic";
@@ -102,7 +103,9 @@ export async function GET(
   let supabase: Awaited<ReturnType<typeof createServerSupabase>>;
   try {
     supabase = await createServerSupabase();
-  } catch {
+  } catch (error) {
+    // CONVENTIONS.md §4.3 — the raw error goes to the reporter, the caller gets a code.
+    void reportError(error, { tags: { route: "api/applications/[id]/proof" } });
     return serverError();
   }
 

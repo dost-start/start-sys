@@ -35,6 +35,7 @@ import { NextResponse } from "next/server";
 // eslint-disable-next-line no-restricted-imports -- job endpoint: the backup/job surface admin-client exists for (see its header, permitted caller 2)
 import { createAdminClient } from "@/lib/server/admin-client";
 import { getDocumentStore } from "@/lib/documents";
+import { reportError } from "@/instrumentation";
 
 /** A job runs against live data; it must never be prerendered or cached. */
 export const dynamic = "force-dynamic";
@@ -109,7 +110,9 @@ export async function POST(request: Request): Promise<NextResponse> {
     try {
       await store.deleteDocument(row.storage_ref);
       documentsDeleted += 1;
-    } catch {
+    } catch (error) {
+      // CONVENTIONS.md §4.3 — the raw error goes to the reporter, the caller gets a code.
+      void reportError(error, { tags: { route: "api/jobs/purge-abandoned-drafts" } });
       // Tolerated: a ref that is already gone is the outcome we wanted. Deleting is
       // idempotent by contract, and a provider outage is retried by tomorrow's run
       // (and by the orphan pass below, which no longer sees a pointer to this file).
@@ -138,7 +141,9 @@ export async function POST(request: Request): Promise<NextResponse> {
       try {
         await store.deleteDocument(ref);
         documentsDeleted += 1;
-      } catch {
+      } catch (error) {
+        // CONVENTIONS.md §4.3 — the raw error goes to the reporter, the caller gets a code.
+        void reportError(error, { tags: { route: "api/jobs/purge-abandoned-drafts" } });
         // already gone, or the store is unreachable — the next run retries via orphans
       }
     }
@@ -186,11 +191,15 @@ export async function POST(request: Request): Promise<NextResponse> {
         try {
           await store.deleteDocument(ref);
           orphansDeleted += 1;
-        } catch {
+        } catch (error) {
+          // CONVENTIONS.md §4.3 — the raw error goes to the reporter, the caller gets a code.
+          void reportError(error, { tags: { route: "api/jobs/purge-abandoned-drafts" } });
           // Same tolerance as above; tomorrow's run sees it again.
         }
       }
-    } catch {
+    } catch (error) {
+      // CONVENTIONS.md §4.3 — the raw error goes to the reporter, the caller gets a code.
+      void reportError(error, { tags: { route: "api/jobs/purge-abandoned-drafts" } });
       // The store could not enumerate. The redaction above still happened and is the
       // part with a legal deadline; reconciliation retries tomorrow.
     }

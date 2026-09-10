@@ -42,6 +42,7 @@ import { NextResponse } from "next/server";
 import { type ActionError, type ErrorCode, err, isErr } from "@/lib/action-result";
 import { getSessionContext } from "@/lib/auth/queries";
 import { pingDocumentStore } from "@/lib/documents";
+import { reportError } from "@/instrumentation";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -105,7 +106,14 @@ export async function GET(request: Request): Promise<NextResponse> {
     const { driver } = await pingDocumentStore();
 
     return NextResponse.json({ status: "ok", driver }, { status: 200, headers: NO_STORE });
-  } catch {
+  } catch (error) {
+    // CONVENTIONS.md §4.3: the raw error is logged server-side, the caller gets the
+    // mapped code. Until 2026-09-10 this was a bare `catch {}`, so the daily job that
+    // exists to catch a broken document store reported a 500 with no reason to anybody.
+    await reportError(error, {
+      message: "document store health check failed",
+      tags: { route: "api/health/drive" },
+    });
     return NextResponse.json(actionError("upstream"), { status: 500, headers: NO_STORE });
   }
 }

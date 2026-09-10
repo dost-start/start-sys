@@ -34,6 +34,7 @@ import { NextResponse } from "next/server";
 
 import { type ActionError, type ErrorCode, err, isErr } from "@/lib/action-result";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { reportError } from "@/instrumentation";
 
 /** A health check that could be cached is not a health check. */
 export const dynamic = "force-dynamic";
@@ -106,7 +107,9 @@ export async function GET(): Promise<NextResponse> {
     };
 
     return NextResponse.json(body, { status: 200, headers: NO_STORE });
-  } catch {
+  } catch (error) {
+    // CONVENTIONS.md §4.3 — the raw error goes to the reporter, the caller gets a code.
+    void reportError(error, { tags: { route: "api/health" } });
     // Missing environment, unreachable host, a cookie-store failure — one answer to a
     // stranger, and none of them describable to one.
     return unhealthy();

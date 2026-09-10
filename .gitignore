@@ -7,6 +7,13 @@
 node_modules
 node_modules/
 
+# npm and yarn lockfiles. This project is pnpm-only (CLAUDE.md: "Never `npm` or `yarn`")
+# and `pnpm-lock.yaml` is the committed one. An `npx` invocation will quietly write a
+# package-lock.json into the repo root, and a second lockfile is how a 2029 maintainer
+# ends up with a different node_modules — and therefore different bugs — from CI.
+package-lock.json
+yarn.lock
+
 # Next.js build output
 .next/
 out/

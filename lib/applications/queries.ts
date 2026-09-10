@@ -301,6 +301,59 @@ async function resolvePsgc(ctx: ActionContext, code: unknown): Promise<ResolvedA
  * error: the officer and RR dashboards never render this tile, and a zero is a safer
  * failure than an exception on a dashboard.
  */
+/**
+ * How many applicants started this term and never finished.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * WHY THE ORG NEEDS THIS NUMBER ON SCREEN
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * A `draft` row is an applicant who filled the whole form and whose upload did not
+ * complete. It holds their birthdate, contact number, home address and Facebook link —
+ * the weakest retention basis in the system — and until now it was **invisible**: the
+ * queue counts `pending`, `draft` is deliberately absent from the status chips
+ * (`APPLICATION_QUEUE_STATUSES`, so un-submitted PII never lands on a reviewer screen),
+ * and nothing else surfaced it.
+ *
+ * On 2026-09-10 the document store was broken for eleven hours. Five real people were
+ * stuck at `draft`, and CRRD's dashboard read "4 pending" the whole time. Nobody could
+ * have known from the product that anything was wrong.
+ *
+ * This returns a COUNT and nothing else, on purpose. Seeing that seven people are stuck
+ * is an operational signal; seeing who they are and what they typed is a PII surface the
+ * review queue does not need and US-J1 does not want. If CRRD needs to contact them, that
+ * is a deliberate, audited lookup — not a list rendered by default.
+ * ═══════════════════════════════════════════════════════════════════════════════
+ */
+export async function countStalledDrafts(ctx: ActionContext): Promise<number> {
+  const { data: termId, error: termError } = await ctx.supabase.rpc("current_term_id");
+  if (termError || !termId) return 0;
+
+  // WINDOWED ON `created_at`, NOT FILTERED ON `redacted_at`, and both halves of that are
+  // deliberate.
+  //
+  // `redacted_at` is one of the six columns 0027 deliberately WITHHOLDS from
+  // `authenticated` — so filtering on it raises 42501, this function swallows the error,
+  // and the count silently reads 0. That is exactly how it failed the first time it was
+  // wired: the line rendered nowhere and looked like "no drafts" rather than "the query
+  // was refused". Widening the GRANT to fix a counter would be the wrong trade.
+  //
+  // A 30-day window is also the better metric. The question is "who is stuck right now",
+  // not "who ever abandoned a form" — and it matches `purge_abandoned_drafts` (0020),
+  // which redacts at 30 days, so a swept row ages out of this count instead of inflating
+  // it forever.
+  const windowStart = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { count, error } = await ctx.supabase
+    .from("applications")
+    .select("id", { count: "exact", head: true })
+    .eq("term_id", termId)
+    .eq("status", "draft")
+    .gte("created_at", windowStart);
+
+  if (error) return 0;
+  return count ?? 0;
+}
+
 export async function countPendingApplications(ctx: ActionContext): Promise<number> {
   const { data: termId, error: termError } = await ctx.supabase.rpc("current_term_id");
   if (termError || !termId) return 0;

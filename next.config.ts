@@ -135,6 +135,17 @@ const SECURITY_HEADERS = [
 const NOINDEX_EXCEPT_PUBLIC = "/((?!apply$|privacy$).*)";
 
 const nextConfig: NextConfig = {
+  // Next advertises itself in a response header by default. It names the framework and
+  // therefore the CVE list worth trying. Nothing depends on it.
+  poweredByHeader: false,
+
+  // `next dev` appends a `<!-- BEGIN:nextjs-agent-rules -->` block to the repo's
+  // CLAUDE.md on every run — the file that IS this project's working contract. A tool
+  // rewriting the governance document unprompted leaves the tree dirty after the
+  // documented dev command and puts the change one careless `git add -A` from being
+  // committed as if a human wrote it. QA 2026-09-10, ISSUE-007.
+  agentRules: false,
+
   async headers() {
     return [
       { source: "/:path*", headers: [...SECURITY_HEADERS] },

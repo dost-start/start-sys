@@ -38,6 +38,15 @@ import type { OrgRole } from "@/lib/auth/route-access";
 export type RegionOption = { id: string; code: string; name: string };
 
 export type UserRoleRow = {
+  /**
+   * The account's sign-in address, or `null` if the Admin API lookup failed.
+   *
+   * Null renders as an em-dash and the id below still identifies the row — the screen
+   * degrades to what it was before rather than breaking. It is deliberately NOT sourced
+   * from `people`: `tech_admin` reads zero rows there (OQ-5), which is the whole reason
+   * this column exists (QA 2026-09-10, ISSUE-006).
+   */
+  accountEmail: string | null;
   userId: string;
   role: OrgRole;
   personId: string | null;
@@ -128,7 +137,17 @@ function UserRoleRowItem({ row, regions }: { row: UserRoleRow; regions: readonly
 
   return (
     <TableRow className="align-top">
-      <TableCell className="font-mono text-xs">{row.userId}</TableCell>
+      <TableCell>
+        {/* The email is what a human can actually match to a person. The id stays
+            visible underneath because it is the value every other surface keys on —
+            the audit log renders actor as a bare uuid and never resolves it. */}
+        <div className="flex flex-col gap-0.5">
+          <span className="text-brand-ink text-xs font-medium break-all">
+            {row.accountEmail ?? "—"}
+          </span>
+          <span className="text-brand-label font-mono text-[10px] break-all">{row.userId}</span>
+        </div>
+      </TableCell>
       <TableCell>{row.personLabel ?? <span className="text-brand-label">—</span>}</TableCell>
       <TableCell>
         <NativeSelect

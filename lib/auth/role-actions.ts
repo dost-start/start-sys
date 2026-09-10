@@ -41,17 +41,27 @@ export const assignRole = withRole<unknown, { userId: string }>(
 
     const { user_id, role, region_id, person_id }: RoleAssignmentInput = parsed.data;
 
-    const { error } = await ctx.supabase.from("user_roles").upsert(
+    const { error, count } = await ctx.supabase.from("user_roles").upsert(
       {
         user_id,
         role,
         region_id: region_id ?? null,
         person_id: person_id ?? null,
       },
-      { onConflict: "user_id" },
+      { onConflict: "user_id", count: "exact" },
     );
 
     if (error) return err(mapDbError(error).code);
+    // An RLS refusal on a write is ZERO ROWS AFFECTED, not an error — so without this
+    // check the screen reported "Updated." for a write that never happened. That is not
+    // hypothetical here: `user_roles_write` requires tech_admin **and** `aal2`, so with
+    // `DEV_DISABLE_MFA=1` (set on Production today, launch-debt item 9) an unverified
+    // session is aal1 and every role assignment silently does nothing while claiming
+    // success. `revokeRole` below already checks this; `assignRole` did not.
+    //
+    // `not_found` and never `unauthorized`, per CONVENTIONS.md §4.3: the response must
+    // not confirm whether the account exists.
+    if (count === 0) return err("not_found");
 
     revalidatePath("/system/user-roles");
     return ok({ userId: user_id });

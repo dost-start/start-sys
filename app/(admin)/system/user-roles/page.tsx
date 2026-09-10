@@ -4,6 +4,7 @@ import {
   type RegionOption,
   type UserRoleRow,
 } from "@/components/auth/user-roles-table";
+import { listAccountEmails } from "@/lib/auth/invite-actions";
 import { getSessionContext } from "@/lib/auth/queries";
 import type { OrgRole } from "@/lib/auth/route-access";
 
@@ -30,14 +31,25 @@ export default async function UserRolesPage() {
     return null;
   }
 
-  const [{ data: roleRows }, { data: regionRows }, { data: personRows }] = await Promise.all([
-    ctx.supabase
-      .from("user_roles")
-      .select("user_id, role, person_id, region_id")
-      .order("role", { ascending: true }),
-    ctx.supabase.from("regions").select("id, code, name").order("sort_order", { ascending: true }),
-    ctx.supabase.from("people").select("id, given_name, family_name, member_id"),
-  ]);
+  const [{ data: roleRows }, { data: regionRows }, { data: personRows }, emailResult] =
+    await Promise.all([
+      ctx.supabase
+        .from("user_roles")
+        .select("user_id, role, person_id, region_id")
+        .order("role", { ascending: true }),
+      ctx.supabase
+        .from("regions")
+        .select("id, code, name")
+        .order("sort_order", { ascending: true }),
+      ctx.supabase.from("people").select("id, given_name, family_name, member_id"),
+      // `tech_admin` reads ZERO rows from `people` (OQ-5), so `personRows` above is
+      // always empty for the only role that can open this page — every PERSON cell fell
+      // through to an em-dash. The email is what actually lets the CTO tell one account
+      // from another before granting it exec_admin. QA 2026-09-10, ISSUE-006.
+      listAccountEmails(undefined),
+    ]);
+
+  const emailById: Record<string, string> = emailResult.ok ? emailResult.data : {};
 
   const regions: RegionOption[] = (regionRows ?? []).map((r) => ({
     id: r.id,
@@ -59,6 +71,7 @@ export default async function UserRolesPage() {
       : null;
 
     return {
+      accountEmail: emailById[row.user_id] ?? null,
       userId: row.user_id,
       role: row.role as OrgRole,
       personId: row.person_id,

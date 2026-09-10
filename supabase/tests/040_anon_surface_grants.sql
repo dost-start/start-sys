@@ -42,7 +42,7 @@ begin;
 \ir helpers/auth.psql
 \ir helpers/fixtures.psql
 
-select plan(21);
+select plan(24);
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════════
@@ -154,6 +154,30 @@ select ok(
   not has_table_privilege('anon', 'public.people', 'select'),
   'anon holds NO select privilege on people — the revoke in 0015 §1 is what makes '
   'assertion 4 raise'
+);
+
+-- 11b/c/d — the three tables 0015 forgot, revoked by 0061.
+--
+-- These returned `200 []` to the anon key on 2026-09-10: RLS held, no policy named anon,
+-- nothing leaked. But a GRANT with no policy fails closed only while the policy set stays
+-- correct, whereas an absent GRANT fails closed at the privilege layer regardless. The
+-- asymmetry matters most on exactly these three — who holds which role, who may read PII,
+-- and the membership roll itself — so the absence is asserted rather than assumed.
+-- QA 2026-09-10, ISSUE-011.
+select ok(
+  not has_table_privilege('anon', 'public.memberships', 'select'),
+  'anon holds NO select privilege on memberships (0061)'
+);
+
+select ok(
+  not has_table_privilege('anon', 'public.user_roles', 'select'),
+  'anon holds NO select privilege on user_roles — an anonymous caller must never be one '
+  'widened policy away from reading who holds which role (0061)'
+);
+
+select ok(
+  not has_table_privilege('anon', 'public.confidentiality_acknowledgements', 'select'),
+  'anon holds NO select privilege on confidentiality_acknowledgements (0061)'
 );
 
 -- 12 — anon MUST keep INSERT on applications: the /apply Server Action holds no session and

@@ -236,7 +236,33 @@ has actually arrived on the CTO's phone and in Discord; and the confirmation is 
 
 ---
 
-## 9. `DEV_DISABLE_MFA` is set on the demo deployment ⚠️ **must be unset before real data**
+## 9. ~~`DEV_DISABLE_MFA` is set on the demo deployment~~ ✅ **RESOLVED 2026-09-10**
+
+> **Closed.** The flag is removed from the Vercel Production *and* Preview scopes, and all
+> six accounts hold a verified TOTP factor (`scripts/enrol-demo-mfa.mjs`). Signing in now
+> lands on `/auth/mfa/verify` before any org data is reachable.
+>
+> **It was not only a security gap — it was breaking the product silently.** `has_aal2()`
+> guards writes to `user_roles`, `terms`, `application_windows`, `rr_region_grants` and
+> `privacy_notice_versions`, and an aal1 session gets `HTTP 200, 0 rows affected` rather
+> than an error. Measured on 2026-09-10, same account, same statement:
+>
+> ```
+> aal1 -> application_windows write: 0 row(s) affected
+> aal2 -> application_windows write: 1 row(s) affected
+> ```
+>
+> So assigning a role, opening the application period and running a term rollover had
+> never worked through the app on this deployment; the window was only ever opened with
+> the service-role key. Enrolment fixed that as a side effect. PR #27 separately made
+> `assignRole` report the refusal instead of saying "Updated."
+>
+> Enrolment was done BEFORE the flag was removed, so nobody was locked out at any point —
+> including the CTO, who is the only role that can hand out roles.
+
+Original entry follows.
+
+### ~~`DEV_DISABLE_MFA` is set on the demo deployment~~ ⚠️ ~~must be unset before real data~~
 
 **Blocks:** PRD MVP item 2 / US-A3 — TOTP enrolment mandatory above Member tier.
 **Owner:** CTO. **Added 2026-09-03 at the project heads' request, for demo ergonomics.**

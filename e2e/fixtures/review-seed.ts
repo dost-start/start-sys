@@ -199,6 +199,8 @@ export async function seedFakeProof(applicationId: string): Promise<SeededProof>
     fileName: "certificate-of-registration.pdf",
     mimeType: "application/pdf",
     sizeBytes: bytes.byteLength,
+    // Seed fixture: no browser will PUT these, the seeder does it server-side.
+    browserOrigin: null,
   });
   await fakeStorePut(session.storageRef, bytes, "application/pdf");
 

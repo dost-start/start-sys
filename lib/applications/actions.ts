@@ -57,6 +57,7 @@ import {
 } from "@/lib/applications/schema";
 import { withPublic } from "@/lib/auth/with-public";
 import { getDocumentStore } from "@/lib/documents";
+import { browserOriginFromRequest } from "@/lib/documents/request-origin";
 import {
   DocumentRejectedError,
   DocumentUnavailableError,
@@ -226,6 +227,7 @@ export const startApplication = withPublic<StartApplicationInput, StartApplicati
     // any object it produced. The alternative — session first, row second — would
     // create objects with no row pointing at them, which nothing sweeps.
     try {
+      const browserOrigin = await browserOriginFromRequest();
       const store = getDocumentStore();
       const session = await store.createUploadSession({
         applicationId,
@@ -233,6 +235,7 @@ export const startApplication = withPublic<StartApplicationInput, StartApplicati
         mimeType: input.proof_mime_type,
         sizeBytes: input.proof_size_bytes,
         documentKind: "registration",
+        browserOrigin,
       });
       const noaSession = await store.createUploadSession({
         applicationId,
@@ -240,6 +243,7 @@ export const startApplication = withPublic<StartApplicationInput, StartApplicati
         mimeType: input.noa_mime_type,
         sizeBytes: input.noa_size_bytes,
         documentKind: "noa",
+        browserOrigin,
       });
       return ok({
         applicationId,

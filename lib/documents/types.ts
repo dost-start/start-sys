@@ -139,6 +139,19 @@ export type CreateUploadSessionInput = {
   sizeBytes: number;
   /** Which of an application's documents this is ("registration" | "noa"). Naming only. */
   documentKind?: string;
+  /**
+   * The origin of the page that will PUT the bytes, e.g. `https://start-sys.vercel.app`.
+   *
+   * REQUIRED, and required on purpose. Google binds CORS on a resumable upload to the
+   * origin named at INITIATION: omit it and the PUT still succeeds server-side but comes
+   * back without `Access-Control-Allow-Origin`, so the browser throws away a completed
+   * upload as a network failure. That was half of the 2026-09-10 outage. Making it
+   * optional would let a future caller reintroduce it silently — see
+   * `lib/documents/request-origin.ts`.
+   *
+   * `null` is accepted only for callers with no request context (a job, a test).
+   */
+  browserOrigin: string | null;
 };
 
 export type UploadSession = {

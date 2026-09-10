@@ -9,7 +9,7 @@
 // environment is present — they make real network calls and would turn every PR red on a
 // laptop with no credentials. Running them is a deliberate act:
 //
-//     DOCUMENT_STORE=drive GOOGLE_SA_CLIENT_EMAIL=... GOOGLE_SA_PRIVATE_KEY=... \
+//     DOCUMENT_STORE=drive GOOGLE_OAUTH_CLIENT_ID=... GOOGLE_OAUTH_CLIENT_SECRET=... \
 //       GOOGLE_DRIVE_PROOF_FOLDER_ID=... pnpm test lib/documents/contract.test.ts
 //
 // S3-T23's acceptance requires the Drive driver to be exercised against the real provider
@@ -105,8 +105,9 @@ const drivers: Driver[] = [
 // silent — a skipped security test that nobody knows is skipped is worse than no test.
 const driveConfigured =
   process.env.DOCUMENT_STORE === "drive" &&
-  Boolean(process.env.GOOGLE_SA_CLIENT_EMAIL) &&
-  Boolean(process.env.GOOGLE_SA_PRIVATE_KEY) &&
+  Boolean(process.env.GOOGLE_OAUTH_CLIENT_ID) &&
+  Boolean(process.env.GOOGLE_OAUTH_CLIENT_SECRET) &&
+  Boolean(process.env.GOOGLE_DRIVE_REFRESH_TOKEN) &&
   Boolean(process.env.GOOGLE_DRIVE_PROOF_FOLDER_ID);
 
 const storageConfigured =
@@ -166,6 +167,9 @@ describe.each(drivers)("DocumentStore contract — $name", (driver) => {
       fileName: "cor.pdf",
       mimeType: "application/pdf",
       sizeBytes: PDF.byteLength,
+      // No request context in a unit test. `null` is the documented value for a caller
+      // that has no browser origin to name; the drive driver then omits the header.
+      browserOrigin: null,
       ...overrides,
     };
   }

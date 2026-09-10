@@ -24,6 +24,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { err, mapDbError, ok, type ActionResult } from "@/lib/action-result";
 import { withPublic } from "@/lib/auth/with-public";
 import { getDocumentStore } from "@/lib/documents";
+import { browserOriginFromRequest } from "@/lib/documents/request-origin";
 import {
   DocumentRejectedError,
   DocumentUnavailableError,
@@ -140,6 +141,7 @@ export const startRenewal = withPublic<StartRenewalInput, StartRenewalResult>(
     }
 
     try {
+      const browserOrigin = await browserOriginFromRequest();
       const store = getDocumentStore();
       const session = await store.createUploadSession({
         applicationId: renewalId,
@@ -147,6 +149,7 @@ export const startRenewal = withPublic<StartRenewalInput, StartRenewalResult>(
         mimeType: input.proof_mime_type,
         sizeBytes: input.proof_size_bytes,
         documentKind: "registration",
+        browserOrigin,
       });
       const noaSession = await store.createUploadSession({
         applicationId: renewalId,
@@ -154,6 +157,7 @@ export const startRenewal = withPublic<StartRenewalInput, StartRenewalResult>(
         mimeType: input.noa_mime_type,
         sizeBytes: input.noa_size_bytes,
         documentKind: "noa",
+        browserOrigin,
       });
       return ok({
         renewalId,

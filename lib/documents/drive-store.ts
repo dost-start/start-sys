@@ -10,8 +10,8 @@
 //   1. **Never create a permission on a file.** No `permissions.create`, no "anyone with
 //      the link", not even a per-user grant. A Certificate of Registration one forwarded
 //      URL away from the public internet is the single most likely breach vector in this
-//      system (ARCHITECTURE.md §7). The service account owns the file; the ONLY read path
-//      is `GET /api/applications/[id]/proof`, which re-checks RLS and writes an audit row.
+//      system (ARCHITECTURE.md §7). The START-DOST Google account owns the file; the ONLY
+//      read path is `GET /api/applications/[id]/proof`, which re-checks RLS and audits.
 //   2. **Never use a scope other than `drive.file`.** `drive` and `drive.readonly` are
 //      both classified *sensitive* by Google — they trigger app verification and they
 //      grant access far beyond files this app created. `drive.file` is least-privilege
@@ -20,7 +20,7 @@
 //      return value is persisted server-side into a sensitive column and never granted.
 //   4. **Never log a token, a private key, a file name or a Drive URL.** `no-console` is
 //      an ESLint error under `lib/**`; the errors thrown here are deliberately generic
-//      because a Google error body names the service account, the folder and the Drive.
+//      because a Google error body names the account, the folder and the Drive.
 //
 // WHY `files.generateIds` (the non-obvious bit): a resumable upload session does not
 // hand back a file id until the bytes have finished moving, which would mean the SERVER
@@ -31,8 +31,8 @@
 
 import { Readable } from "node:stream";
 
-// `google.auth.JWT` rather than a direct `google-auth-library` import: that package is a
-// transitive dependency of googleapis and is not declared in package.json, and reaching
+// `google.auth.OAuth2` rather than a direct `google-auth-library` import: that package is
+// a transitive dependency of googleapis and is not declared in package.json, and reaching
 // past a declared dependency into its own tree is how a lockfile bump silently breaks a
 // build (CONVENTIONS.md §12.6 — every dependency is something a 2029 officer must upgrade).
 import { google } from "googleapis";
@@ -54,53 +54,85 @@ import {
   extensionForMime,
 } from "./types";
 
-/** Least privilege, and the only scope this integration may ever hold. See rule 2 above. */
-const DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+/**
+ * Least privilege, and the only scope this integration may ever hold. See rule 2 above.
+ *
+ * Not passed to the client: the scope is baked into the refresh token at consent time,
+ * so widening it means minting a new token, not editing this constant. It stays here as
+ * the single written record of what that token is allowed to do.
+ */
+export const DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 
 const RESUMABLE_ENDPOINT =
   "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true";
 
-type DriveConfig = { folderId: string; auth: InstanceType<typeof google.auth.JWT> };
+type DriveConfig = { folderId: string; auth: InstanceType<typeof google.auth.OAuth2> };
 
 let cached: DriveConfig | null = null;
 
 /**
- * Build the JWT client lazily, from the environment, at first use.
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * WHY THIS IS A USER CREDENTIAL AND NOT A SERVICE ACCOUNT (ADR 0018)
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * Until 2026-09-10 this authenticated as a service account. It could mint an upload
+ * session and it could be granted access to a folder, and then every commit failed:
  *
- * Lazy on purpose: a build-time analysis pass, a typecheck, or a deployment running the
- * fake store must not require Google credentials to be present. A missing variable then
- * fails loudly at first use naming exactly what is absent, rather than producing a
- * client that authenticates as nobody and returns an opaque 401 an hour later.
+ *     403 "Service Accounts do not have storage quota. Leverage shared drives"
+ *
+ * A service account owns no Drive storage. The documented escape is a Shared Drive,
+ * which the drive itself owns — but Shared Drives exist only on paid Google Workspace,
+ * and START-DOST runs on a consumer @gmail.com. There was no configuration that could
+ * make the service-account path work, and it never had.
+ *
+ * So the app now acts AS the START-DOST Google account, via the refresh token minted
+ * once at setup (docs/runbooks/06). Files are owned by that account and consume its
+ * quota, which exists. Scope is unchanged: `drive.file`, least privilege, per rule 2
+ * in the file header.
+ *
+ * The cost, stated because it does not go away: the documents live in one Google
+ * account. ARCHITECTURE.md §10 names personal-account ownership as the likeliest cause
+ * of system death at handover. Runbook 03 carries the rotation step; the annual
+ * handover checklist carries the transfer.
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ * Built lazily, from the environment, at first use. Lazy on purpose: a build-time
+ * analysis pass, a typecheck, or a deployment running the fake store must not require
+ * Google credentials to be present. A missing variable then fails loudly at first use
+ * naming exactly what is absent, rather than producing a client that authenticates as
+ * nobody and returns an opaque 401 an hour later.
  */
 function driveConfig(): DriveConfig {
   if (cached !== null) return cached;
 
-  const clientEmail = process.env.GOOGLE_SA_CLIENT_EMAIL;
-  const privateKey = process.env.GOOGLE_SA_PRIVATE_KEY;
+  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+  const refreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN;
   const folderId = process.env.GOOGLE_DRIVE_PROOF_FOLDER_ID;
 
   const missing: string[] = [];
-  if (!clientEmail) missing.push("GOOGLE_SA_CLIENT_EMAIL");
-  if (!privateKey) missing.push("GOOGLE_SA_PRIVATE_KEY");
+  if (!clientId) missing.push("GOOGLE_OAUTH_CLIENT_ID");
+  if (!clientSecret) missing.push("GOOGLE_OAUTH_CLIENT_SECRET");
+  if (!refreshToken) missing.push("GOOGLE_DRIVE_REFRESH_TOKEN");
   if (!folderId) missing.push("GOOGLE_DRIVE_PROOF_FOLDER_ID");
 
-  if (!clientEmail || !privateKey || !folderId) {
+  if (!clientId || !clientSecret || !refreshToken || !folderId) {
     throw new Error(
       `Drive document store: missing required environment variable(s): ${missing.join(", ")}. ` +
-        `Real values live in Bitwarden ("Google Cloud — START-SYS — service account"). ` +
+        `Real values live in Bitwarden ("Google — START-SYS Drive — OAuth client"). ` +
+        `To mint a new refresh token or folder, see docs/runbooks/06-GOOGLE-DRIVE-SETUP-FOR-CCDO.md. ` +
         `To run without Drive, set DOCUMENT_STORE=supabase_storage (ADR 0005) or =fake.`,
     );
   }
 
-  cached = {
-    folderId,
-    auth: new google.auth.JWT({
-      email: clientEmail,
-      // Vercel and GitHub Actions store the PEM with literal "\n" sequences.
-      key: privateKey.replace(/\\n/g, "\n"),
-      scopes: [DRIVE_FILE_SCOPE],
-    }),
-  };
+  const auth = new google.auth.OAuth2({ clientId, clientSecret });
+  // No access token is stored: googleapis exchanges the refresh token for one on demand
+  // and caches it in memory for the lifetime of the function instance. The refresh token
+  // itself does not expire — which is true ONLY because the OAuth consent screen is
+  // published ("In production"). On "Testing" Google expires it after 7 days, silently,
+  // and this integration would die exactly the way it died on 2026-09-10.
+  auth.setCredentials({ refresh_token: refreshToken });
+
+  cached = { folderId, auth };
 
   return cached;
 }
@@ -124,7 +156,7 @@ function statusOf(error: unknown): number | null {
  * Collapse a provider failure into our own error type.
  *
  * The provider's message is DISCARDED, never wrapped: a Google error body names the
- * service account, the parent folder and often the Shared Drive, and this error can end
+ * account, the parent folder and often the Drive itself, and this error can end
  * up in a Sentry event or an HTTP response.
  */
 function unavailable(error: unknown, what: string): DocumentUnavailableError {
@@ -165,8 +197,29 @@ async function accessToken(): Promise<string> {
     if (!token) throw new Error("no token");
     return token;
   } catch (error) {
-    throw unavailable(error, "could not obtain an access token for the service account");
+    throw unavailable(error, "could not exchange the refresh token for an access token");
   }
+}
+
+/**
+ * Normalise whatever gaxios hands back for `responseType: "stream"` into a web stream.
+ *
+ * WHY THIS IS NOT JUST `Readable.toWeb`: gaxios 7 (which googleapis pulls in on its own
+ * cadence) returns a WHATWG `ReadableStream`; earlier majors returned a Node `Readable`.
+ * Calling `Readable.toWeb()` on something that is already a web stream produces a stream
+ * that Next tears down mid-response with `Error: The destination stream closed early` —
+ * a 500 on the proof proxy that says nothing about its cause. Detect, do not assume; the
+ * same defensive shape as `headerValue` above and for the same reason.
+ */
+function toWebStream(data: unknown): ReadableStream<Uint8Array> {
+  if (
+    typeof data === "object" &&
+    data !== null &&
+    typeof (data as ReadableStream).getReader === "function"
+  ) {
+    return data as ReadableStream<Uint8Array>;
+  }
+  return Readable.toWeb(data as Readable) as ReadableStream<Uint8Array>;
 }
 
 export const driveDocumentStore: DocumentStore = {
@@ -199,14 +252,24 @@ export const driveDocumentStore: DocumentStore = {
 
     let response: Response;
     try {
+      const initHeaders: Record<string, string> = {
+        Authorization: `Bearer ${await accessToken()}`,
+        "Content-Type": "application/json; charset=UTF-8",
+        "X-Upload-Content-Type": mime,
+        "X-Upload-Content-Length": String(input.sizeBytes),
+      };
+
+      // THE HEADER THAT MAKES THE BROWSER PUT READABLE. Google binds CORS on a resumable
+      // session to the origin given HERE, at initiation — not to the origin of the PUT.
+      // Without it the upload completes and Google answers 200 with no
+      // `Access-Control-Allow-Origin`, so the browser discards a successful upload as a
+      // network error and the applicant is told to check their connection. See
+      // `lib/documents/request-origin.ts` for the measurement.
+      if (input.browserOrigin) initHeaders["Origin"] = input.browserOrigin;
+
       response = await fetch(RESUMABLE_ENDPOINT, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${await accessToken()}`,
-          "Content-Type": "application/json; charset=UTF-8",
-          "X-Upload-Content-Type": mime,
-          "X-Upload-Content-Length": String(input.sizeBytes),
-        },
+        headers: initHeaders,
         body: JSON.stringify({ id: fileId, name, parents: [folderId], mimeType: mime }),
       });
     } catch (error) {
@@ -316,7 +379,7 @@ export const driveDocumentStore: DocumentStore = {
       return {
         // The proxy route hands this straight to a `Response`. The Drive URL itself
         // never leaves the server — that is the entire point of proxying (PRD US-J2).
-        stream: Readable.toWeb(media.data as unknown as Readable) as ReadableStream<Uint8Array>,
+        stream: toWebStream(media.data),
         contentLength: Number.isFinite(length) ? length : null,
       };
     } catch (error) {
@@ -380,13 +443,64 @@ export const driveDocumentStore: DocumentStore = {
  */
 export async function pingDrive(): Promise<void> {
   const { folderId } = driveConfig();
+  const drive = driveClient();
+
+  // 1. Can we see the folder at all?
+  //
+  // Under `drive.file` this answers a sharper question than it looks like: the scope
+  // grants access ONLY to files this app created, so a folder someone made by hand in
+  // the Drive web UI returns 404 here no matter how it is shared. That 404 is precisely
+  // what `GOOGLE_DRIVE_PROOF_FOLDER_ID` pointed at before 2026-09-10, and it is why the
+  // folder must be created THROUGH the API (docs/runbooks/06), never in the browser.
+  let canAddChildren: boolean | null = null;
   try {
-    await driveClient().files.get({
+    const response = await drive.files.get({
       fileId: folderId,
-      fields: "id",
+      fields: "id, capabilities(canAddChildren)",
       supportsAllDrives: true,
     });
+    canAddChildren = response.data.capabilities?.canAddChildren ?? null;
   } catch (error) {
     throw unavailable(error, "health check could not read the proof-of-enrollment folder");
+  }
+
+  // 2. May we write into it? A readable-but-not-writable folder passes step 1 and then
+  //    fails every upload, which is a worse failure than an outright 404 because the
+  //    probe would have said "ok".
+  if (canAddChildren === false) {
+    throw new DocumentUnavailableError(
+      "Drive document store: health check found the proof-of-enrollment folder is not writable",
+      403,
+    );
+  }
+
+  // 3. Is there quota to commit bytes into?
+  //
+  // THE CHECK THAT WOULD HAVE CAUGHT THE 2026-09-10 OUTAGE. Steps 1 and 2 both passed
+  // for the service account; the failure only appeared on the final PUT, as
+  // `403 "Service Accounts do not have storage quota"`. A principal with no quota
+  // reports no `limit` and no `usage` at all, so an absent quota block is itself the
+  // signal — not a missing field to shrug at.
+  try {
+    const about = await drive.about.get({ fields: "storageQuota(limit,usage)" });
+    const quota = about.data.storageQuota;
+
+    if (!quota || (quota.limit == null && quota.usage == null)) {
+      throw new DocumentUnavailableError(
+        "Drive document store: health check found no storage quota for the Drive principal — " +
+          "uploads will be refused on commit (ADR 0018)",
+        403,
+      );
+    }
+
+    if (quota.limit != null && quota.usage != null && BigInt(quota.usage) >= BigInt(quota.limit)) {
+      throw new DocumentUnavailableError(
+        "Drive document store: health check found the Drive account is out of storage",
+        507,
+      );
+    }
+  } catch (error) {
+    if (error instanceof DocumentUnavailableError) throw error;
+    throw unavailable(error, "health check could not read the Drive storage quota");
   }
 }

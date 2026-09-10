@@ -22,9 +22,9 @@ ID, region and status. The database itself enforces this, not just the screen.
 
 ## Where it is stored
 
-Our database and app run on servers in Singapore, and your two documents are stored there
-too. Emails are sent from START-DOST's Gmail account. Your information is stored outside
-the Philippines.
+Our database and app run on servers in Singapore. Your two documents are kept in
+START-DOST's own Google Drive, which means Google stores them on its servers. Emails are
+sent from START-DOST's Gmail account. Your information is stored outside the Philippines.
 
 ## On your own device
 
@@ -101,7 +101,7 @@ Your information is stored and processed by:
 |---|---|---|
 | Supabase (database) | Your application record | Singapore (`ap-southeast-1`) |
 | Vercel (hosting) | Runs the application while you use it; does not retain your data afterward | Singapore (`sin1`) |
-| Supabase Storage | Your uploaded proof-of-enrollment documents, never shared publicly. Google Drive remains the design target and is one environment variable away (ADR 0005, PRD OQ-1) — if it is ever switched on, this row, the plain-language section above and `page.tsx` change in the SAME pull request as the variable | Singapore (`ap-southeast-1`) |
+| Google (Drive) | Your uploaded proof-of-enrollment documents, stored in START-DOST's own Google Drive and never shared publicly. Switched on 2026-09-10 (ADR 0018) — before that they were in Supabase Storage. If the store is ever moved again, this row, the plain-language section above and `page.tsx` change in the SAME pull request as the variable | Google-managed, not disclosed per file |
 | Gmail (SMTP, interim — ADR 0010) | Delivers system emails from the org's Gmail account until the org owns a domain (OQ-10); Resend is the planned replacement | United States |
 | GitHub Actions | Briefly handles an encrypted copy of the whole database — including your record — while producing the nightly backup; never stores it unencrypted | United States |
 | Backblaze B2 *(planned)* | Stores the encrypted nightly backup once provisioned (see "Status" note above) | United States / European Union |

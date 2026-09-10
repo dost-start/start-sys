@@ -19,11 +19,20 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** The version an applicant's consent checkbox currently agrees to. Max 32 chars — see `consentShape` in `lib/applications/schema.ts`. */
-export const PRIVACY_NOTICE_VERSION = "v3";
+export const PRIVACY_NOTICE_VERSION = "v4";
 
 /**
- * When this version took effect. `v3` (2026-09-09) corrects the storage paragraph — the
- * uploaded documents are in the Singapore project, not Google Drive — and discloses the
- * draft autosave added in PR D, which keeps what an applicant typed in their own browser.
+ * When this version took effect.
+ *
+ * `v4` (2026-09-10) names Google as a processor. The document store moved to Google Drive
+ * that day (ADR 0018) and the notice did not move with it, so for a few hours applicants
+ * were ticking a consent box against a statement that had become false — it said the two
+ * documents sat in the Singapore project. Under RA 10173 consent is given at collection,
+ * to a specific disclosure; a notice that misstates where personal data lives is worse
+ * than no notice at all, which is why `page.tsx` carries the "same PR as the variable"
+ * rule and why this is a version bump rather than a quiet edit.
+ *
+ * `v3` (2026-09-09) had corrected the same paragraph in the other direction and disclosed
+ * the draft autosave.
  */
-export const PRIVACY_NOTICE_EFFECTIVE_DATE = "2026-09-09";
+export const PRIVACY_NOTICE_EFFECTIVE_DATE = "2026-09-10";

@@ -83,18 +83,23 @@ export default function PrivacyNoticePage() {
         </section>
 
         {/*
-          Corrected 2026-09-09: this said the documents were in Google Drive. They are not
-          — production runs DOCUMENT_STORE=supabase_storage while PRD OQ-1 is unresolved,
-          so they are in the same Singapore project as the database. If the org moves to
-          Drive, this paragraph, docs/privacy/PRIVACY_NOTICE.md and the processing register
-          change in the SAME PR as the environment variable.
+          Corrected 2026-09-10: production now runs DOCUMENT_STORE=drive (ADR 0018), so the
+          two documents are in START-DOST's own Google Drive and Google is a processor. The
+          previous wording — "stored there too", meaning the Singapore project — became
+          false the moment the variable changed, and this page is what an applicant ticks a
+          consent box against. It must move in the SAME PR as the variable; on 2026-09-10 it
+          did not, and this is that correction.
+
+          Word for word with docs/privacy/PRIVACY_NOTICE.md — the CI digest guard compares
+          the file's sha256 against the newest privacy_notice_versions row.
         */}
         <section className={SECTION_CLASS}>
           <h2 className={HEADING_CLASS}>Where it is stored</h2>
           <p className={BODY_CLASS}>
-            Our database and app run on servers in Singapore, and your two documents are stored
-            there too. Emails are sent from START-DOST&apos;s Gmail account. Your information is
-            stored outside the Philippines.
+            Our database and app run on servers in Singapore. Your two documents are kept in
+            START-DOST&apos;s own Google Drive, which means Google stores them on its servers.
+            Emails are sent from START-DOST&apos;s Gmail account. Your information is stored outside
+            the Philippines.
           </p>
         </section>
 

@@ -63,7 +63,75 @@ function operationVariant(operation: string) {
   return "neutral" as const;
 }
 
-export function AuditLogTable({ entries }: { entries: readonly AuditEntry[] }) {
+/**
+ * Collapse runs of identical repeated views into one row.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * WHY, AND WHY IT COLLAPSES THE VIEW RATHER THAN THE WRITE
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * `list_region_member_contacts()` writes one `VIEW_CONTACTS` row per call, and the RR
+ * dashboard calls it on every render — including the renders caused by bouncing off a
+ * route the rep cannot reach. QA 2026-09-10 produced TEN rows in 45 seconds of ordinary
+ * navigation (ISSUE-008).
+ *
+ * Every one of those rows is correct and none of them may be dropped: ADR 0011 and CBL
+ * Art. VIII §6 want each access recorded, and the log is append-only at the GRANT level
+ * anyway. The problem is not that they exist, it is that a term of accidental navigation
+ * buries the deliberate reads the log exists to evidence.
+ *
+ * So the fix is at the READING end. Nothing is written differently, nothing is deleted,
+ * and the raw rows are one toggle away. Only runs that are ADJACENT, by the same actor,
+ * with the same operation and table, and within the window are folded — so a burst of
+ * dashboard renders becomes one line while two genuinely separate lookups an hour apart
+ * stay two lines.
+ * ═══════════════════════════════════════════════════════════════════════════════
+ */
+const COLLAPSE_WINDOW_MS = 10 * 60 * 1000;
+
+/** Only repeated READS collapse. A write is never noise. */
+function isCollapsible(operation: string): boolean {
+  return operation.startsWith("VIEW");
+}
+
+type AuditGroup = { head: AuditEntry; count: number; earliest: string };
+
+function groupRepeats(entries: readonly AuditEntry[]): AuditGroup[] {
+  const groups: AuditGroup[] = [];
+
+  for (const entry of entries) {
+    const previous = groups[groups.length - 1];
+    const sameSubject =
+      previous !== undefined &&
+      isCollapsible(entry.operation) &&
+      isCollapsible(previous.head.operation) &&
+      previous.head.operation === entry.operation &&
+      previous.head.table_name === entry.table_name &&
+      previous.head.actor_user_id === entry.actor_user_id;
+
+    // Entries arrive newest-first, so `earliest` is the tail of the run.
+    const withinWindow =
+      previous !== undefined &&
+      Date.parse(previous.earliest) - Date.parse(entry.created_at) <= COLLAPSE_WINDOW_MS;
+
+    if (previous !== undefined && sameSubject && withinWindow) {
+      previous.count += 1;
+      previous.earliest = entry.created_at;
+      continue;
+    }
+
+    groups.push({ head: entry, count: 1, earliest: entry.created_at });
+  }
+
+  return groups;
+}
+
+export function AuditLogTable({
+  entries,
+  collapseRepeats,
+}: {
+  entries: readonly AuditEntry[];
+  collapseRepeats: boolean;
+}) {
   if (entries.length === 0) {
     return (
       <Card className="border-border border border-dashed p-6 shadow-none">
@@ -87,10 +155,18 @@ export function AuditLogTable({ entries }: { entries: readonly AuditEntry[] }) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {entries.map((entry) => (
+          {(collapseRepeats
+            ? groupRepeats(entries)
+            : entries.map((e) => ({ head: e, count: 1, earliest: e.created_at }))
+          ).map(({ head: entry, count, earliest }) => (
             <TableRow key={entry.id}>
               <TableCell className="align-top font-mono text-xs whitespace-nowrap tabular-nums">
                 {formatManila(entry.created_at)}
+                {count > 1 ? (
+                  <span className="text-brand-label mt-0.5 block font-sans text-[10px]">
+                    back to {formatManila(earliest)}
+                  </span>
+                ) : null}
               </TableCell>
               <TableCell className="align-top">
                 <div className="flex flex-col gap-0.5">
@@ -104,6 +180,14 @@ export function AuditLogTable({ entries }: { entries: readonly AuditEntry[] }) {
               </TableCell>
               <TableCell className="align-top">
                 <Badge variant={operationVariant(entry.operation)}>{entry.operation}</Badge>
+                {count > 1 ? (
+                  <span
+                    className="text-brand-label ml-1.5 font-mono text-[10px]"
+                    title={`${count} identical entries by this actor within ten minutes. Every one is still stored; this only folds them for reading.`}
+                  >
+                    ×{count}
+                  </span>
+                ) : null}
               </TableCell>
               <TableCell className="align-top">
                 <div className="flex flex-col gap-0.5">

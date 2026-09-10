@@ -64,6 +64,34 @@ const PARALLEL_RETRIES = 10;
 /** Fifty concurrent round trips plus GoTrue setup. Generous; the race itself is fast. */
 const RACE_TIMEOUT_MS = 180_000;
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// A SKIP IN CI IS A FAILURE, NOT A PASS.
+//
+// `describe.skipIf` exits 0 when the environment is missing, so if CI ever stopped
+// exporting the local Supabase keys this file would go quietly silent and the suite would
+// stay green. The `db` job's own comment already says a skip here means "the race was NOT
+// proved" — but a comment cannot fail a build, and this is the ONLY place the member-ID
+// race is actually exercised (pgTAP wraps each file in a rolled-back transaction, so a
+// second connection cannot see the fixtures — see 048_member_id_concurrency.sql).
+//
+// `2024-001` never becoming `2025-001` is a PRD hard requirement (US-C3, US-C4). It should
+// not be able to become guaranteed-by-review without anyone noticing.
+// QA 2026-09-10, ISSUE-010.
+// ═══════════════════════════════════════════════════════════════════════════════
+// Keyed on REQUIRE_DB_TESTS, set only by ci.yml's "DB-backed vitest" step — NOT on `CI`.
+// The `js` job runs this same file inside `pnpm test` with no Supabase stack running, and
+// skipping there is correct; only the job that stood a database up has any business
+// demanding that the race actually ran.
+if (process.env.REQUIRE_DB_TESTS === "1" && !DB_TEST_ENV_READY) {
+  throw new Error(
+    "approve_application() concurrency suite cannot run: NEXT_PUBLIC_SUPABASE_URL, " +
+      "NEXT_PUBLIC_SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY must all be set. " +
+      "The `db` job exports them from `supabase status` — if this fires, that step is " +
+      "broken and the member-ID race is unproven. Do not silence it by unsetting " +
+      "REQUIRE_DB_TESTS.",
+  );
+}
+
 describe.skipIf(!DB_TEST_ENV_READY)("approve_application() under real concurrency", () => {
   let admin: TypedClient;
   let reviewer: TypedClient;

@@ -322,9 +322,17 @@ export function ApplicationForm({
       patchDoc(key, { progress: percent }),
     );
     if (!outcome.ok) {
+      // Two different failures, two different things the applicant can do about them.
+      // Before 2026-09-10 both said "check your connection" — including a server-side
+      // 403 that no applicant could ever have fixed. See `UploadOutcome`.
       patchDoc(key, {
         status: "error",
-        serverError: "The upload did not complete. Check your connection, then try again below.",
+        serverError:
+          outcome.reason === "rejected"
+            ? "We could not accept that file just now. This is a problem on our side, not " +
+              "yours, and retrying will not help until it is fixed. Please try again later, " +
+              "or contact CRRD if it keeps happening."
+            : "The upload did not complete. Check your connection, then try again below.",
       });
       return false;
     }
@@ -543,7 +551,7 @@ export function ApplicationForm({
       { label: "Contact number", value: text(v.contact_number) },
       { label: "Scholarship", value: scholarship },
       { label: "School", value: school },
-      { label: "Region", value: region },
+      { label: "START-DOST region", value: region },
     ];
   }
 

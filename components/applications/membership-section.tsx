@@ -34,10 +34,21 @@ export function MembershipSection({ regions }: { regions: RegionOption[] }) {
   } = useFormContext<ApplicationSubmitInput>();
 
   return (
-    <FormSection title="Region" description="Which region are you applying under?">
+    // ⚠ NOT the same "Region" as the one on the Personal step.
+    //
+    // That one is the applicant's HOME address (PSGC, where they are from). This one is
+    // the START-DOST region they belong to as a member: it decides which Regional
+    // Representative can see them and it prefixes their member ID. A Bicol scholar
+    // studying in Manila answers the two differently, and nothing on the form said so —
+    // DATA_MODEL.md §2.2 warns they are not the same field, and QA 2026-09-10 (ISSUE-013)
+    // found both rendered under the bare word "Region".
+    <FormSection
+      title="START-DOST region"
+      description="The region you represent as a member. This is not always where you live — pick the region of your school, or the chapter you are joining."
+    >
       <Field>
         <FieldLabel htmlFor="region_id" required>
-          Region
+          START-DOST region
         </FieldLabel>
         <NativeSelect
           id="region_id"
@@ -46,7 +57,7 @@ export function MembershipSection({ regions }: { regions: RegionOption[] }) {
           {...register("region_id")}
         >
           <option value="" disabled>
-            Select your region…
+            Select your START-DOST region…
           </option>
           {regions.map((region) => (
             <option key={region.id} value={region.id}>

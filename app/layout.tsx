@@ -23,7 +23,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={poppins.variable}>
+    // `data-scroll-behavior="smooth"` tells Next the `scroll-behavior: smooth` in
+    // globals.css is deliberate, so it stops warning about it on every route transition.
+    // Same reason as the emblem above: a clean console is what makes a real error visible.
+    <html lang="en" className={poppins.variable} data-scroll-behavior="smooth">
       <body className="font-sans antialiased">{children}</body>
     </html>
   );

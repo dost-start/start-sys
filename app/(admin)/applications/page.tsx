@@ -26,6 +26,7 @@ import { getSessionContext } from "@/lib/auth/queries";
 import { homeForRole } from "@/lib/auth/route-access";
 import {
   countPendingApplications,
+  countStalledDrafts,
   listApplications,
   listPendingStandards,
 } from "@/lib/applications/queries";
@@ -63,9 +64,10 @@ export default async function ApplicationsPage({
   const rawParams = await searchParams;
   const filters = parseApplicationListFilters(rawParams);
 
-  const [listResult, pendingCount, terms, standardsFailures] = await Promise.all([
+  const [listResult, pendingCount, stalledDrafts, terms, standardsFailures] = await Promise.all([
     listApplications(ctx, filters),
     countPendingApplications(ctx),
+    countStalledDrafts(ctx),
     listTermOptions(ctx.supabase),
     // ADR 0013 §2 — the queue's "meets standards" flag, exec_admin/crrd_admin only,
     // same two tiers `REVIEWER_ROLES` above already gates this whole page to.
@@ -90,9 +92,24 @@ export default async function ApplicationsPage({
     <div className="space-y-5">
       <h1 className="sr-only">Applications</h1>
       <div className="flex min-h-11 flex-wrap items-start justify-between gap-4">
-        <p className="text-brand-body max-w-3xl text-sm">
-          {pendingCount} pending decision{pendingCount === 1 ? "" : "s"} this term.
-        </p>
+        <div className="max-w-3xl space-y-1">
+          <p className="text-brand-body text-sm">
+            {pendingCount} pending decision{pendingCount === 1 ? "" : "s"} this term.
+          </p>
+          {/* A `draft` is an applicant who filled the form and whose upload never
+              completed. It is not reviewable and its PII deliberately never reaches this
+              screen — but the COUNT has to, or an outage in the upload path is invisible
+              to the org. On 2026-09-10 five people were stuck here for eleven hours while
+              this page read "4 pending". See `countStalledDrafts`. */}
+          {stalledDrafts > 0 ? (
+            <p className="text-brand-label text-sm">
+              {stalledDrafts} {stalledDrafts === 1 ? "applicant" : "applicants"} started but never
+              completed a submission — usually a failed document upload. Check{" "}
+              <code className="font-mono text-xs">/api/health/drive</code> if this number is
+              climbing.
+            </p>
+          ) : null}
+        </div>
         {/* Both roles able to reach this render are already exec_admin/crrd_admin —
             REVIEWER_ROLES above already redirected everyone else — so no second role
             check is needed here (ADR 0013 §2's guard is the SQL function's own). */}

@@ -155,7 +155,27 @@ export function ProofUploadField({
 // Transport — XHR PUT with progress, and a best-effort resume attempt
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type UploadOutcome = { ok: true } | { ok: false };
+/**
+ * Why this is not a boolean.
+ *
+ * It was `{ ok: true } | { ok: false }` until 2026-09-10, so a dropped Wi-Fi connection
+ * and a server-side 403 produced the same copy: *"The upload did not complete. Check your
+ * connection, then try again below."* On that day the failure was a Google configuration
+ * error the applicant could do nothing about, and five real people were told to check
+ * their internet. Two of them were the same person, retrying four minutes apart.
+ *
+ * `reason` distinguishes the two cases the applicant can actually act on differently:
+ *
+ *   · `network`  — the request never completed. Retrying, or a better connection, helps.
+ *   · `rejected` — the provider answered, with a non-2xx. Nothing the applicant does
+ *                  will help; the org has to fix it, and needs to be told.
+ *
+ * `status` is carried for the second case so the caller can report it. It is a provider
+ * status code, not a message: a Google error BODY names the account and the folder and
+ * must never reach a browser (`drive-store.ts` header, rule 4).
+ */
+export type UploadOutcome =
+  { ok: true } | { ok: false; reason: "network" | "rejected"; status?: number };
 
 /** Automatic attempts before handing control back to a manual "Retry upload" click. */
 const MAX_AUTO_RETRIES = 3;
@@ -226,6 +246,9 @@ export async function uploadFileToStore(
 ): Promise<UploadOutcome> {
   let attempt = 0;
   let startByte = 0;
+  // Why the LAST failure and not the first: a transient blip followed by a hard refusal
+  // should report the refusal, which is the one the org can act on.
+  let lastFailure: { reason: "network" | "rejected"; status?: number } = { reason: "network" };
 
   while (attempt <= MAX_AUTO_RETRIES) {
     const chunk = startByte > 0 ? file.slice(startByte) : file;
@@ -251,16 +274,23 @@ export async function uploadFileToStore(
       // Non-2xx but the request itself completed. Not a network error — still worth
       // one retry-from-a-known-offset before giving up, since a transient 5xx from
       // the provider is common under load.
+      //
+      // NOTE the CORS trap this hides: a cross-origin PUT whose response the browser
+      // refuses to expose surfaces here as a THROW (status 0 / network error), not as a
+      // non-2xx — because the browser never lets the script see the real status. That is
+      // what made the 2026-09-10 403 look like a connection problem for eleven hours.
+      lastFailure = { reason: "rejected", status: result.status };
     } catch {
       // Network error, abort, or timeout. Fall through to the retry path below.
+      lastFailure = { reason: "network" };
     }
 
     attempt += 1;
-    if (attempt > MAX_AUTO_RETRIES) return { ok: false };
+    if (attempt > MAX_AUTO_RETRIES) return { ok: false, ...lastFailure };
 
     const resumeFrom = await probeCommittedOffset(uploadUrl, file.size);
     startByte = resumeFrom ?? 0;
   }
 
-  return { ok: false };
+  return { ok: false, ...lastFailure };
 }

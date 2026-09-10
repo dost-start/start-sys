@@ -70,7 +70,25 @@ const REPORT_ONLY_CSP = [
   "base-uri 'self'",
   "form-action 'self'",
   "object-src 'none'",
+  // Where the violations actually go. Without this the browser evaluated the policy and
+  // discarded every finding, which is why nobody has ever seen the list of what enforcing
+  // it would break — the precondition for closing launch-debt item 5. `report-uri` is
+  // deprecated but is still what Chrome and Safari send today; `report-to` is the
+  // replacement. Both are listed on purpose (QA 2026-09-10, ISSUE-009).
+  "report-uri /api/csp-report",
+  "report-to csp-endpoint",
 ].join("; ");
+
+/**
+ * The `report-to` group the directive above names. Same endpoint, newer wire format.
+ * `max_age` is a week: long enough to survive a quiet period, short enough that removing
+ * the endpoint takes effect within one.
+ */
+const REPORTING_ENDPOINTS = JSON.stringify({
+  group: "csp-endpoint",
+  max_age: 604_800,
+  endpoints: [{ url: "/api/csp-report" }],
+});
 
 /** Applied to every response. */
 const SECURITY_HEADERS = [
@@ -97,6 +115,7 @@ const SECURITY_HEADERS = [
     value: "frame-ancestors 'none'",
   },
   { key: "Content-Security-Policy-Report-Only", value: REPORT_ONLY_CSP },
+  { key: "Report-To", value: REPORTING_ENDPOINTS },
   {
     // Without this, a `Referer` on any outbound link leaks the full path — including
     // `/api/applications/<uuid>/proof`, i.e. the address of a scholar's Certificate of

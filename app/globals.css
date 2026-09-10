@@ -114,6 +114,7 @@
 @theme {
   --color-brand-blue: #0099ff;
   --color-brand-yellow: #ffdd00;
+  --color-brand-white: #f4f4f4;
   --color-brand-slate: #465461;
   --color-brand-ink: #171717;
   --color-brand-body: #3c4043;
@@ -161,6 +162,7 @@
   background-image: linear-gradient(
     90deg,
     var(--color-brand-yellow) 0%,
+    var(--color-brand-white) 50%,
     var(--color-brand-blue) 100%
   );
   -webkit-background-clip: text;

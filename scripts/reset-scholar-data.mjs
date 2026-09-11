@@ -7,12 +7,22 @@
 // schema and none may be added." That rule governs the RUNNING system and it is
 // untouched by this file: no DELETE policy is created, no route calls this, and the
 // only way to run it is a human typing the command with the service-role key in the
-// environment. It is the same category of act as `supabase db reset` — clearing a
-// pre-launch scratch database before real data arrives — not a product capability.
+// environment.
 //
-// WHY IT EXISTS: 2026-09-10. The scratch project had accumulated seeded demo members
-// plus a handful of real submissions from testing, and real intake was about to start
-// against it. See docs/issues/2026-09-10-pre-intake-data-reset.md.
+// ⚠️ THE PROJECT PINNED BELOW IS THE ONE THE DEPLOYED APP RUNS AGAINST, AND IT NOW
+//    HOLDS REAL SCHOLAR PII.
+//
+// This header used to call it "a pre-launch scratch database" and put the reset in the
+// same category as `supabase db reset`. That stopped being true when real intake opened
+// against the same project ref that `.env.local` and the Vercel Production environment
+// point at. It holds real applicants' birthdates, contact numbers, addresses and their
+// Certificates of Registration (RA 10173), and every delete below is irreversible: no
+// DELETE here is recoverable, docs/runbooks/02-RESTORE_FROM_BACKUP.md has never been
+// drilled, and the 2026-09-10 run took no backup (offered and declined).
+//
+// WHY IT EXISTS: 2026-09-10, a one-off clear-down of seeded demo members and test
+// submissions immediately before the first real intake.
+// See docs/issues/2026-09-10-pre-intake-data-reset.md.
 //
 // WHAT IT KEEPS, DELIBERATELY:
 //   · auth.users + user_roles — all six demo logins survive, so nobody is locked out.
@@ -24,14 +34,38 @@
 //     0011_audit.sql revokes DELETE from service_role itself. A masked record that
 //     this reset happened survives, which is the correct outcome.
 //
-// SAFETY: refuses to run against any project ref other than the one named below,
-// mirroring assertNotProduction() in lib/applications/test-support.ts.
+// SAFETY — TWO BARRIERS, and the ref pin is not the one that protects you:
+//   1. The project-ref check refuses any ref other than the one named below. Note what
+//      that does and does not buy: the named ref is the LIVE project, so it stops a
+//      stray URL pointing at some OTHER project and stops nothing whatever about wiping
+//      this one. It is NOT assertNotProduction() from lib/applications/test-support.ts —
+//      that one refuses any non-local URL. This is its inverse and must never be read as
+//      the same guard.
+//   2. The caller must name the project by value in RESET_CONFIRM_PROJECT_REF. That is
+//      the barrier that does not depend on anyone having read this header.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createClient } from "@supabase/supabase-js";
 
-/** The scratch project this reset is authorised for. Any other ref aborts. */
+/**
+ * The project this reset is authorised for — WHICH IS THE LIVE ONE. Any other ref aborts.
+ *
+ * This constant is a pin, not a guard: the check below passes on exactly the one database
+ * whose loss is unrecoverable. CONFIRM_ENV is the real barrier.
+ */
 const ALLOWED_PROJECT_REF = "rxtzeoodrdzpcyfkgenr";
+
+/**
+ * The second barrier: the caller must name the project they are about to wipe, by value.
+ *
+ *   RESET_CONFIRM_PROJECT_REF=rxtzeoodrdzpcyfkgenr node scripts/reset-scholar-data.mjs
+ *
+ * A generic `--yes` gets typed from muscle memory; a project ref has to be looked up and
+ * matched against the URL already in the environment, which is the pause this script
+ * needs. Nothing in CI or package.json invokes this file, so requiring it breaks no
+ * automation.
+ */
+const CONFIRM_ENV = "RESET_CONFIRM_PROJECT_REF";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -49,6 +83,23 @@ if (ref !== ALLOWED_PROJECT_REF) {
       `  NEXT_PUBLIC_SUPABASE_URL points at ${ref}.\n` +
       `  If you genuinely mean to reset a different project, edit ALLOWED_PROJECT_REF\n` +
       `  in this file in a reviewed commit — do not pass it as an argument.`,
+  );
+  process.exit(1);
+}
+
+// The second barrier. Deliberately AFTER the ref check, so the refusal can name the real
+// project, and BEFORE createClient, so a refusal never constructs a service-role client.
+if (process.env[CONFIRM_ENV] !== ref) {
+  console.error(
+    `REFUSING TO RUN — confirmation missing.\n` +
+      `  Project ${ref} holds REAL scholar PII. This deletes every person, membership,\n` +
+      `  application, renewal and campaign row, every object in the proof-of-enrollment\n` +
+      `  bucket, and every file in the Google Drive proof folder.\n` +
+      `  There is no undo: no DELETE here is recoverable, 02-RESTORE_FROM_BACKUP.md has\n` +
+      `  never been drilled, and the 2026-09-10 run took no backup.\n` +
+      `\n` +
+      `  Take a backup first. Then name the project you are wiping:\n` +
+      `    ${CONFIRM_ENV}=${ref} node scripts/reset-scholar-data.mjs`,
   );
   process.exit(1);
 }

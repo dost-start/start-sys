@@ -81,9 +81,17 @@ function operationVariant(operation: string) {
  *
  * So the fix is at the READING end. Nothing is written differently, nothing is deleted,
  * and the raw rows are one toggle away. Only runs that are ADJACENT, by the same actor,
- * with the same operation and table, and within the window are folded — so a burst of
- * dashboard renders becomes one line while two genuinely separate lookups an hour apart
- * stay two lines.
+ * with the same operation and table, ON THE SAME RECORD, and within the window are
+ * folded — so a burst of dashboard renders becomes one line while two genuinely separate
+ * lookups an hour apart stay two lines.
+ *
+ * ⚠ `row_id` IS IN THE KEY, AND THAT HALF IS COMPLIANCE-LOAD-BEARING. Folding is the
+ * DEFAULT view, so a key that ignored the record would collapse a read of scholar A and a
+ * read of scholar B into one line carrying only A's id — and "who looked at scholar B's
+ * record" would need the raw toggle to answer, which is not a question RA 10173 lets us
+ * hide behind a control. Narrowing the key costs ISSUE-008 nothing: that burst is the
+ * SAME subject repeated, and of the nine `VIEW*` writers in the migrations 0042 is the
+ * ONLY one writing `row_id = null`, so it still folds to one line.
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 const COLLAPSE_WINDOW_MS = 10 * 60 * 1000;
@@ -106,7 +114,12 @@ function groupRepeats(entries: readonly AuditEntry[]): AuditGroup[] {
       isCollapsible(previous.head.operation) &&
       previous.head.operation === entry.operation &&
       previous.head.table_name === entry.table_name &&
-      previous.head.actor_user_id === entry.actor_user_id;
+      previous.head.actor_user_id === entry.actor_user_id &&
+      // ⚠ THE RECORD IS PART OF THE KEY (RA 10173; CBL Art. VIII §6). Without it, a read
+      // of scholar A and a read of scholar B fold into one line bearing only A's id, and
+      // the default view stops answering "who looked at scholar B's record" — which is
+      // why `get_member_record()` writes `p_person_id` into `row_id` in the first place.
+      previous.head.row_id === entry.row_id;
 
     // Entries arrive newest-first, so `earliest` is the tail of the run.
     const withinWindow =
@@ -183,7 +196,7 @@ export function AuditLogTable({
                 {count > 1 ? (
                   <span
                     className="text-brand-label ml-1.5 font-mono text-[10px]"
-                    title={`${count} identical entries by this actor within ten minutes. Every one is still stored; this only folds them for reading.`}
+                    title={`${count} identical entries by this actor on this record within ten minutes. Every one is still stored; this only folds them for reading.`}
                   >
                     ×{count}
                   </span>

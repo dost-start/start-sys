@@ -22,8 +22,9 @@
 --   17-18  the catalog itself: officer_assignments_insert / _update now name crrd_admin
 --   19     officer_assignments_read is STILL using(true) — the org chart stays org-public
 --   20     STILL no DELETE policy on officer_assignments
---   21-24  SPECIAL_ADVISOR is exec_admin's ALONE (0054, finding A9) — crrd_admin cannot
---          seat it, cannot separate it, exec_admin still can, and both policies say so
+--   21-26  SPECIAL_ADVISOR: narrowed to exec_admin by 0054 (finding A9), RETIRED for every
+--          tier by 0063 (ADR 0019) — neither recorder tier can seat it or touch an older
+--          assignment to it, both policies say so, and the row is kept, not deleted
 --
 -- ⚠ AN INSERT REFUSED BY RLS RAISES 42501; AN UPDATE REFUSED BY RLS AFFECTS 0 ROWS. Same
 --   asymmetry 025_org_structure_rls.sql documents and relies on — a WITH CHECK failure is
@@ -49,7 +50,7 @@ begin;
 \ir helpers/auth.psql
 \ir helpers/fixtures.psql
 
-select plan(24);
+select plan(26);
 
 
 -- SECURITY INVOKER, so the statement runs with the calling fixture's privileges.
@@ -294,17 +295,17 @@ select is(
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════════
--- 21-24 — SPECIAL_ADVISOR is the ONE seat ADR 0012 does not reach (0054, finding A9)
+-- 21-26 — SPECIAL_ADVISOR: narrowed to exec_admin by 0054 (finding A9), then RETIRED for
+--         every tier by 0063 (ADR 0019, officer feedback 2026-09-11)
 --
--- CBL Art. X §3.1 makes the Special Advisor an employee of DOST-SEI rather than a scholar,
--- and Art. X §2.4-2.5 makes them the INDEPENDENT reviewer of appeals against the very
--- disciplinary outcomes crrd_admin records. A tier that can seat its own appeal reviewer
--- is not being reviewed independently, so 0054 narrows this one position back to
--- exec_admin while leaving the other 22 exactly as ADR 0012 left them.
+-- 0054 kept crrd_admin out of this seat: CBL Art. X §3.1 makes the Special Advisor a
+-- DOST-SEI employee rather than a scholar, and Art. X §2.4-2.5 makes them the INDEPENDENT
+-- reviewer of appeals against the outcomes crrd_admin records. 0063 then retired the
+-- position from START-SYS altogether: `officer_positions.is_active` is false for it, and
+-- both write policies refuse an inactive position for EVERY tier, exec_admin included.
 --
--- The position row itself is untouched: it is still seeded, still readable by everyone,
--- and exec_admin still appoints and separates it. Deleting it would make a seat CBL
--- Art. III §2.9 creates unrecordable, which is a worse defect than the one being fixed.
+-- The position ROW is not deleted — still 23 rows, still readable — so an assignment that
+-- predates 0063 keeps a valid FK. Assertions 23-24 prove such a row is frozen.
 -- ═══════════════════════════════════════════════════════════════════════════════════
 
 -- 21 — crrd_admin cannot seat it. INSERT refused by WITH CHECK, so this RAISES.
@@ -319,47 +320,86 @@ select throws_ok($$
     from public.terms where status = 'active'
   $$,
   '42501'::char(5), null::text,
-  'crrd_admin CANNOT seat SPECIAL_ADVISOR — CBL Art. X §2.4-2.5 and §3.1; 0054 narrows ADR 0012 for this seat alone');
+  'crrd_admin CANNOT seat SPECIAL_ADVISOR — CBL Art. X §2.4-2.5 and §3.1 (0054), and the seat is retired (0063)');
 
--- 22 — exec_admin still can, so 21 is a narrowing and not a broken table.
+-- 22 — since 0063 neither can exec_admin: the seat is retired for every tier.
 select pg_temp.logout();
 select pg_temp.login_as('00000000-0000-4000-a000-000000000001');   -- exec_admin
-select lives_ok($$
+select throws_ok($$
     insert into public.officer_assignments
       (id, person_id, term_id, role, status, is_acting, status_note)
     select '00000000-0000-4000-f000-000000000104',
            '00000000-0000-4000-b000-000000000005',
            id, 'SPECIAL_ADVISOR', 'active', false,
-           'CBL Art. III §2.9 Special Advisor seated (fixture, recorded by exec_admin)'
+           'attempted Special Advisor appointment by exec_admin (fixture, must be refused)'
     from public.terms where status = 'active'
   $$,
-  'exec_admin CAN STILL seat SPECIAL_ADVISOR — 0054 narrows crrd_admin only');
+  '42501'::char(5), null::text,
+  'exec_admin CANNOT seat SPECIAL_ADVISOR either — the position is retired from START-SYS (0063, ADR 0019)');
 
--- 23 — and crrd_admin cannot separate the seat exec_admin just filled. The USING half
--- filters the row out of the scan, so this is 0 ROWS AFFECTED rather than a raise —
--- the same INSERT/UPDATE asymmetry this file's header documents.
+-- 23-24 — a Special Advisor assignment that PREDATES 0063, inserted by the test owner (who
+-- bypasses RLS, exactly as helpers/fixtures.psql does), is frozen for both recorder tiers.
+-- The USING half filters the row out of the scan, so both are 0 ROWS AFFECTED rather than
+-- a raise — the same INSERT/UPDATE asymmetry this file's header documents.
 select pg_temp.logout();
+insert into public.officer_assignments
+  (id, person_id, term_id, role, status, is_acting, status_note)
+select '00000000-0000-4000-f000-000000000105',
+       '00000000-0000-4000-b000-000000000005',
+       id, 'SPECIAL_ADVISOR', 'active', false,
+       'CBL Art. III §2.9 Special Advisor seated before 0063 (fixture, owner insert)'
+from public.terms where status = 'active';
+
 select pg_temp.login_as('00000000-0000-4000-a000-000000000003');   -- crrd_admin
 select is(pg_temp.rows_affected($$
     update public.officer_assignments
        set status = 'resigned',
            status_note = 'attempted Special Advisor separation by CRRD (fixture, must be refused)'
-     where id = '00000000-0000-4000-f000-000000000104'
+     where id = '00000000-0000-4000-f000-000000000105'
   $$), 0,
-  'crrd_admin CANNOT record a separation on SPECIAL_ADVISOR — the USING half filters the row away');
+  'crrd_admin CANNOT record a separation on a pre-0063 SPECIAL_ADVISOR assignment — the USING half filters the row away');
 
--- 24 — the catalog says so, so a future flat rewrite of these policies fails here rather
--- than silently restoring the widening.
+select pg_temp.logout();
+select pg_temp.login_as('00000000-0000-4000-a000-000000000001');   -- exec_admin
+select is(pg_temp.rows_affected($$
+    update public.officer_assignments
+       set status = 'resigned',
+           status_note = 'attempted Special Advisor separation by exec_admin (fixture, must be refused)'
+     where id = '00000000-0000-4000-f000-000000000105'
+  $$), 0,
+  'exec_admin CANNOT either — a retired seat is frozen for every tier (0063)');
+
+-- 25 — the catalog says so, so a future flat rewrite of these policies fails here rather
+-- than silently re-opening the seat.
 select pg_temp.logout();
 select ok(
   (select with_check from pg_policies
      where schemaname = 'public' and tablename = 'officer_assignments'
        and policyname = 'officer_assignments_insert') ~ 'SPECIAL_ADVISOR'
   and
+  (select with_check from pg_policies
+     where schemaname = 'public' and tablename = 'officer_assignments'
+       and policyname = 'officer_assignments_insert') ~ 'is_active'
+  and
   (select qual from pg_policies
      where schemaname = 'public' and tablename = 'officer_assignments'
-       and policyname = 'officer_assignments_update') ~ 'SPECIAL_ADVISOR',
-  'both write policies name SPECIAL_ADVISOR — the narrowing is in the catalog, not only in the UI (0054)');
+       and policyname = 'officer_assignments_update') ~ 'SPECIAL_ADVISOR'
+  and
+  (select qual from pg_policies
+     where schemaname = 'public' and tablename = 'officer_assignments'
+       and policyname = 'officer_assignments_update') ~ 'is_active'
+  and
+  (select with_check from pg_policies
+     where schemaname = 'public' and tablename = 'officer_assignments'
+       and policyname = 'officer_assignments_update') ~ 'is_active',
+  'both write policies name SPECIAL_ADVISOR (0054) and check is_active (0063) — in the catalog, not only in the UI');
+
+-- 26 — retired, not deleted.
+select ok(
+  (select count(*) from public.officer_positions) = 23
+  and (select array_agg(code order by code) from public.officer_positions where not is_active)
+      = array['SPECIAL_ADVISOR'],
+  'officer_positions still holds all 23 CBL rows and SPECIAL_ADVISOR is the ONLY inactive one — retired, not deleted (0063)');
 
 
 select * from finish();

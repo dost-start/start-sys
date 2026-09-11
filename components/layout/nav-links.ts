@@ -12,6 +12,9 @@ export const ADMIN_NAV_LINKS: ReadonlyArray<NavLink> = [
   { href: "/members", label: "Members" },
   { href: "/applications", label: "Applications" },
   { href: "/renewals", label: "Renewals" },
+  // Officer feedback 2026-09-11: CRRD opens and closes the application and renewal periods
+  // here, and the page had no link — it was reachable only by typing the URL.
+  { href: "/applications/window", label: "Application period" },
   { href: "/campaigns", label: "Campaigns" },
   { href: "/officers", label: "Officers" },
   { href: "/audit", label: "Audit log" },

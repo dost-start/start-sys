@@ -860,6 +860,7 @@ export type Database = {
         Row: {
           code: string
           grants_org_role: Database["public"]["Enums"]["org_role"]
+          is_active: boolean
           is_administrator: boolean
           sort_order: number
           title: string
@@ -867,6 +868,7 @@ export type Database = {
         Insert: {
           code: string
           grants_org_role: Database["public"]["Enums"]["org_role"]
+          is_active?: boolean
           is_administrator?: boolean
           sort_order: number
           title: string
@@ -874,6 +876,7 @@ export type Database = {
         Update: {
           code?: string
           grants_org_role?: Database["public"]["Enums"]["org_role"]
+          is_active?: boolean
           is_administrator?: boolean
           sort_order?: number
           title?: string

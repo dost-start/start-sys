@@ -57,9 +57,12 @@ export async function listOfficerRoster(ctx: ActionContext): Promise<OfficerRost
   const { data: termId } = await ctx.supabase.rpc("current_term_id");
   if (!termId) return { term_id: null, positions: [] };
 
+  // Retired positions are not listed (ADR 0019, 0063: the Special Advisor). The write
+  // policies refuse them independently, so this filter is presentation, not permission.
   const { data: positions, error: positionsError } = await ctx.supabase
     .from("officer_positions")
     .select("code, title, sort_order, is_administrator")
+    .eq("is_active", true)
     .order("sort_order", { ascending: true });
 
   if (positionsError || !positions) return { term_id: termId, positions: [] };

@@ -150,21 +150,71 @@ const statusNoteSchema = z
   )
   .max(OFFICER_STATUS_NOTE_MAX_LENGTH, "That note is too long.");
 
-/** Matches `member_id_format` (0004): `^\d{4}-\d{3,}$`, admitting both 3- and 4-digit widths. */
-const MEMBER_ID_RE = /^\d{4}-\d{3,}$/;
+// Appoint by name (Officer feedback 2026-09-11): the dialog's candidate search.
 
-export const officerLookupSchema = z
+export type MembershipStatus = Enums<"membership_status">;
+
+/**
+ * Which members the appoint dialog's search offers. Every group reads the CURRENT term's
+ * membership row. `terminated` (CBL Art. VII §3) and `renewal_pending` belong to no group,
+ * so neither is ever offered for a seat.
+ */
+export const OFFICER_CANDIDATE_GROUPS = ["active", "graduated", "resigned"] as const;
+export type OfficerCandidateGroup = (typeof OFFICER_CANDIDATE_GROUPS)[number];
+
+export const OFFICER_CANDIDATE_GROUP_LABELS: Record<OfficerCandidateGroup, string> = {
+  active: "Active members this term",
+  graduated: "Graduated",
+  resigned: "Resigned or left",
+};
+
+/** The `memberships.status` values each group reads. */
+export const OFFICER_CANDIDATE_GROUP_STATUSES: Record<
+  OfficerCandidateGroup,
+  readonly MembershipStatus[]
+> = {
+  active: ["active"],
+  graduated: ["graduated"],
+  resigned: ["resigned", "left"],
+};
+
+export const OFFICER_CANDIDATE_QUERY_MAX_LENGTH = 60;
+
+/**
+ * ⚠ A SECURITY CONTROL, NOT INPUT HYGIENE. `searchOfficerCandidates` interpolates the first
+ * word into a PostgREST `or=(...)` filter string. Letters (ñ and accents included), digits,
+ * space, period, apostrophe and hyphen only — so `, ( ) " * % _ \ :`, which would close a
+ * quoted value, start another condition or act as a LIKE wildcard, cannot get there.
+ * Widening this class widens that string.
+ */
+const CANDIDATE_QUERY_RE = /^[\p{L}\p{M}\d .'-]*$/u;
+
+export const officerCandidateSearchSchema = z
   .object({
-    member_id: z.string().trim().regex(MEMBER_ID_RE, "Enter a member ID like 2026-0001"),
+    q: z
+      .string()
+      // Phone keyboards type a curly apostrophe (’); "O’Neil" must search like "O'Neil".
+      .transform((value) => value.replace(/[‘’ʼ]/g, "'").trim())
+      .pipe(
+        z
+          .string()
+          .max(OFFICER_CANDIDATE_QUERY_MAX_LENGTH, "That search is too long.")
+          .regex(
+            CANDIDATE_QUERY_RE,
+            "Use letters, numbers, spaces, periods, hyphens or apostrophes only.",
+          ),
+      ),
+    group: z.enum(OFFICER_CANDIDATE_GROUPS).default("active"),
   })
   .strict();
-export type OfficerLookupInput = z.infer<typeof officerLookupSchema>;
+/** The INPUT shape: `group` may be omitted and defaults to `active`. */
+export type OfficerCandidateSearchInput = z.input<typeof officerCandidateSearchSchema>;
 
 /**
  * Appoint a person to a vacant (or acting) seat. `position_code` and `person_id` are
  * both resolved server-rendered values, never free text the caller invents: the position
- * comes from a roster row the page already fetched, and `person_id` is what
- * `lookupOfficerCandidate` resolved from the typed member ID. The database's own FK
+ * comes from a roster row the page already fetched, and `person_id` is the row the caller
+ * picked from `searchOfficerCandidates`' results. The database's own FK
  * (`officer_assignments.role -> officer_positions.code`, `.person_id -> people.id`) and
  * the `one_sitting_officer` / `one_acting_officer` partial unique indexes (0007) are the
  * real boundary; this schema only rejects an obviously malformed request before it

@@ -289,6 +289,26 @@ Merge fields work on both tabs, and the same short list as before: first name, l
 
 ---
 
+### 16. Fixes from the officers' test run
+
+**What it is.** Co-officers tried the system on 2026-09-11 and sent a list of problems. These are the fixes.
+
+**How it works from the user's side.**
+- **Students graduating this school year can apply.** A scholar whose expected graduation year is the year the current term ends (2027, for the 2026–2027 term) is now accepted on the application and renewal forms. Before, they were refused as if they had already graduated. A year earlier than that is still refused.
+- **Clearer error messages on the forms.** A problem now points at the exact field, including the address and social-media fields, which used to show "Please fix the highlighted fields" with nothing highlighted. A refused document says which of the two documents was refused and why. Three messages stay general on purpose, to protect scholars' privacy: too many attempts in an hour, an email address that cannot be used, and a repeat application (which still shows the normal success screen).
+- **A "Back to home" link** at the top of the application form, the renewal form and the privacy notice.
+- **The Special Advisor is no longer on the Officers page, for anyone.** The Special Advisor advises the whole organization and is a DOST-SEI employee, so it is not a seat the officers record in this system. Nothing was deleted; the system simply stops recording it.
+- **Appointing an officer by name.** The Appoint box on the Officers page now has a search. Type a letter and the list shows people whose first or last name starts with it; it narrows as you type. It shows this term's active members by default, with a switch to show graduated or resigned members instead. A member ID still works in the same box.
+- **"Application period" is in the sidebar.** The page for opening and closing the application and renewal periods now has its own link for CRRD and the CEO and COO. Before, it could only be reached by typing its address.
+- **A clear message instead of "page not found"** when a reviewer opens an application or renewal before their confidentiality agreement for this term is on file.
+- **Automatic log out after 1 hour without activity.** A warning appears one minute before, with a "Stay logged in" button. Anyone actively using the system stays logged in.
+
+**What CRRD must do or know.** A reviewer who sees the confidentiality message needs their agreement for this term recorded — there is no screen for that yet, so tell Ethan. Committee filtering was not changed; it waits for the planned committee rework.
+
+**Decided by:** Ethan, 2026-09-11, on the co-officers' list (decision record ADR 0019 for the Special Advisor; ADR 0013 amended for the graduation year).
+
+---
+
 ## Still open
 
 Decided or defaulted, waiting for a final word or an action:
@@ -320,7 +340,7 @@ Decided or defaulted, waiting for a final word or an action:
 | **Executive admin** | CEO, COO | Oversee all records; the only ones who can terminate a membership; record officer appointments and departures; run "Approve all" |
 | **Technical admin** | CTO, Deputy CTO for Product Development | Configure the system, create and manage everyone's access, open/close the application and renewal periods, run the once-a-year term rollover |
 | **CRRD admin** | CCDO, Deputy CCDO for Community, Deputy CCDO for Development | Manage members, committees and departments; open/close the application and renewal periods; review and decide applications and renewals, one by one or with "Approve all"; record officer appointments and departures for any position; compose and send emails and forms; grant Regional Reps permission to send |
-| **Officer** | Every other Chief and Deputy, plus the Special Advisor | View member and committee information only — cannot edit or approve anything |
+| **Officer** | Every other Chief and Deputy (the Special Advisor is no longer recorded in the system — update 16) | View member and committee information only — cannot edit or approve anything |
 | **Regional Representative** | The Regional Representatives (under the Deputy CCDO for Community) | View and (as of this update) contact their own region's scholars only; cannot edit anything |
 | **Member** | Every scholar in the org | No login at all — submits the application and renewal forms only |
 

@@ -7,10 +7,11 @@
 
 import "server-only";
 
-import { err, mapDbError, ok, type ActionResult } from "@/lib/action-result";
+import { err, ok, type ActionResult } from "@/lib/action-result";
 import type { ActionContext } from "@/lib/auth/with-role";
 import type { Enums } from "@/database.types";
 
+import { mapReviewDetailError } from "./queries";
 import type { RenewalQueueStatus } from "./renewal-schema";
 
 export type RenewalQueueRow = {
@@ -56,17 +57,17 @@ export async function listRenewals(
   }));
 }
 
-/** The audited full read. `not_found` for a row RLS hides or an id that does not exist. */
+/**
+ * The audited full read. `not_found` for a row RLS hides or an id that does not exist; a
+ * missing confidentiality acknowledgement gets its own message (`mapReviewDetailError`,
+ * Officer feedback 2026-09-11).
+ */
 export async function getRenewalDetail(
   ctx: ActionContext,
   renewalId: string,
 ): Promise<ActionResult<Record<string, unknown>>> {
   const { data, error } = await ctx.supabase.rpc("get_renewal_detail", { p_id: renewalId });
-  if (error) {
-    const mapped = mapDbError(error);
-    if (mapped.code === "unauthorized") return err<Record<string, unknown>>("not_found");
-    return { ok: false, error: mapped };
-  }
+  if (error) return mapReviewDetailError<Record<string, unknown>>(error);
   if (data === null || typeof data !== "object" || Array.isArray(data)) {
     return err<Record<string, unknown>>("not_found");
   }

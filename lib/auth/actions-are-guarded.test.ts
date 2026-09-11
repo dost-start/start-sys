@@ -64,6 +64,14 @@ const ALLOWLIST: ReadonlyArray<{ file: string; name: string; reason: string }> =
       "service-role client, which lives behind lib/server/admin-client.ts.",
   },
   {
+    file: "lib/auth/actions.ts",
+    name: "signOutIdle",
+    reason:
+      "signOut for the idle logout (Officer feedback 2026-09-11): the same scope 'local' " +
+      "sign-out of the CALLER'S OWN session, no id parameter; only the redirect target " +
+      "differs. A role gate could only refuse someone the right to be logged out.",
+  },
+  {
     file: "lib/auth/mfa-actions.ts",
     name: "enrollTotp",
     reason:

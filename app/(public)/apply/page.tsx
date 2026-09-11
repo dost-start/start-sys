@@ -11,12 +11,16 @@
 // the emblem + wordmark hero with one pill that scrolls to the form card, the four-step
 // card, and the footer strip. The hero is passed INTO the client form so the success
 // screen can render hero-less, as the canvas draws it — one <main>, one <form>.
+//
+// Officer feedback 2026-09-11: a "Back to home" link sits above the hero or the closed
+// card, in both branches.
 import type { Metadata } from "next";
 
 import { ApplicationClosed } from "@/components/applications/application-closed";
 import { BrandBackground } from "@/components/brand/brand-background";
 import { BrandFooter } from "@/components/brand/brand-footer";
 import { BrandHero } from "@/components/brand/brand-hero";
+import { PublicHomeLink } from "@/components/brand/public-home-link";
 import { orgContactEmail } from "@/lib/brand/org-contact";
 import { getPublicWindowState } from "@/lib/applications/queries";
 import { cachedReference } from "@/lib/applications/reference-cache";
@@ -102,6 +106,9 @@ export default async function ApplyPage() {
     return (
       <main className="brand-surface flex min-h-screen flex-col">
         <BrandBackground />
+        <div className="px-4 pt-6 sm:px-10">
+          <PublicHomeLink />
+        </div>
         <div className="flex flex-1 items-center justify-center px-4 py-16 sm:px-10">
           <ApplicationClosed window={windowState} contactEmail={contactEmail} />
         </div>
@@ -119,6 +126,9 @@ export default async function ApplyPage() {
   return (
     <main className="brand-surface flex min-h-screen flex-col">
       <BrandBackground />
+      <div className="px-4 pt-6 sm:px-10">
+        <PublicHomeLink />
+      </div>
       <ApplicationForm
         hero={
           <BrandHero ctaLabel="Become part of the START Community" ctaHref="#application-form" />

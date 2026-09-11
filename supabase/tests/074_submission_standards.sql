@@ -5,10 +5,10 @@
 --     1    a sanity check that the fixture's own program/university lookups resolved to
 --          real rows — a fixture bug here would make every "unknown"-branch assertion
 --          below pass for the wrong reason.
---    2-11  check_submission_standards(): a fully valid payload passes ('{}'); each of the
+--    2-12  check_submission_standards(): a fully valid payload passes ('{}'); each of the
 --          six field-level standards fails in isolation when broken one at a time
---          (expected_grad_year missing, expected_grad_year at the active term's own end
---          year, program_id malformed, program_id well-formed but unknown, university_id
+--          (expected_grad_year missing, expected_grad_year one year BEFORE the active
+--          term's end year — while the end year itself now passes, 0062 — program_id malformed, program_id well-formed but unknown, university_id
 --          unknown, scholarship_award unrecognized, award_year malformed); an email
 --          matching a person whose LATEST membership is 'terminated' fails 'applicant_email'
 --          alone (CBL Art. VII §3); with NO active term the function short-circuits to
@@ -56,7 +56,7 @@ begin;
 \ir helpers/fixtures.psql
 \ir helpers/review-fixtures.psql
 
-select plan(35);
+select plan(36);
 
 -- ═══════════════════════════════════════════════════════════════════════════════════
 -- setup — a real, fully-qualifying payload, built from REAL seeded reference rows
@@ -122,13 +122,24 @@ select is(
   'a MISSING expected_grad_year fails exactly that key'
 );
 
+-- 0062 (officer feedback 2026-09-11): a scholar graduating in the year the active term ENDS
+-- is enrolled for the whole term, so that year now PASSES; one year earlier still fails.
 select is(
   public.check_submission_standards(
     'valid.applicant@fixture.start-sys.test',
     (select body from fx_valid_payload) || jsonb_build_object('expected_grad_year', 2027)
   ),
+  '{}'::text[],
+  'expected_grad_year EQUAL to the active term''s own end year passes — 0062, a 2027 graduate is enrolled through May 2027'
+);
+
+select is(
+  public.check_submission_standards(
+    'valid.applicant@fixture.start-sys.test',
+    (select body from fx_valid_payload) || jsonb_build_object('expected_grad_year', 2026)
+  ),
   array['expected_grad_year']::text[],
-  'expected_grad_year equal to the active term''s OWN end year fails — must be LATER (PRD US-G7)'
+  'expected_grad_year BEFORE the active term''s end year fails — that scholar graduates before the term is over (0062)'
 );
 
 select is(

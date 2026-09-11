@@ -144,7 +144,12 @@ export async function listAudienceOptions(ctx: ActionContext): Promise<AudienceO
     await Promise.all([
       ctx.supabase.from("regions").select("id, name, island_group").order("sort_order"),
       ctx.supabase.from("affiliations").select("id, name").eq("is_active", true).order("name"),
-      ctx.supabase.from("officer_positions").select("code, title").order("sort_order"),
+      // Active positions only — a retired seat (ADR 0019) is not a filter anyone needs.
+      ctx.supabase
+        .from("officer_positions")
+        .select("code, title")
+        .eq("is_active", true)
+        .order("sort_order"),
       ctx.supabase
         .from("people")
         .select("join_year")

@@ -19,8 +19,10 @@
 # ── THE FIVE ASSERTIONS, AND WHY EACH ONE ────────────────────────────────────
 #   1. 18 regions            reference data survived. 18, not 17: RA 12000 (2024) created
 #                            the Negros Island Region (DATA_MODEL.md §6/0016).
-#   2. 4 administrators      the constitutional invariant — CEO, COO, CTO, CCDO and
-#                            nobody else (CBL Art. III §2; the `admin_is_c_suite` CHECK).
+#   2. 7 administrators      the constitutional invariant, READ OUT OF THE CHECK rather
+#                            than hard-coded: CEO, COO, CTO, DCTO-PD, CCDO, DCCDO-C,
+#                            DCCDO-D (CRRD SRS 2026-09-05; the
+#                            `admin_is_srs_administrator` CHECK, migration 0036).
 #   3. people > 0            the actual member records are there. A dump taken by a role
 #                            subject to FORCE ROW LEVEL SECURITY restores an EMPTY
 #                            database that looks structurally perfect.
@@ -186,13 +188,35 @@ else
   fail "1. regions = ${regions}, expected 18 — reference data did not survive the restore"
 fi
 
-# 2 — the constitutional invariant
+# 2 — the constitutional invariant, DERIVED from the CHECK rather than hard-coded
+#
+# `admin_is_srs_administrator` (0036) is the ONE place the administrator set is written
+# down; 0003's four-code `admin_is_c_suite` was dropped when the CRRD SRS made it seven.
+# Reading the codes back out of the restored constraint means the next Art. XII amendment
+# costs one migration and not also a silent quarterly FAIL — and a drill that cries wolf
+# on a good backup teaches the operator to ignore FAIL lines, which is precisely what the
+# other four assertions exist to be believed about.
+#
+# It is still a real assertion, not a tautology. The CHECK only says which codes MAY be
+# administrators, so comparing the codes it NAMES against the codes actually flagged
+# `is_administrator` still catches a restore that brought the constraint back but not the
+# seeded flags. And a MISSING constraint fails outright rather than passing vacuously:
+# losing the invariant itself is exactly the kind of half-restore this drill is for.
+expected_admins=$(q "
+  select coalesce(string_agg(m.parts[1], ',' order by m.parts[1]), '')
+  from pg_constraint c,
+       lateral regexp_matches(pg_get_constraintdef(c.oid), '''([A-Z_]+)''', 'g') as m(parts)
+  where c.conrelid = 'public.officer_positions'::regclass
+    and c.conname = 'admin_is_srs_administrator'
+")
 admins=$(q "select count(*) from public.officer_positions where is_administrator")
-admin_codes=$(q "select string_agg(code, ',' order by code) from public.officer_positions where is_administrator")
-if [ "$admins" = "4" ] && [ "$admin_codes" = "CCDO,CEO,COO,CTO" ]; then
-  pass "2. administrators = 4 and are exactly CEO, COO, CTO, CCDO (CBL Art. III §2)"
+admin_codes=$(q "select coalesce(string_agg(code, ',' order by code), '') from public.officer_positions where is_administrator")
+if [ "$expected_admins" = "QUERY_FAILED" ] || [ -z "$expected_admins" ]; then
+  fail "2. the admin_is_srs_administrator CHECK is absent from officer_positions — the constitutional invariant ITSELF did not survive the restore (migration 0036). An eighth administrator could be seeded into the restored database with nothing refusing it."
+elif [ "$admin_codes" = "$expected_admins" ]; then
+  pass "2. administrators = ${admins}, exactly (${admin_codes}) — matching the admin_is_srs_administrator CHECK (CRRD SRS 2026-09-05; CBL Art. III §2-§3)"
 else
-  fail "2. administrators = ${admins} (${admin_codes}), expected 4: CEO, COO, CTO, CCDO"
+  fail "2. administrators are (${admin_codes}) but the admin_is_srs_administrator CHECK names (${expected_admins}) — the seed and the constraint disagree in the restored database"
 fi
 
 # 3 — the member records themselves

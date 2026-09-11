@@ -15,6 +15,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { BrandBackground } from "@/components/brand/brand-background";
+import { PublicHomeLink } from "@/components/brand/public-home-link";
 import { Card } from "@/components/ui/card";
 import { orgContactEmail } from "@/lib/brand/org-contact";
 
@@ -40,49 +41,50 @@ export default function PrivacyNoticePage() {
   const contactEmail = orgContactEmail();
 
   return (
-    <main className="brand-surface flex min-h-screen justify-center px-4 py-10 sm:px-8">
+    <main className="brand-surface flex min-h-screen flex-col items-center px-4 py-10 sm:px-8">
       <BrandBackground />
-      <Card
-        radius="hero"
-        className="w-full max-w-[860px] gap-7 self-start px-7 py-10 sm:px-16 sm:py-14"
-      >
-        <div className="flex flex-col gap-1.5">
-          <h1 className="text-brand-ink text-[28px] font-bold tracking-tight">
-            START-DOST Privacy Notice
-          </h1>
-          <p className="text-muted-foreground text-sm">
-            How START-DOST handles the information you give us when you apply.
-          </p>
-        </div>
+      {/* Officer feedback 2026-09-11: a way back to the splash page. Navigation, not notice
+          text — the card below is unchanged. */}
+      <div className="flex w-full max-w-[860px] flex-col gap-4">
+        <PublicHomeLink />
+        <Card radius="hero" className="w-full gap-7 px-7 py-10 sm:px-16 sm:py-14">
+          <div className="flex flex-col gap-1.5">
+            <h1 className="text-brand-ink text-[28px] font-bold tracking-tight">
+              START-DOST Privacy Notice
+            </h1>
+            <p className="text-muted-foreground text-sm">
+              How START-DOST handles the information you give us when you apply.
+            </p>
+          </div>
 
-        <section className={SECTION_CLASS}>
-          <h2 className={HEADING_CLASS}>What we collect</h2>
-          <p className={BODY_CLASS}>
-            When you apply, we collect your name, birth date, sex, email, phone number and Facebook
-            link. We also collect your home address, your scholarship details, your school and
-            program, your region, and two documents: your registration form and your Notice of
-            Award.
-          </p>
-        </section>
+          <section className={SECTION_CLASS}>
+            <h2 className={HEADING_CLASS}>What we collect</h2>
+            <p className={BODY_CLASS}>
+              When you apply, we collect your name, birth date, sex, email, phone number and
+              Facebook link. We also collect your home address, your scholarship details, your
+              school and program, your region, and two documents: your registration form and your
+              Notice of Award.
+            </p>
+          </section>
 
-        <section className={SECTION_CLASS}>
-          <h2 className={HEADING_CLASS}>Why we collect it</h2>
-          <p className={BODY_CLASS}>
-            To check that you are a DOST scholar, and to run your membership. That means your member
-            record, your committee, and the emails START-DOST sends you.
-          </p>
-        </section>
+          <section className={SECTION_CLASS}>
+            <h2 className={HEADING_CLASS}>Why we collect it</h2>
+            <p className={BODY_CLASS}>
+              To check that you are a DOST scholar, and to run your membership. That means your
+              member record, your committee, and the emails START-DOST sends you.
+            </p>
+          </section>
 
-        <section className={SECTION_CLASS}>
-          <h2 className={HEADING_CLASS}>Who can see it</h2>
-          <p className={BODY_CLASS}>
-            Only the officers whose job needs it. The CRRD officers and the CEO and COO can see your
-            contact details. Other officers and your Regional Representative see your name, member
-            ID, region and status. The database itself enforces this, not just the screen.
-          </p>
-        </section>
+          <section className={SECTION_CLASS}>
+            <h2 className={HEADING_CLASS}>Who can see it</h2>
+            <p className={BODY_CLASS}>
+              Only the officers whose job needs it. The CRRD officers and the CEO and COO can see
+              your contact details. Other officers and your Regional Representative see your name,
+              member ID, region and status. The database itself enforces this, not just the screen.
+            </p>
+          </section>
 
-        {/*
+          {/*
           Corrected 2026-09-10: production now runs DOCUMENT_STORE=drive (ADR 0018), so the
           two documents are in START-DOST's own Google Drive and Google is a processor. The
           previous wording — "stored there too", meaning the Singapore project — became
@@ -93,69 +95,70 @@ export default function PrivacyNoticePage() {
           Word for word with docs/privacy/PRIVACY_NOTICE.md — the CI digest guard compares
           the file's sha256 against the newest privacy_notice_versions row.
         */}
-        <section className={SECTION_CLASS}>
-          <h2 className={HEADING_CLASS}>Where it is stored</h2>
-          <p className={BODY_CLASS}>
-            Our database and app run on servers in Singapore. Your two documents are kept in
-            START-DOST&apos;s own Google Drive, which means Google stores them on its servers.
-            Emails are sent from START-DOST&apos;s Gmail account. Your information is stored outside
-            the Philippines.
-          </p>
-        </section>
+          <section className={SECTION_CLASS}>
+            <h2 className={HEADING_CLASS}>Where it is stored</h2>
+            <p className={BODY_CLASS}>
+              Our database and app run on servers in Singapore. Your two documents are kept in
+              START-DOST&apos;s own Google Drive, which means Google stores them on its servers.
+              Emails are sent from START-DOST&apos;s Gmail account. Your information is stored
+              outside the Philippines.
+            </p>
+          </section>
 
-        {/* PR D — draft autosave puts a birthdate and an address in the applicant's own
+          {/* PR D — draft autosave puts a birthdate and an address in the applicant's own
             browser. Disclosed here rather than left implicit. */}
-        <section className={SECTION_CLASS}>
-          <h2 className={HEADING_CLASS}>On your own device</h2>
-          <p className={BODY_CLASS}>
-            While you are filling in the application or renewal form, what you have typed is saved
-            in your own browser on the device you are using, so that you can close the page and come
-            back. This never leaves your device and START-DOST cannot see it. Your uploaded
-            documents are never saved this way. It is removed as soon as you submit, and there is a{" "}
-            <span className="text-brand-ink font-semibold">Clear the saved draft</span> button on
-            the form if you want it gone sooner — worth using if you are on a shared or public
-            computer.
-          </p>
-        </section>
+          <section className={SECTION_CLASS}>
+            <h2 className={HEADING_CLASS}>On your own device</h2>
+            <p className={BODY_CLASS}>
+              While you are filling in the application or renewal form, what you have typed is saved
+              in your own browser on the device you are using, so that you can close the page and
+              come back. This never leaves your device and START-DOST cannot see it. Your uploaded
+              documents are never saved this way. It is removed as soon as you submit, and there is
+              a <span className="text-brand-ink font-semibold">Clear the saved draft</span> button
+              on the form if you want it gone sooner — worth using if you are on a shared or public
+              computer.
+            </p>
+          </section>
 
-        <section className={SECTION_CLASS}>
-          <h2 className={HEADING_CLASS}>How long we keep it</h2>
-          <p className={BODY_CLASS}>
-            Five years after your last active term with START-DOST. An application you start but do
-            not finish is cleared after 30 days.
-          </p>
-        </section>
+          <section className={SECTION_CLASS}>
+            <h2 className={HEADING_CLASS}>How long we keep it</h2>
+            <p className={BODY_CLASS}>
+              Five years after your last active term with START-DOST. An application you start but
+              do not finish is cleared after 30 days.
+            </p>
+          </section>
 
-        <section className={SECTION_CLASS}>
-          <h2 className={HEADING_CLASS}>Your rights</h2>
-          <p className={BODY_CLASS}>
-            You can ask what we hold about you, ask us to correct it, object to how we use it, or
-            file a complaint. These are your rights under the Data Privacy Act. Write to{" "}
-            <a
-              href={`mailto:${contactEmail}`}
-              className="text-brand-link font-medium underline-offset-4 hover:underline"
-            >
-              {contactEmail}
-            </a>
-            .
-          </p>
-        </section>
+          <section className={SECTION_CLASS}>
+            <h2 className={HEADING_CLASS}>Your rights</h2>
+            <p className={BODY_CLASS}>
+              You can ask what we hold about you, ask us to correct it, object to how we use it, or
+              file a complaint. These are your rights under the Data Privacy Act. Write to{" "}
+              <a
+                href={`mailto:${contactEmail}`}
+                className="text-brand-link font-medium underline-offset-4 hover:underline"
+              >
+                {contactEmail}
+              </a>
+              .
+            </p>
+          </section>
 
-        <section className={SECTION_CLASS}>
-          <h2 className={HEADING_CLASS}>If something goes wrong</h2>
-          <p className={BODY_CLASS}>
-            If your information is ever exposed, START-DOST will tell you and the National Privacy
-            Commission within 72 hours.
-          </p>
-        </section>
+          <section className={SECTION_CLASS}>
+            <h2 className={HEADING_CLASS}>If something goes wrong</h2>
+            <p className={BODY_CLASS}>
+              If your information is ever exposed, START-DOST will tell you and the National Privacy
+              Commission within 72 hours.
+            </p>
+          </section>
 
-        <Link
-          href="/apply"
-          className="text-brand-link self-start text-sm font-medium underline-offset-4 hover:underline"
-        >
-          Back to the application
-        </Link>
-      </Card>
+          <Link
+            href="/apply"
+            className="text-brand-link self-start text-sm font-medium underline-offset-4 hover:underline"
+          >
+            Back to the application
+          </Link>
+        </Card>
+      </div>
     </main>
   );
 }

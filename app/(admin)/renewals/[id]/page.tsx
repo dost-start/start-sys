@@ -3,6 +3,9 @@
 // which asserts the confidentiality acknowledgement and writes the VIEW audit row — the
 // RA 10173 access record is a consequence of rendering, not a separate step.
 //
+// Every refusal renders `notFound()` except a missing CBL Art. VIII §7.1 acknowledgement,
+// which renders an explanatory panel like the member page (Officer feedback 2026-09-11).
+//
 // Brand edition (2026-09-08): the `renewal_detail` board of the design canvas — the same
 // treatment as the application detail page, plus the "unchanged by renewal" member-ID
 // line under the title. Every string, test id and audit read is unchanged.
@@ -16,6 +19,7 @@ import { RejectRenewalDialog } from "@/components/applications/reject-renewal-di
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card } from "@/components/ui/card";
 import type { Database } from "@/database.types";
+import { isReviewAcknowledgementMissing } from "@/lib/applications/queries";
 import { getRenewalDetail } from "@/lib/applications/renewal-queries";
 import { getSessionContext } from "@/lib/auth/queries";
 import { homeForRole, LOGIN_PATH } from "@/lib/auth/route-access";
@@ -38,7 +42,21 @@ export default async function RenewalDetailPage({ params }: { params: Promise<{ 
 
   const { id } = await params;
   const result = await getRenewalDetail(ctx, id);
-  if (!result.ok) notFound();
+  if (!result.ok) {
+    if (isReviewAcknowledgementMissing(result.error)) {
+      return (
+        <div className="space-y-4">
+          <a href="/renewals" className="text-brand-label text-xs hover:underline">
+            ← Back to renewals
+          </a>
+          <Alert variant="warning" role="alert">
+            {result.error.message}
+          </Alert>
+        </div>
+      );
+    }
+    notFound();
+  }
 
   const detail = result.data;
   const status = detail.status as ApplicationStatus;

@@ -14,9 +14,11 @@
 //      distinction on top of it.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { type ActionResult, err, validationFailure } from "@/lib/action-result";
+import { IDLE_LOGOUT_URL, LAST_ACTIVITY_COOKIE } from "@/lib/auth/idle";
 import { homeForRole } from "@/lib/auth/route-access";
 import { safeNextPath } from "@/lib/auth/safe-next";
 import { signInSchema } from "@/lib/auth/schema";
@@ -97,4 +99,26 @@ export async function signOut(): Promise<void> {
   await supabase.auth.signOut({ scope: "local" });
 
   redirect("/login");
+}
+
+/**
+ * `signOut` for the idle logout (Officer feedback 2026-09-11: auto logout). Called by
+ * `components/auth/idle-logout.tsx` when the hour runs out or "Log out now" is pressed,
+ * and lands on `/login?reason=idle`, which says why.
+ *
+ * Unguarded for the same reason as `signOut`: it ends the caller's own session and
+ * nothing else. Nor is it the enforcement — `middleware.ts` ends an idle session on the
+ * next request whether or not this ever runs.
+ */
+export async function signOutIdle(): Promise<void> {
+  const supabase = await createServerSupabase();
+  // 'local', as in signOut: this browser only, never the user's other devices.
+  await supabase.auth.signOut({ scope: "local" });
+
+  // Removing the activity cookie tells this browser's other open tabs that the session
+  // is over, so they leave their screens too (see idle-logout.tsx). Best effort.
+  const cookieStore = await cookies();
+  cookieStore.delete(LAST_ACTIVITY_COOKIE);
+
+  redirect(IDLE_LOGOUT_URL);
 }

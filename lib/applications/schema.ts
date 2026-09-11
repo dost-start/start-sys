@@ -54,6 +54,7 @@
 
 import { z } from "zod";
 
+import type { RejectionReason } from "@/lib/documents/types";
 import { awardYearWindow } from "@/lib/validation/award-year";
 import {
   isFacebookProfileUrl,
@@ -591,8 +592,10 @@ export const SUBMISSION_STANDARDS_GENERIC_MESSAGE = "Please fix the highlighted 
 
 /** One message per checkable field. `term` is deliberately absent — see the note above. */
 export const SUBMISSION_STANDARDS_FIELD_MESSAGES: Record<string, string> = {
+  // Officer feedback 2026-09-11: the rule is now "not EARLIER than the year the active
+  // term ends", so a 2027 graduate may apply for 2026–2027. No year is named here.
   expected_grad_year:
-    "Only current students may apply: your expected graduation year must be after the current term ends.",
+    "Your expected graduation year is before the current term ends. Only students still enrolled this term can apply.",
   program_id: "Select your program from the list.",
   university_id: "Select your university from the list.",
   scholarship_award: "Select your DOST scholarship award.",
@@ -620,6 +623,70 @@ export function submissionStandardsFieldErrors(
     if (message !== undefined) fields[key] = [message];
   }
   return fields;
+}
+
+// ── Document refusals (Officer feedback 2026-09-11) ──────────────────────────
+// "One of the files could not be accepted" named neither the file nor the reason. Both
+// public forms send a `proof_*` key to the registration-form upload and a `noa_*` key to
+// the Notice of Award upload, so the actions name a refused document with one of the two
+// keys below. No message carries a file name: a file name is often the scholar's own name.
+
+/** The field key a Server Action uses to name a refused document. */
+export type DocumentField = "proof_file" | "noa_file";
+
+/** Why a document was refused, in terms the applicant can act on. */
+export type DocumentRefusal = "not_pdf" | "too_large" | "empty";
+
+const DOCUMENT_LABELS: Record<DocumentField, string> = {
+  proof_file: "latest registration form",
+  noa_file: "Notice of Award",
+};
+
+const MAX_DECLARED_PROOF_MB = Math.floor(MAX_DECLARED_PROOF_BYTES / (1024 * 1024));
+
+/** The `message` on a document refusal; the per-document text travels in `fields`. */
+export const DOCUMENT_REFUSED_GENERIC_MESSAGE =
+  "A document could not be accepted. The message under that document says why.";
+
+/** A store rejection reason as a refusal the applicant can act on. */
+export function documentRefusalFromReason(reason: RejectionReason): DocumentRefusal {
+  if (reason === "too_large") return "too_large";
+  if (reason === "empty_file") return "empty";
+  // mime_not_allowed, mime_mismatch, unidentifiable: the bytes are not a PDF.
+  return "not_pdf";
+}
+
+/** At `start*`: the file the browser DESCRIBED was refused before anything was uploaded. */
+export function declaredDocumentRefusedMessage(
+  field: DocumentField,
+  refusal: DocumentRefusal,
+): string {
+  const document = DOCUMENT_LABELS[field];
+  switch (refusal) {
+    case "not_pdf":
+      return `Your ${document} was refused because it is not a PDF. Save or export it as a PDF of up to ${MAX_DECLARED_PROOF_MB}MB, then choose it again.`;
+    case "too_large":
+      return `Your ${document} was refused because it is larger than ${MAX_DECLARED_PROOF_MB}MB. Choose a PDF of up to ${MAX_DECLARED_PROOF_MB}MB.`;
+    case "empty":
+      return `Your ${document} was refused because the file is empty. Choose the PDF again.`;
+  }
+}
+
+/** At `finalize*`: the STORED file failed verification, and both stored files were deleted. */
+export function uploadedDocumentRefusedMessage(
+  field: DocumentField,
+  refusal: DocumentRefusal,
+): string {
+  const document = DOCUMENT_LABELS[field];
+  const again = "Choose both documents again, then submit.";
+  switch (refusal) {
+    case "not_pdf":
+      return `Your ${document} was not accepted: the uploaded file is not a real PDF. Save or export it as a PDF. ${again}`;
+    case "too_large":
+      return `Your ${document} was not accepted: the uploaded file is larger than ${MAX_DECLARED_PROOF_MB}MB. ${again}`;
+    case "empty":
+      return `Your ${document} was not accepted: the uploaded file is empty. ${again}`;
+  }
 }
 
 export const REJECT_REASON_MIN_LENGTH = 10;

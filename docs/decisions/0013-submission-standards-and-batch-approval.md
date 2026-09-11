@@ -57,6 +57,9 @@ validation in this system (CONVENTIONS §6): one schema, re-checked in the Serve
    relevant term ends (applied-into term, or renewed-into term). Reuses the predicate
    `DATA_MODEL.md`'s `renewal_eligible_people()` already computes, now also as a
    submission-time gate (see Costs — does not resolve OQ-3 in general).
+   *Amended 2026-09-11 (migration 0062): **not earlier than** the year the term ends, instead
+   of later than it. A scholar graduating in the term's end year (2027, for 2026–2027) is
+   enrolled for the whole term. Raised by co-officer QA; approved by Ethan Baltazar.*
 3. **Eligible program.** `program_id` names one of the thirteen seeded `programs` rows
    (OQ-17, closed list) — enforced structurally by a closed `<select>`, no free text.
 4. **Eligible university.** `university_id` names a row in `universities` (starter list;

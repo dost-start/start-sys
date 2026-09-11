@@ -112,11 +112,11 @@ export default async function OfficersPage() {
                         </TableCell>
                         <TableCell>
                           {/*
-                            A9 / 0054: crrd_admin gets no Appoint control on SPECIAL_ADVISOR.
-                            The ROW still renders — CRRD can see the seat and who holds it —
-                            only the write control goes. The database refuses the write
-                            independently (`officer_assignments_insert`), so this is UX, not
-                            the permission.
+                            `canSeatPosition` says no only for a retired seat (ADR 0019), and
+                            `listOfficerRoster` already leaves retired positions out, so this
+                            fallback is defensive. The database refuses the write
+                            independently (`officer_assignments_insert`, 0063) — UX, not the
+                            permission.
                           */}
                           {canSeatPosition(ctx.role, position.code) ? (
                             <AppointOfficerDialog
@@ -124,7 +124,7 @@ export default async function OfficersPage() {
                               positionTitle={position.title}
                             />
                           ) : (
-                            <span className="text-brand-label text-xs">Executive Admin only</span>
+                            <span className="text-brand-label text-xs">Not recorded</span>
                           )}
                         </TableCell>
                       </TableRow>
@@ -173,9 +173,7 @@ export default async function OfficersPage() {
                                   ) : null}
                                 </>
                               ) : (
-                                <span className="text-brand-label text-xs">
-                                  Executive Admin only
-                                </span>
+                                <span className="text-brand-label text-xs">Not recorded</span>
                               )}
                             </div>
                           </TableCell>

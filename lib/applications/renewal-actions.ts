@@ -27,16 +27,22 @@ import { getDocumentStore } from "@/lib/documents";
 import { browserOriginFromRequest } from "@/lib/documents/request-origin";
 import {
   DocumentRejectedError,
-  DocumentUnavailableError,
   isAllowedMime,
   MAX_PROOF_BYTES,
+  type DocumentStore,
+  type UploadSession,
   type VerifiedUpload,
 } from "@/lib/documents/types";
 
 import {
   buildApplicationPayload,
+  declaredDocumentRefusedMessage,
+  DOCUMENT_REFUSED_GENERIC_MESSAGE,
+  documentRefusalFromReason,
   submissionStandardsFieldErrors,
   SUBMISSION_STANDARDS_GENERIC_MESSAGE,
+  uploadedDocumentRefusedMessage,
+  type DocumentRefusal,
 } from "./schema";
 import {
   finalizeRenewalSchema,
@@ -61,6 +67,49 @@ export type FinalizeRenewalResult = { status: "pending" };
 
 function hashSubmitToken(token: string): string {
   return createHash("sha256").update(token, "utf8").digest("hex");
+}
+
+// ── Per-document checks (Officer feedback 2026-09-11) ────────────────────────
+// Mirrors lib/applications/actions.ts: one try per document, so a refusal names the
+// document it belongs to. It describes the scholar's own file and nothing else.
+
+/** One document's upload session, or why it was not minted. */
+type SessionMint =
+  | { kind: "minted"; session: UploadSession }
+  | { kind: "refused"; refusal: DocumentRefusal }
+  | { kind: "unavailable" };
+
+/** Mint one document's upload session. The store's own message never reaches the scholar. */
+async function mintUploadSession(mint: () => Promise<UploadSession>): Promise<SessionMint> {
+  try {
+    return { kind: "minted", session: await mint() };
+  } catch (caught) {
+    if (caught instanceof DocumentRejectedError) {
+      return { kind: "refused", refusal: documentRefusalFromReason(caught.reason) };
+    }
+    return { kind: "unavailable" };
+  }
+}
+
+/** One stored document, verified, or why it failed verification. */
+type DocumentCheck =
+  | { kind: "verified"; upload: VerifiedUpload }
+  | { kind: "refused"; refusal: DocumentRefusal }
+  | { kind: "unavailable" };
+
+/** Re-verify one stored document from provider metadata and magic bytes. */
+async function verifyStoredDocument(store: DocumentStore, ref: string): Promise<DocumentCheck> {
+  try {
+    const upload = await store.verifyUpload(ref);
+    if (!isAllowedMime(upload.mimeType)) return { kind: "refused", refusal: "not_pdf" };
+    if (upload.sizeBytes > MAX_PROOF_BYTES) return { kind: "refused", refusal: "too_large" };
+    return { kind: "verified", upload };
+  } catch (caught) {
+    if (caught instanceof DocumentRejectedError) {
+      return { kind: "refused", refusal: documentRefusalFromReason(caught.reason) };
+    }
+    return { kind: "unavailable" };
+  }
 }
 
 const MISMATCH_MESSAGE =
@@ -140,37 +189,57 @@ export const startRenewal = withPublic<StartRenewalInput, StartRenewalResult>(
       return { ok: false, error: mapped };
     }
 
+    let browserOrigin: string | null;
+    let store: DocumentStore;
     try {
-      const browserOrigin = await browserOriginFromRequest();
-      const store = getDocumentStore();
-      const session = await store.createUploadSession({
+      browserOrigin = await browserOriginFromRequest();
+      store = getDocumentStore();
+    } catch {
+      return err<StartRenewalResult>("upstream");
+    }
+
+    const registration = await mintUploadSession(() =>
+      store.createUploadSession({
         applicationId: renewalId,
         fileName: input.proof_file_name,
         mimeType: input.proof_mime_type,
         sizeBytes: input.proof_size_bytes,
         documentKind: "registration",
         browserOrigin,
-      });
-      const noaSession = await store.createUploadSession({
+      }),
+    );
+    if (registration.kind === "unavailable") return err<StartRenewalResult>("upstream");
+    const noa = await mintUploadSession(() =>
+      store.createUploadSession({
         applicationId: renewalId,
         fileName: input.noa_file_name,
         mimeType: input.noa_mime_type,
         sizeBytes: input.noa_size_bytes,
         documentKind: "noa",
         browserOrigin,
-      });
-      return ok({
-        renewalId,
-        uploadToken,
-        uploadUrl: session.uploadUrl,
-        storageRef: session.storageRef,
-        noaUploadUrl: noaSession.uploadUrl,
-        noaStorageRef: noaSession.storageRef,
-      });
-    } catch (caught) {
-      if (caught instanceof DocumentRejectedError) return err<StartRenewalResult>("validation");
-      return err<StartRenewalResult>("upstream");
+      }),
+    );
+
+    if (registration.kind === "refused" || noa.kind === "refused") {
+      const fields: Record<string, string[]> = {};
+      if (registration.kind === "refused") {
+        fields["proof_file"] = [declaredDocumentRefusedMessage("proof_file", registration.refusal)];
+      }
+      if (noa.kind === "refused") {
+        fields["noa_file"] = [declaredDocumentRefusedMessage("noa_file", noa.refusal)];
+      }
+      return err<StartRenewalResult>("validation", DOCUMENT_REFUSED_GENERIC_MESSAGE, fields);
     }
+    if (noa.kind === "unavailable") return err<StartRenewalResult>("upstream");
+
+    return ok({
+      renewalId,
+      uploadToken,
+      uploadUrl: registration.session.uploadUrl,
+      storageRef: registration.session.storageRef,
+      noaUploadUrl: noa.session.uploadUrl,
+      noaStorageRef: noa.session.storageRef,
+    });
   },
 );
 
@@ -182,33 +251,35 @@ export const finalizeRenewal = withPublic(
   async (ctx, input): Promise<ActionResult<FinalizeRenewalResult>> => {
     const store = getDocumentStore();
 
-    async function verifyOrNull(ref: string): Promise<VerifiedUpload | "rejected" | "unavailable"> {
-      try {
-        const v = await store.verifyUpload(ref);
-        if (!isAllowedMime(v.mimeType) || v.sizeBytes > MAX_PROOF_BYTES) return "rejected";
-        return v;
-      } catch (caught) {
-        if (caught instanceof DocumentRejectedError) return "rejected";
-        if (caught instanceof DocumentUnavailableError) return "unavailable";
-        return "unavailable";
-      }
-    }
-
-    const [verified, noaVerified] = await Promise.all([
-      verifyOrNull(input.storage_ref),
-      verifyOrNull(input.noa_storage_ref),
+    // Both documents re-verified from provider metadata; on any refusal both objects are
+    // deleted and the scholar picks both again. The refusal names WHICH document failed
+    // and why (Officer feedback 2026-09-11).
+    const [registrationCheck, noaCheck] = await Promise.all([
+      verifyStoredDocument(store, input.storage_ref),
+      verifyStoredDocument(store, input.noa_storage_ref),
     ]);
 
-    if (verified === "rejected" || noaVerified === "rejected") {
+    if (registrationCheck.kind === "refused" || noaCheck.kind === "refused") {
       await Promise.all([
         store.deleteDocument(input.storage_ref).catch(() => undefined),
         store.deleteDocument(input.noa_storage_ref).catch(() => undefined),
       ]);
-      return err<FinalizeRenewalResult>("validation");
+      const fields: Record<string, string[]> = {};
+      if (registrationCheck.kind === "refused") {
+        fields["proof_file"] = [
+          uploadedDocumentRefusedMessage("proof_file", registrationCheck.refusal),
+        ];
+      }
+      if (noaCheck.kind === "refused") {
+        fields["noa_file"] = [uploadedDocumentRefusedMessage("noa_file", noaCheck.refusal)];
+      }
+      return err<FinalizeRenewalResult>("validation", DOCUMENT_REFUSED_GENERIC_MESSAGE, fields);
     }
-    if (verified === "unavailable" || noaVerified === "unavailable") {
+    if (registrationCheck.kind === "unavailable" || noaCheck.kind === "unavailable") {
       return err<FinalizeRenewalResult>("upstream");
     }
+    const verified = registrationCheck.upload;
+    const noaVerified = noaCheck.upload;
 
     const { error } = await ctx.supabase.rpc("finalize_renewal", {
       p_id: input.renewal_id,

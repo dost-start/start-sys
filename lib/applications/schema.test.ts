@@ -32,6 +32,11 @@ import {
   finalizeApplicationSchema,
   MAX_DECLARED_PROOF_BYTES,
   startApplicationSchema,
+  declaredDocumentRefusedMessage,
+  DOCUMENT_REFUSED_GENERIC_MESSAGE,
+  documentRefusalFromReason,
+  SUBMISSION_STANDARDS_FIELD_MESSAGES,
+  uploadedDocumentRefusedMessage,
 } from "@/lib/applications/schema";
 
 /**
@@ -621,5 +626,44 @@ describe("applicationListFiltersSchema", () => {
     const parsed = parseApplicationListFilters({ q: "dela cruz", page: "2" });
     expect(parsed.page).toBe(2);
     expect(parsed).not.toHaveProperty("q");
+  });
+});
+
+// Officer feedback 2026-09-11: errors on /apply and /renew must say what went wrong.
+describe("submission-time and document messages", () => {
+  it("states the graduation-year rule without naming a year", () => {
+    const message = SUBMISSION_STANDARDS_FIELD_MESSAGES["expected_grad_year"];
+    expect(message).toContain("before the current term ends");
+    expect(message).not.toMatch(/\d{4}/);
+  });
+
+  it("maps every store rejection reason to something the applicant can act on", () => {
+    expect(documentRefusalFromReason("too_large")).toBe("too_large");
+    expect(documentRefusalFromReason("empty_file")).toBe("empty");
+    for (const reason of ["mime_not_allowed", "mime_mismatch", "unidentifiable"] as const) {
+      expect(documentRefusalFromReason(reason)).toBe("not_pdf");
+    }
+  });
+
+  it.each([
+    ["proof_file", /latest registration form/],
+    ["noa_file", /Notice of Award/],
+  ] as const)("names the %s document in every refusal", (field, documentName) => {
+    for (const refusal of ["not_pdf", "too_large", "empty"] as const) {
+      expect(declaredDocumentRefusedMessage(field, refusal)).toMatch(documentName);
+      expect(uploadedDocumentRefusedMessage(field, refusal)).toMatch(documentName);
+      // Finalize deletes both stored files, so the applicant must pick both again.
+      expect(uploadedDocumentRefusedMessage(field, refusal)).toContain(
+        "Choose both documents again",
+      );
+    }
+  });
+
+  it("says why a document was refused", () => {
+    expect(uploadedDocumentRefusedMessage("proof_file", "not_pdf")).toContain("not a real PDF");
+    expect(uploadedDocumentRefusedMessage("noa_file", "too_large")).toContain("10MB");
+    expect(declaredDocumentRefusedMessage("proof_file", "not_pdf")).toContain("not a PDF");
+    expect(declaredDocumentRefusedMessage("noa_file", "empty")).toContain("empty");
+    expect(DOCUMENT_REFUSED_GENERIC_MESSAGE).not.toMatch(/registration form|Notice of Award/);
   });
 });

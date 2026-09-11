@@ -207,6 +207,41 @@ export async function listApplications(
 }
 
 /**
+ * What the application and renewal detail pages show when the reviewer's CBL Art. VIII
+ * §7.1 acknowledgement is not on file for the current term (Officer feedback 2026-09-11).
+ */
+export const REVIEW_MISSING_ACKNOWLEDGEMENT_MESSAGE =
+  "Your confidentiality acknowledgement for the current term is not on file, so " +
+  "applications and renewals cannot be opened. An Executive Admin records it " +
+  "(CBL Art. VIII §7.1).";
+
+/**
+ * Substring of `assert_confidentiality_ack()`'s exception (0012) — the same text
+ * `getMemberRecord` matches. If it ever stops matching, the page falls back to a 404:
+ * safe, only less helpful.
+ */
+const ACK_REFUSAL_MARKER = "confidentiality acknowledgement";
+
+/**
+ * Map a `get_application_detail()` / `get_renewal_detail()` error. The acknowledgement
+ * gate gets its own message; every other refusal is `not_found`, never `unauthorized`.
+ */
+export function mapReviewDetailError<T>(error: { message?: unknown }): ActionResult<T> {
+  const raw = typeof error.message === "string" ? error.message : "";
+  if (raw.includes(ACK_REFUSAL_MARKER)) {
+    return err<T>("unauthorized", REVIEW_MISSING_ACKNOWLEDGEMENT_MESSAGE);
+  }
+  const mapped = mapDbError(error);
+  if (mapped.code === "unauthorized") return err<T>("not_found");
+  return { ok: false, error: mapped };
+}
+
+/** Did a detail read fail on the acknowledgement gate rather than on the row? */
+export function isReviewAcknowledgementMissing(error: { message: string }): boolean {
+  return error.message === REVIEW_MISSING_ACKNOWLEDGEMENT_MESSAGE;
+}
+
+/**
  * The full application, including `applicant_email` and `payload` (PRD US-C1: "the
  * detail view shows every submitted field").
  *
@@ -216,18 +251,13 @@ export async function listApplications(
  * (CBL Art. VIII §6). Do not call it to test whether a row exists, and do not call it
  * twice per render.
  *
- * ⚠ THE ERROR MAPPING IS LOSSY, DELIBERATELY. Both the role guard and
- * `assert_confidentiality_ack()` raise 42501, so this layer cannot distinguish "wrong
- * tier" from "your CBL Art. VIII §7.1 acknowledgement is not on file for this term".
- * Both become `not_found`, which is the CONVENTIONS §4.3 rule: an empty result caused
- * by a policy is `not_found`, never `unauthorized`, because "forbidden" confirms the
- * row exists and therefore that a named person applied.
- *
- * The practical consequence, stated so it is not debugged as a bug: a newly appointed
- * CCDO in June sees the queue but every detail page 404s until an Executive Admin
- * records their acknowledgement. That is what "upon assuming their roles" means
- * (ARCHITECTURE.md §9 item 5). If the screen must say so out loud, the answer is a
- * separate `has_confidentiality_ack()` call on the page — not a wider error code here.
+ * ⚠ ONE REFUSAL IS NAMED; EVERY OTHER IS `not_found`. The role guard and
+ * `assert_confidentiality_ack()` both raise 42501, so `mapReviewDetailError` tells them
+ * apart by the acknowledgement's message text, as `getMemberRecord` does. A wrong tier,
+ * RLS and a missing row stay `not_found` (CONVENTIONS §4.3). The acknowledgement gets its
+ * own message (Officer feedback 2026-09-11: a newly appointed CCDO saw a bare 404 on every
+ * detail page). It is about the caller, and the RPC raises it BEFORE it looks the row up,
+ * so it says nothing about whether this application exists.
  */
 /** What `psgc_resolve()` returns: the five levels of a PSGC address, plus the city code. */
 export type ResolvedAddress = {
@@ -247,11 +277,7 @@ export async function getApplicationDetail(
     p_app_id: applicationId,
   });
 
-  if (error) {
-    const mapped = mapDbError(error);
-    if (mapped.code === "unauthorized") return err<Record<string, unknown>>("not_found");
-    return { ok: false, error: mapped };
-  }
+  if (error) return mapReviewDetailError<Record<string, unknown>>(error);
 
   // The RPC returns SQL NULL for an application that does not exist, and writes no
   // audit row for it — an absent row must not be distinguishable from an unreadable one.

@@ -8,6 +8,9 @@
 // Brand edition (2026-09-08; design canvas `public_page("renew")`): the same surface,
 // hero, four-step card and footer as /apply. The hero is passed INTO the client form so
 // the success screen can render hero-less — one <main>, one <form>.
+//
+// Officer feedback 2026-09-11: a "Back to home" link sits above the hero or the closed
+// card, in both branches.
 import type { Metadata } from "next";
 
 import type { ProgramOption, UniversityOption } from "@/components/applications/academic-section";
@@ -17,6 +20,7 @@ import { orgContactEmail } from "@/lib/brand/org-contact";
 import { BrandBackground } from "@/components/brand/brand-background";
 import { BrandFooter } from "@/components/brand/brand-footer";
 import { BrandHero } from "@/components/brand/brand-hero";
+import { PublicHomeLink } from "@/components/brand/public-home-link";
 import { getPublicWindowState } from "@/lib/applications/queries";
 import { MEMBERSHIP_RENEWAL_FORM_KIND } from "@/lib/applications/window-schema";
 import { cachedReference } from "@/lib/applications/reference-cache";
@@ -83,6 +87,9 @@ export default async function RenewPage() {
     return (
       <main className="brand-surface flex min-h-screen flex-col">
         <BrandBackground />
+        <div className="px-4 pt-6 sm:px-10">
+          <PublicHomeLink />
+        </div>
         <div className="flex flex-1 items-center justify-center px-4 py-16 sm:px-10">
           <RenewalClosed contactEmail={orgContactEmail()} />
         </div>
@@ -100,6 +107,9 @@ export default async function RenewPage() {
   return (
     <main className="brand-surface flex min-h-screen flex-col">
       <BrandBackground />
+      <div className="px-4 pt-6 sm:px-10">
+        <PublicHomeLink />
+      </div>
       <RenewalForm
         hero={<BrandHero ctaLabel="Renew your START membership" ctaHref="#application-form" />}
         regions={regions}

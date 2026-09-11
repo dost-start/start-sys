@@ -39,13 +39,20 @@ import { revalidatePath } from "next/cache";
 
 import { err, mapDbError, ok, validationFailure } from "@/lib/action-result";
 import { withRole } from "@/lib/auth/with-role";
+import {
+  candidateNameFilter,
+  matchesCandidateQuery,
+  queryWords,
+} from "@/lib/officers/candidate-match";
 import { canSeatPosition, SPECIAL_ADVISOR_REFUSAL } from "@/lib/officers/positions";
 import {
+  OFFICER_CANDIDATE_GROUP_STATUSES,
   officerAppointSchema,
-  officerLookupSchema,
+  officerCandidateSearchSchema,
   officerSeparationSchema,
+  type MembershipStatus,
   type OfficerAppointInput,
-  type OfficerLookupInput,
+  type OfficerCandidateSearchInput,
   type OfficerSeparationInput,
 } from "@/lib/officers/schema";
 
@@ -59,37 +66,95 @@ export type OfficerCandidate = {
   member_id: string | null;
   given_name: string;
   family_name: string;
+  /** The current-term membership's region; null only if that region row is unreadable. */
+  region_name: string | null;
+  status: MembershipStatus;
 };
 
+export type OfficerCandidateSearchResult = {
+  candidates: OfficerCandidate[];
+  /** More people matched than are returned — the dialog asks for more letters. */
+  truncated: boolean;
+};
+
+/** How many candidates the dialog lists. */
+const CANDIDATE_RESULT_LIMIT = 20;
+
+/** How many rows the first-word filter may return before the every-word pass runs. */
+const CANDIDATE_FETCH_LIMIT = 200;
+
 /**
- * Resolve a member ID to the person it names, for the appoint dialog's "look up" step.
+ * Find people to appoint by name or member ID, narrowing as the caller types (Officer
+ * feedback 2026-09-11: appoint by name — nobody memorises a member ID).
  *
- * A read, not a write — still `withRole`-guarded, because this is a records-desk action
- * reachable from a client component, not a Server Component render: an unguarded-looking
- * action here would be indistinguishable from a forgotten guard (CONVENTIONS §0 rule 6).
- * `people`'s six-column GRANT (0015) is what actually decides which columns come back;
- * this reads only columns already in that set.
+ * A read, not a write — still `withRole`-guarded, because it is reachable from a client
+ * component, not a Server Component render: an unguarded-looking action here would be
+ * indistinguishable from a forgotten guard (CONVENTIONS §0 rule 6). It runs through the
+ * CALLER'S client, so `people_read` / `memberships_read` (0014) decide the rows and
+ * `people`'s column GRANT (0015) decides the columns — the four named here are inside it;
+ * naming any other `people` column raises 42501.
+ *
+ * `memberships!inner` plus the two embedded filters keeps only people with a CURRENT-term
+ * membership in the chosen group, so `terminated` and `renewal_pending` are never offered.
+ * The database filters on the first typed word; `matchesCandidateQuery` applies every word
+ * to what comes back (lib/officers/candidate-match.ts). If the fetch cap is hit,
+ * `truncated` is set even when fewer than 20 survive: rows past the cap were never seen.
  */
-export const lookupOfficerCandidate = withRole<OfficerLookupInput, OfficerCandidate>(
-  OFFICER_DESK_ROLES,
-  async (ctx, input) => {
-    const parsed = officerLookupSchema.safeParse(input);
-    if (!parsed.success) return validationFailure<OfficerCandidate>(parsed.error);
+export const searchOfficerCandidates = withRole<
+  OfficerCandidateSearchInput,
+  OfficerCandidateSearchResult
+>(OFFICER_DESK_ROLES, async (ctx, input) => {
+  const parsed = officerCandidateSearchSchema.safeParse(input);
+  if (!parsed.success) return validationFailure<OfficerCandidateSearchResult>(parsed.error);
+  const { q, group } = parsed.data;
 
-    const { data, error } = await ctx.supabase
-      .from("people")
-      .select("id, member_id, given_name, family_name")
-      .eq("member_id", parsed.data.member_id)
-      .maybeSingle();
+  const { data: termId, error: termError } = await ctx.supabase.rpc("current_term_id");
+  if (termError) return { ok: false, error: mapDbError(termError) };
+  if (!termId) {
+    return err<OfficerCandidateSearchResult>("conflict", "No term is currently open.");
+  }
 
-    if (error) return { ok: false, error: mapDbError(error) };
-    if (!data) {
-      return err<OfficerCandidate>("not_found", "No member with that ID was found.");
-    }
+  let query = ctx.supabase
+    .from("people")
+    .select(
+      "id, member_id, given_name, family_name, memberships!inner(status, term_id, regions(name))",
+    )
+    .eq("memberships.term_id", termId)
+    .in("memberships.status", OFFICER_CANDIDATE_GROUP_STATUSES[group]);
 
-    return ok(data);
-  },
-);
+  const [firstWord] = queryWords(q);
+  if (firstWord !== undefined) query = query.or(candidateNameFilter(firstWord));
+
+  const { data, error } = await query
+    .order("family_name")
+    .order("given_name")
+    .order("id")
+    .limit(CANDIDATE_FETCH_LIMIT);
+
+  if (error) return { ok: false, error: mapDbError(error) };
+
+  const rows = data ?? [];
+  const matched = rows.filter((row) => matchesCandidateQuery(row, q));
+
+  const candidates: OfficerCandidate[] = [];
+  for (const row of matched.slice(0, CANDIDATE_RESULT_LIMIT)) {
+    const membership = row.memberships[0];
+    if (!membership) continue; // `!inner` guarantees one; never offer a person without it
+    candidates.push({
+      id: row.id,
+      member_id: row.member_id,
+      given_name: row.given_name,
+      family_name: row.family_name,
+      region_name: membership.regions?.name ?? null,
+      status: membership.status,
+    });
+  }
+
+  return ok({
+    candidates,
+    truncated: matched.length > CANDIDATE_RESULT_LIMIT || rows.length === CANDIDATE_FETCH_LIMIT,
+  });
+});
 
 export type AppointOfficerResult = { assignment_id: string };
 

@@ -5,13 +5,15 @@
 //
 // A Server Component. It receives only strings and ReactNodes — never the session
 // object — so no PII can reach the client components it composes (SidebarNav,
-// MobileNav and ShellPageTitle read the pathname and nothing else).
+// MobileNav and ShellPageTitle read the pathname and nothing else; IdleLogout takes no
+// props and runs the one-hour idle warning on every screen that uses this shell).
 //
 // ⚠️ UX only. The three route-group layouts that render this still run the
 // `canAccess` gate first, and the data on every page is cut by RLS regardless of what
 // this shell shows (ARCHITECTURE.md §5).
 import type { ReactNode } from "react";
 
+import { IdleLogout } from "@/components/auth/idle-logout";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { BrandBackground } from "@/components/brand/brand-background";
 import { BrandLogo } from "@/components/brand/brand-logo";
@@ -73,6 +75,7 @@ export function AppShell({
           </div>
         </main>
       </div>
+      <IdleLogout />
     </div>
   );
 }

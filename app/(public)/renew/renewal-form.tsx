@@ -76,30 +76,30 @@ const RENEWAL_STEP_FIELDS: Record<FormStep, readonly (keyof RenewalSubmitInput)[
   1: ["member_id", ...APPLICATION_STEP_FIELDS[1]],
 };
 
-const KNOWN_FIELDS = new Set<string>([
-  "member_id",
-  "applicant_given_name",
-  "middle_name",
-  "applicant_family_name",
-  "suffix",
-  "sex",
-  "applicant_email",
-  "birthdate",
-  "contact_number",
-  "facebook_account",
-  "address_line",
-  "postal_code",
-  "scholarship_award",
-  "award_year",
-  "university_id",
-  "program_id",
-  "year_level",
-  "expected_grad_year",
-  "region_id",
-  "consent_privacy_notice",
-  "consent_privacy_notice_version",
-  "certify_accuracy",
-]);
+// Officer feedback 2026-09-11: messages that say what to do next.
+const HONEYPOT_FILLED_MESSAGE =
+  "Your browser filled in a hidden field (usually autofill). Turn off autofill for this page or try another browser, then submit again.";
+const SUBMITTED_TOO_FAST_MESSAGE =
+  "That was very fast. Wait a few seconds, then press Submit again.";
+/** A finalize refusal that names no document (a wrong or expired submit token). Deliberately generic. */
+const DOCUMENTS_NOT_ACCEPTED_MESSAGE =
+  "One of the files could not be accepted. Choose your documents again, then submit.";
+/** On the document the server did NOT name: both stored files were deleted. */
+const CHOOSE_AGAIN_TOO_MESSAGE =
+  "Choose this document again too. Both documents are uploaded together.";
+
+/**
+ * Every key a step renders a field error for, derived from `RENEWAL_STEP_FIELDS` so the two
+ * cannot drift (Officer feedback 2026-09-11: a hand-kept list was missing eight keys, and a
+ * server error on them highlighted nothing). The privacy notice version is a hidden
+ * constant with no error slot, so a message for it goes to the root alert instead.
+ */
+const FIELDS_WITHOUT_ERROR_SLOT = new Set<string>(["consent_privacy_notice_version"]);
+const KNOWN_FIELDS = new Set<string>(
+  Object.values(RENEWAL_STEP_FIELDS)
+    .flat()
+    .filter((key) => !FIELDS_WITHOUT_ERROR_SLOT.has(key)),
+);
 
 function isKnownField(key: string): key is keyof RenewalSubmitInput {
   return KNOWN_FIELDS.has(key);
@@ -275,6 +275,9 @@ export function RenewalForm({
       return;
     }
     let mappedAny = false;
+    // Officer feedback 2026-09-11: a message for a key with no error slot used to be
+    // dropped, leaving a generic line and nothing highlighted. It goes to the root alert.
+    const unshown = new Set<string>();
     for (const [key, messages] of Object.entries(error.fields)) {
       const message = messages[0];
       if (!message) continue;
@@ -291,12 +294,17 @@ export function RenewalForm({
       if (isKnownField(key)) {
         form.setError(key, { message });
         mappedAny = true;
+        continue;
       }
+      unshown.add(message);
     }
+    const unshownText = unshown.size > 0 ? [...unshown].join("\n") : null;
     if (!mappedAny) {
-      setRootError(error.message);
+      // Nothing to highlight: show what the server said, not only the generic line.
+      setRootError(unshownText ?? error.message);
       return;
     }
+    setRootError(unshownText);
     const target = lowestStepForFields(RENEWAL_STEP_FIELDS, Object.keys(error.fields));
     if (target !== undefined && target !== step) showStep(target);
   }
@@ -377,14 +385,24 @@ export function RenewalForm({
         return;
       }
       if (finalizeResult.error.code === "validation") {
+        // Both stored files were deleted, so both are chosen again. When the server names
+        // the document that failed and why (Officer feedback 2026-09-11), that message goes
+        // on that document. A wrong or expired token names none and stays generic.
+        const registrationMessage = finalizeResult.error.fields?.["proof_file"]?.[0] ?? null;
+        const noaMessage = finalizeResult.error.fields?.["noa_file"]?.[0] ?? null;
+        const named = registrationMessage !== null || noaMessage !== null;
         filesRef.current = { registration: null, noa: null };
         setDocs({
           registration: {
             ...IDLE_DOC,
             serverError:
-              "One of the files could not be accepted. Choose your documents again, then submit.",
+              registrationMessage ??
+              (named ? CHOOSE_AGAIN_TOO_MESSAGE : DOCUMENTS_NOT_ACCEPTED_MESSAGE),
           },
-          noa: { ...IDLE_DOC },
+          noa: {
+            ...IDLE_DOC,
+            serverError: noaMessage ?? (named ? CHOOSE_AGAIN_TOO_MESSAGE : null),
+          },
         });
         pendingRef.current = null;
       } else {
@@ -409,10 +427,14 @@ export function RenewalForm({
   async function onValid(values: RenewalSubmitInput) {
     setRootError(null);
 
-    const honeypotFilled = Boolean(honeypotRef.current?.value);
-    const submittedTooFast = Date.now() - mountedAtRef.current < 3000;
-    if (honeypotFilled || submittedTooFast) {
-      setRootError("Something went wrong. Please try again.");
+    // Officer feedback 2026-09-11: two causes, two messages. The honeypot goes first
+    // because waiting a few seconds does not clear it.
+    if (honeypotRef.current?.value) {
+      setRootError(HONEYPOT_FILLED_MESSAGE);
+      return;
+    }
+    if (Date.now() - mountedAtRef.current < 3000) {
+      setRootError(SUBMITTED_TOO_FAST_MESSAGE);
       return;
     }
 
@@ -653,7 +675,7 @@ export function RenewalForm({
               {rootError ? (
                 <p
                   role="alert"
-                  className="text-destructive text-sm"
+                  className="text-destructive text-sm whitespace-pre-line"
                   data-testid="renewal-root-error"
                 >
                   {rootError}

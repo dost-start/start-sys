@@ -301,6 +301,8 @@ export function PersonalSection({ regions }: { regions: PsgcRegionOption[] }) {
           />
           <span>My current address is the same as my home address.</span>
         </label>
+        {/* Officer feedback 2026-09-11: a server error on this key had nowhere to render. */}
+        <FieldError message={errors.current_address_same_as_home?.message} />
 
         {/*
           Hidden rather than unmounted when the box is ticked: unmounting would unregister

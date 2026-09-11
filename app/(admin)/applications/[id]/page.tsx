@@ -9,9 +9,9 @@
 // A null result is rendered as `notFound()`, never as a distinct "forbidden" message —
 // CONVENTIONS.md §4.3: an RLS-shaped denial must be indistinguishable from "this row
 // does not exist", because saying "forbidden" would itself disclose that a named
-// applicant exists. This also covers the CBL Art. VIII §7.1 acknowledgement gate: a
-// reviewer with no current-term acknowledgement sees the same 404 as a bad id, which is
-// the documented (if terse) failure mode in ARCHITECTURE.md §9.
+// applicant exists. The ONE exception is the CBL Art. VIII §7.1 acknowledgement gate,
+// which renders an explanatory panel like the member page (Officer feedback 2026-09-11):
+// it is about the reviewer, and the RPC raises it before looking the row up.
 //
 // Brand edition (2026-09-08): the `application_detail` board of the design canvas —
 // back link, the applicant's name as the visible page title with the status beside it,
@@ -27,7 +27,7 @@ import { RejectApplicationDialog } from "@/components/applications/reject-applic
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card } from "@/components/ui/card";
 import type { Database } from "@/database.types";
-import { getApplicationDetail } from "@/lib/applications/queries";
+import { getApplicationDetail, isReviewAcknowledgementMissing } from "@/lib/applications/queries";
 import { getSessionContext } from "@/lib/auth/queries";
 import { homeForRole } from "@/lib/auth/route-access";
 
@@ -54,7 +54,21 @@ export default async function ApplicationDetailPage({
   const { id } = await params;
 
   const result = await getApplicationDetail(ctx, id);
-  if (!result.ok) notFound();
+  if (!result.ok) {
+    if (isReviewAcknowledgementMissing(result.error)) {
+      return (
+        <div className="space-y-4">
+          <a href="/applications" className="text-brand-label text-xs hover:underline">
+            ← Back to applications
+          </a>
+          <Alert variant="warning" role="alert">
+            {result.error.message}
+          </Alert>
+        </div>
+      );
+    }
+    notFound();
+  }
 
   const detail = result.data;
   const status = detail.status as ApplicationStatus;

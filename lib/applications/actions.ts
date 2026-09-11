@@ -48,11 +48,16 @@ import { createHash, randomBytes } from "node:crypto";
 
 import { type ActionResult, err, mapDbError, ok } from "@/lib/action-result";
 import {
+  declaredDocumentRefusedMessage,
+  DOCUMENT_REFUSED_GENERIC_MESSAGE,
+  documentRefusalFromReason,
   finalizeApplicationSchema,
   startApplicationSchema,
   buildApplicationPayload,
   submissionStandardsFieldErrors,
   SUBMISSION_STANDARDS_GENERIC_MESSAGE,
+  uploadedDocumentRefusedMessage,
+  type DocumentRefusal,
   type StartApplicationInput,
 } from "@/lib/applications/schema";
 import { withPublic } from "@/lib/auth/with-public";
@@ -60,9 +65,10 @@ import { getDocumentStore } from "@/lib/documents";
 import { browserOriginFromRequest } from "@/lib/documents/request-origin";
 import {
   DocumentRejectedError,
-  DocumentUnavailableError,
   isAllowedMime,
   MAX_PROOF_BYTES,
+  type DocumentStore,
+  type UploadSession,
   type VerifiedUpload,
 } from "@/lib/documents/types";
 
@@ -99,6 +105,56 @@ export type FinalizeApplicationResult = {
 /** sha256 hex over the UTF-8 bytes of the token — byte-identical to 0019's SQL. */
 function hashSubmitToken(token: string): string {
   return createHash("sha256").update(token, "utf8").digest("hex");
+}
+
+// ── Per-document checks (Officer feedback 2026-09-11) ────────────────────────
+// One try per document, so a refusal names the document it belongs to. The refusal
+// describes the applicant's own file; it says nothing about any application.
+
+/** One document's upload session, or why it was not minted. */
+type SessionMint =
+  | { kind: "minted"; session: UploadSession }
+  | { kind: "refused"; refusal: DocumentRefusal }
+  | { kind: "unavailable" };
+
+/**
+ * Mint one document's upload session. The store's own message never reaches the
+ * applicant: a provider error body can name a service account, a folder and a Drive.
+ */
+async function mintUploadSession(mint: () => Promise<UploadSession>): Promise<SessionMint> {
+  try {
+    return { kind: "minted", session: await mint() };
+  } catch (caught) {
+    if (caught instanceof DocumentRejectedError) {
+      return { kind: "refused", refusal: documentRefusalFromReason(caught.reason) };
+    }
+    return { kind: "unavailable" };
+  }
+}
+
+/** One stored document, verified, or why it failed verification. */
+type DocumentCheck =
+  | { kind: "verified"; upload: VerifiedUpload }
+  | { kind: "refused"; refusal: DocumentRefusal }
+  | { kind: "unavailable" };
+
+/**
+ * Re-verify one stored document from provider metadata and magic bytes. A
+ * `DocumentRejectedError` means the stored bytes are not an acceptable PDF; anything else
+ * is the store being unreachable.
+ */
+async function verifyStoredDocument(store: DocumentStore, ref: string): Promise<DocumentCheck> {
+  try {
+    const upload = await store.verifyUpload(ref);
+    if (!isAllowedMime(upload.mimeType)) return { kind: "refused", refusal: "not_pdf" };
+    if (upload.sizeBytes > MAX_PROOF_BYTES) return { kind: "refused", refusal: "too_large" };
+    return { kind: "verified", upload };
+  } catch (caught) {
+    if (caught instanceof DocumentRejectedError) {
+      return { kind: "refused", refusal: documentRefusalFromReason(caught.reason) };
+    }
+    return { kind: "unavailable" };
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -226,41 +282,57 @@ export const startApplication = withPublic<StartApplicationInput, StartApplicati
     // nightly `purge_abandoned_drafts` sweep (0020) redacts it after 30 days along with
     // any object it produced. The alternative — session first, row second — would
     // create objects with no row pointing at them, which nothing sweeps.
+    let browserOrigin: string | null;
+    let store: DocumentStore;
     try {
-      const browserOrigin = await browserOriginFromRequest();
-      const store = getDocumentStore();
-      const session = await store.createUploadSession({
+      browserOrigin = await browserOriginFromRequest();
+      store = getDocumentStore();
+    } catch {
+      return err<StartApplicationResult>("upstream");
+    }
+
+    const registration = await mintUploadSession(() =>
+      store.createUploadSession({
         applicationId,
         fileName: input.proof_file_name,
         mimeType: input.proof_mime_type,
         sizeBytes: input.proof_size_bytes,
         documentKind: "registration",
         browserOrigin,
-      });
-      const noaSession = await store.createUploadSession({
+      }),
+    );
+    if (registration.kind === "unavailable") return err<StartApplicationResult>("upstream");
+    const noa = await mintUploadSession(() =>
+      store.createUploadSession({
         applicationId,
         fileName: input.noa_file_name,
         mimeType: input.noa_mime_type,
         sizeBytes: input.noa_size_bytes,
         documentKind: "noa",
         browserOrigin,
-      });
-      return ok({
-        applicationId,
-        uploadToken,
-        uploadUrl: session.uploadUrl,
-        storageRef: session.storageRef,
-        noaUploadUrl: noaSession.uploadUrl,
-        noaStorageRef: noaSession.storageRef,
-      });
-    } catch (caught) {
-      // The store's own message never reaches the applicant: a provider error body can
-      // name a service account, a folder and a Drive.
-      if (caught instanceof DocumentRejectedError) {
-        return err<StartApplicationResult>("validation");
+      }),
+    );
+
+    if (registration.kind === "refused" || noa.kind === "refused") {
+      const fields: Record<string, string[]> = {};
+      if (registration.kind === "refused") {
+        fields["proof_file"] = [declaredDocumentRefusedMessage("proof_file", registration.refusal)];
       }
-      return err<StartApplicationResult>("upstream");
+      if (noa.kind === "refused") {
+        fields["noa_file"] = [declaredDocumentRefusedMessage("noa_file", noa.refusal)];
+      }
+      return err<StartApplicationResult>("validation", DOCUMENT_REFUSED_GENERIC_MESSAGE, fields);
     }
+    if (noa.kind === "unavailable") return err<StartApplicationResult>("upstream");
+
+    return ok({
+      applicationId,
+      uploadToken,
+      uploadUrl: registration.session.uploadUrl,
+      storageRef: registration.session.storageRef,
+      noaUploadUrl: noa.session.uploadUrl,
+      noaStorageRef: noa.session.storageRef,
+    });
   },
 );
 
@@ -289,35 +361,35 @@ export const finalizeApplication = withPublic(
 
     // ── 1. Never trust the browser about what it uploaded ───────────────────
     // Both documents are re-verified from PROVIDER metadata and magic bytes — never the
-    // browser's claim. On any rejection both objects are deleted: the applicant re-picks
-    // both, and the response does not say which one failed (nothing to probe).
-    async function verifyOrNull(ref: string): Promise<VerifiedUpload | "rejected" | "unavailable"> {
-      try {
-        const v = await store.verifyUpload(ref);
-        if (!isAllowedMime(v.mimeType) || v.sizeBytes > MAX_PROOF_BYTES) return "rejected";
-        return v;
-      } catch (caught) {
-        if (caught instanceof DocumentRejectedError) return "rejected";
-        if (caught instanceof DocumentUnavailableError) return "unavailable";
-        return "unavailable";
-      }
-    }
-
-    const [verified, noaVerified] = await Promise.all([
-      verifyOrNull(input.storage_ref),
-      verifyOrNull(input.noa_storage_ref),
+    // browser's claim. On any refusal both objects are deleted and the applicant picks
+    // both again. Since Officer feedback 2026-09-11 the refusal names WHICH document failed
+    // and why, under `proof_file` / `noa_file`.
+    const [registrationCheck, noaCheck] = await Promise.all([
+      verifyStoredDocument(store, input.storage_ref),
+      verifyStoredDocument(store, input.noa_storage_ref),
     ]);
 
-    if (verified === "rejected" || noaVerified === "rejected") {
+    if (registrationCheck.kind === "refused" || noaCheck.kind === "refused") {
       await Promise.all([
         store.deleteDocument(input.storage_ref).catch(() => undefined),
         store.deleteDocument(input.noa_storage_ref).catch(() => undefined),
       ]);
-      return err<FinalizeApplicationResult>("validation");
+      const fields: Record<string, string[]> = {};
+      if (registrationCheck.kind === "refused") {
+        fields["proof_file"] = [
+          uploadedDocumentRefusedMessage("proof_file", registrationCheck.refusal),
+        ];
+      }
+      if (noaCheck.kind === "refused") {
+        fields["noa_file"] = [uploadedDocumentRefusedMessage("noa_file", noaCheck.refusal)];
+      }
+      return err<FinalizeApplicationResult>("validation", DOCUMENT_REFUSED_GENERIC_MESSAGE, fields);
     }
-    if (verified === "unavailable" || noaVerified === "unavailable") {
+    if (registrationCheck.kind === "unavailable" || noaCheck.kind === "unavailable") {
       return err<FinalizeApplicationResult>("upstream");
     }
+    const verified = registrationCheck.upload;
+    const noaVerified = noaCheck.upload;
 
     const { error } = await ctx.supabase.rpc("finalize_application", {
       p_app_id: input.application_id,

@@ -159,7 +159,21 @@ export default async function OfficersPage() {
                             <div className="flex flex-wrap gap-2">
                               {canSeatPosition(ctx.role, position.code) ? (
                                 <>
+                                  {/*
+                                    KEYED ON THE STATUS, not only the assignment id. After a
+                                    separation is recorded, `revalidatePath` re-renders this row
+                                    with the holder's new standing. Without the status in the key,
+                                    React keeps the mounted dialog, whose react-hook-form
+                                    `defaultValues` captured `from_status` AT MOUNT — so a second
+                                    change in the same tab would offer targets from the new status
+                                    while submitting the previous edge. Changing the key remounts
+                                    it and re-captures the prop. This is the UX half only: the
+                                    Server Action filters the UPDATE on `from_status` regardless,
+                                    so a form that is stale anyway gets `conflict`, never a wrong
+                                    write (lib/officers/actions.ts).
+                                  */}
                                   <RecordOfficerSeparationDialog
+                                    key={`${holder.assignment_id}:${holder.status}`}
                                     assignmentId={holder.assignment_id}
                                     holderName={`${holder.person.given_name} ${holder.person.family_name}`}
                                     fromStatus={holder.status}

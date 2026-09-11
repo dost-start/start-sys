@@ -127,6 +127,13 @@ export function RecordOfficerSeparationDialog({
 
         <form method="post" onSubmit={onSubmit} className="space-y-5">
           <input type="hidden" {...register("assignment_id")} />
+          {/*
+            `from_status` is a PRECONDITION TOKEN, not a trusted fact. It is a hidden field,
+            so it is editable in devtools and goes stale the moment anyone else writes the
+            row — `recordOfficerSeparation` filters the UPDATE on it, and a forged or stale
+            value matches 0 rows and comes back as `conflict`. Its job here is only to let
+            the resolver reject an illegal CBL Art. VI edge before the request is sent.
+          */}
           <input type="hidden" {...register("from_status")} />
 
           <Field>

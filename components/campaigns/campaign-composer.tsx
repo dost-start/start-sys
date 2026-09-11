@@ -285,7 +285,7 @@ export function CampaignComposer({ options, origin }: CampaignComposerProps) {
             ))}
           </NativeSelect>
           <FieldHint>
-            Choosing a template replaces the subject and message with its starting text. The three
+            Choosing a template replaces the subject and message with its starting text. The two
             form templates carry the link to the public form for this site.
           </FieldHint>
         </Field>

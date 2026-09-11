@@ -24,7 +24,7 @@ import { canSendCampaigns } from "@/lib/campaigns/roles";
 export const dynamic = "force-dynamic";
 
 /**
- * The origin the three form templates link to, from the request itself — so a preview
+ * The origin the two form templates link to, from the request itself — so a preview
  * deployment links to its own `/apply`, and production to production's. Never from a
  * client-supplied value.
  */

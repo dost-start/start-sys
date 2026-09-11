@@ -23,6 +23,7 @@ import { closeApplicationWindow, openApplicationWindow } from "@/lib/application
 import {
   MEMBERSHIP_APPLICATION_FORM_KIND,
   type WindowFormKind,
+  type WindowState,
 } from "@/lib/applications/window-schema";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
@@ -31,8 +32,14 @@ import { Input } from "@/components/ui/input";
 export type ApplicationWindowFormProps = {
   /** Which public form's period this instance controls. Defaults to the application form. */
   formKind?: WindowFormKind;
-  /** Whether a period is open right now — decides which control is primary. */
-  isOpen: boolean;
+  /**
+   * The period's state right now, or null when this term has no window row at all.
+   *
+   * Three states, not a boolean: "scheduled" (opens_at still in the future) has to be
+   * distinguishable from "open", because a scheduled period can be cancelled or
+   * re-scheduled freely while an open one must be closed deliberately first.
+   */
+  state: WindowState | null;
   /** False for a reviewer who may read the schedule but not change it (see the page). */
   canWrite: boolean;
   /** Prefill for the two inputs, already converted to `datetime-local` shape. */
@@ -57,7 +64,7 @@ function toAbsoluteInstant(localValue: string): string | null {
 
 export function ApplicationWindowForm({
   formKind = MEMBERSHIP_APPLICATION_FORM_KIND,
-  isOpen,
+  state,
   canWrite,
   defaultOpensAtLocal,
   defaultClosesAtLocal,
@@ -67,6 +74,11 @@ export function ApplicationWindowForm({
   const [message, setMessage] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [pending, startTransition] = useTransition();
+
+  // Derived once: three states, and every control below keys off one of the two that
+  // permit an action. A closed or absent period offers only "Open the period".
+  const isOpen = state === "open";
+  const isScheduled = state === "scheduled";
 
   if (!canWrite) {
     return (
@@ -121,7 +133,9 @@ export function ApplicationWindowForm({
 
       setMessage(
         result.ok
-          ? "The application period is closed. The next submission is refused by the database."
+          ? isScheduled
+            ? "The scheduled period is cancelled. It will not open, and its dates are free to re-use."
+            : "The application period is closed. The next submission is refused by the database."
           : result.error.message,
       );
     });
@@ -171,16 +185,23 @@ export function ApplicationWindowForm({
           disabled={pending}
           data-testid={`window-open-${formKind}`}
         >
-          {isOpen ? "Update the open period" : "Open the period"}
+          {isOpen
+            ? "Update the open period"
+            : isScheduled
+              ? "Reschedule the period"
+              : "Open the period"}
         </Button>
+        {/* ⚠ ENABLED FOR A SCHEDULED PERIOD TOO. A window whose opens_at was still in
+            the future used to leave this disabled, which — together with Open refusing
+            a scheduled row — made a mistyped date uncancellable until it passed. */}
         <Button
           type="button"
           variant="outline"
           onClick={submitClose}
-          disabled={pending || !isOpen}
+          disabled={pending || (!isOpen && !isScheduled)}
           data-testid={`window-close-${formKind}`}
         >
-          Close the period now
+          {isScheduled ? "Cancel the scheduled period" : "Close the period now"}
         </Button>
       </div>
 

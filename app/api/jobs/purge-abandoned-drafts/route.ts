@@ -159,33 +159,55 @@ export async function POST(request: Request): Promise<NextResponse> {
   // four reads below fails, `known` is left `null` for that source and the whole pass is
   // skipped — a partial known-set is more dangerous than skipping a night, because it
   // would delete real, referenced files.
-  const [appRefs, appNoaRefs, renewalRefs, renewalNoaRefs] = await Promise.all([
-    admin.from("applications").select("proof_drive_file_id").not("proof_drive_file_id", "is", null),
-    admin.from("applications").select("noa_drive_file_id").not("noa_drive_file_id", "is", null),
-    admin
-      .from("renewal_submissions")
-      .select("proof_drive_file_id")
-      .not("proof_drive_file_id", "is", null),
-    admin
-      .from("renewal_submissions")
-      .select("noa_drive_file_id")
-      .not("noa_drive_file_id", "is", null),
-  ]);
+  // PAGINATE. PostgREST caps every response at `max_rows` (config.toml = 1000) with NO
+  // error and NO signal — a full page just means "there may be more". The previous version
+  // read each column once with no `.range()`, so once any of these tables passed 1000 rows
+  // (well within the system's own 5-term / ~600-member scale) `knownRefs` silently held
+  // only the first 1000, and every Drive file behind a row past #1000 — real, approved
+  // members' Certificates of Registration and Notices of Award — was classified an orphan
+  // and permanently deleted (QA 2026-09-11, DOCS-01). Reading in full pages closes that.
+  // A PAGE of exactly this size means "keep going"; a short page is the end.
+  const PAGE = 1000;
+  const collectRefs = async (
+    table: "applications" | "renewal_submissions",
+    col: "proof_drive_file_id" | "noa_drive_file_id",
+  ): Promise<string[]> => {
+    const refs: string[] = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await admin
+        .from(table)
+        .select(col)
+        .not(col, "is", null)
+        .range(from, from + PAGE - 1);
+      if (error) throw error;
+      const page = (data ?? []) as Array<Record<string, string | null>>;
+      for (const row of page) {
+        const ref = row[col];
+        if (ref != null) refs.push(ref);
+      }
+      if (page.length < PAGE) break;
+    }
+    return refs;
+  };
 
-  const knownSources = [
-    { rows: appRefs.data, error: appRefs.error, col: "proof_drive_file_id" as const },
-    { rows: appNoaRefs.data, error: appNoaRefs.error, col: "noa_drive_file_id" as const },
-    { rows: renewalRefs.data, error: renewalRefs.error, col: "proof_drive_file_id" as const },
-    { rows: renewalNoaRefs.data, error: renewalNoaRefs.error, col: "noa_drive_file_id" as const },
-  ];
+  // A PARTIAL known-set must NEVER drive deletes — that is the whole hazard. If any read
+  // fails, leave knownRefs null and skip the orphan pass entirely tonight; the redaction
+  // above (the part with a legal deadline) already happened, and reconciliation retries
+  // tomorrow.
+  let knownRefs: string[] | null = null;
+  try {
+    const groups = await Promise.all([
+      collectRefs("applications", "proof_drive_file_id"),
+      collectRefs("applications", "noa_drive_file_id"),
+      collectRefs("renewal_submissions", "proof_drive_file_id"),
+      collectRefs("renewal_submissions", "noa_drive_file_id"),
+    ]);
+    knownRefs = groups.flat();
+  } catch (error) {
+    void reportError(error, { tags: { route: "api/jobs/purge-abandoned-drafts" } });
+  }
 
-  if (knownSources.every((s) => !s.error && s.rows)) {
-    const knownRefs = knownSources.flatMap((s) =>
-      (s.rows as Array<Record<string, string | null>>)
-        .map((row) => row[s.col])
-        .filter((ref): ref is string => ref !== null),
-    );
-
+  if (knownRefs !== null) {
     try {
       for (const ref of await store.listOrphans(knownRefs)) {
         try {

@@ -10,9 +10,10 @@
 // What it creates, idempotently (re-runs update passwords, never duplicate rows):
 //   · one account per tier: demo.ceo (exec_admin), demo.cto (tech_admin),
 //     demo.ccdo (crrd_admin), demo.dccdo (crrd_admin, a deputy), demo.officer, demo.rep (NCR),
-//     demo.member — each with the FIXED password `<name>123` (demo.ceo -> ceo123),
-//     written to demo-credentials.local.md (gitignored). Set DEMO_RANDOM_PASSWORDS=1
-//     for a fresh random password per account instead (the pre-2026-09-06 behaviour).
+//     demo.member — each with a fresh RANDOM password per run, written to
+//     demo-credentials.local.md (gitignored). The old fixed default, derived from the
+//     account name, was removed 2026-09-11 (AUTH-16): a public repo must not commit a
+//     recipe that produces a working password.
 //   · people + current-term memberships for the accounts that represent members,
 //     confidentiality acknowledgements for the three sensitive-reader tiers
 //     (CBL Art. VIII §7.1 — without these, every sensitive read correctly fails).
@@ -58,14 +59,13 @@ if (/placeholder/.test(url)) {
 
 const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
 
-// Fixed, trivially guessable passwords BY DESIGN (Ethan, 2026-09-06): this is a scratch
-// project holding fake data and nobody but the team reaches it. `demo.ceo@…` -> `ceo123`.
-// Anything that ever holds real scholar data must not be seeded by this script at all
-// (see the header), so the weak default never meets real PII.
-const password = (email) =>
-  process.env.DEMO_RANDOM_PASSWORDS === "1"
-    ? `demo-${randomBytes(9).toString("base64url")}`
-    : `${email.replace(/^demo\./, "").replace(/@.*$/, "")}123`;
+// A fresh RANDOM password per account, every run, written to demo-credentials.local.md
+// (gitignored). The old default, derived from the account name, was removed 2026-09-11 (QA
+// AUTH-16 / INFRA-01): this repo is PUBLIC, and committing a rule that derives a working
+// password from an account name hands an attacker every demo login — which, against the
+// production project these accounts turned out to live on, was a live RA 10173 exposure.
+// Read the current password from the generated file; do not put a predictable one back.
+const password = () => `demo-${randomBytes(18).toString("base64url")}`;
 
 /** Stable ids so re-runs are updates, not duplicates. */
 const PERSON = (n) => `00000000-0000-4000-de00-${String(n).padStart(12, "0")}`;
@@ -208,7 +208,7 @@ async function main() {
 
   // ── the six demo accounts ──────────────────────────────────────────────────
   for (const a of ACCOUNTS) {
-    const pass = password(a.email);
+    const pass = password();
     const userId = await upsertUser(a.email, pass);
     const personId = a.person ? PERSON(a.person) : null;
 
@@ -510,7 +510,8 @@ async function main() {
         `| ${c.email} | ${c.role} | \`${c.pass}\` | ${c.role === "member" ? "none (ADR 0004)" : "enrol on first login — scan the QR with any authenticator app"} |`,
     ),
     "",
-    "Passwords are fixed (`<name>123`). Re-run with DEMO_RANDOM_PASSWORDS=1 for random ones.",
+    "Passwords are random and change on every run — this file is the only copy. Keep it out",
+    "of chat and out of git (it is gitignored); delete it once the passwords are in a vault.",
   ].join("\n");
 
   writeFileSync("demo-credentials.local.md", lines + "\n");

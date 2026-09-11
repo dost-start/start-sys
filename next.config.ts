@@ -154,6 +154,23 @@ const SECURITY_HEADERS = [
 const NOINDEX_EXCEPT_PUBLIC = "/((?!apply$|privacy$).*)";
 
 const nextConfig: NextConfig = {
+  // Never trace these into a server function bundle. `lib/documents/fake-store.ts` does a
+  // `readdir(storeDir())` whose computed path makes Turbopack pull the whole repo into the
+  // trace of every function that imports the document boundary (/apply, /renew, the proof
+  // proxies, the purge job). That swept the gitignored credential files and the QA reports
+  // into function artifacts (QA 2026-09-11, CRITIC-01 / GATES-02). `.vercelignore` stops
+  // them being uploaded at all; this is the belt to that braces, and also covers a local
+  // build run from a working tree that still holds the files.
+  outputFileTracingExcludes: {
+    "*": [
+      "**/demo-credentials*.local.md",
+      "**/*.local.md",
+      ".gstack/**",
+      "e2e-artifacts/**",
+      "docs/design/**",
+    ],
+  },
+
   // Next advertises itself in a response header by default. It names the framework and
   // therefore the CVE list worth trying. Nothing depends on it.
   poweredByHeader: false,

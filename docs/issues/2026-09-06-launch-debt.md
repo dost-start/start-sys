@@ -236,7 +236,12 @@ has actually arrived on the CTO's phone and in Discord; and the confirmation is 
 
 ---
 
-## 9. ~~`DEV_DISABLE_MFA` is set on the demo deployment~~ ✅ **RESOLVED 2026-09-10**
+## 9. ~~`DEV_DISABLE_MFA` is set on the demo deployment~~ ✅ **RESOLVED 2026-09-10** — ⚠️ **REOPENED 2026-09-11, see item 13**
+
+> **Superseded.** This was closed on 2026-09-10 and deliberately reversed on 2026-09-11: the
+> project head turned 2FA off org-wide, in both layers (`DEV_DISABLE_MFA=1` plus migration
+> `0065`, which forces `has_aal2()` true). **Item 13 is the current state**; everything below
+> describes the position on 2026-09-10 and is kept as the record of what "resolved" meant.
 
 > **Closed.** The flag is removed from the Vercel Production *and* Preview scopes, and all
 > six accounts hold a verified TOTP factor (`scripts/enrol-demo-mfa.mjs`). Signing in now
@@ -350,6 +355,74 @@ What it needs: a `deploy.yml` gated on `ci.yml` going green, with `SUPABASE_ACCE
 the project ref as repository secrets. Related debt: the database password currently lives
 only in the CTO's macOS Keychain (item 1), so today nobody else could run the manual push
 either.
+
+---
+
+## 13. Two-factor authentication is switched OFF org-wide ⚠️ **highest**
+
+**Decision:** project head (Ethan), 2026-09-11 — *turn 2FA off for now, re-implement soon.*
+**Owner:** CTO. **Supersedes item 9, which closed this same gap on 2026-09-10.**
+
+Two changes, one in each layer, so the app actually works rather than failing silently:
+
+- `supabase/migrations/0065_disable_second_factor_temporarily.sql` makes `public.has_aal2()`
+  `select true`. Every predicate that gates on it — `is_user_roles_writer()` and the write
+  policies on `user_roles`, `terms`, `application_windows`, `rr_region_grants`,
+  `privacy_notice_versions` — therefore stops requiring a second factor.
+- `DEV_DISABLE_MFA=1` on Vercel turns off the middleware gate (`mfaGateEnabled()`).
+
+Middleware alone would not have been enough: `has_aal2()` guards WRITES at the data layer,
+so an aal1 session gets `HTTP 200, 0 rows affected` on role assignment, opening the
+application window and rollover — the exact silent breakage item 9 documented.
+
+### ⚠️ What this costs, stated plainly
+
+The 2026-09-11 QA found that **MFA was the only thing standing between a password and real
+scholar PII**, because the database has no aal2 check on any PII-returning RPC
+(`get_member_record`, `get_application_detail`, `list_region_member_contacts`,
+`resolve_recipients`) and none on most privileged writes. With 2FA off, **a password alone
+reads and writes real member data through PostgREST.**
+
+That is only survivable if the password half is closed, and **as of 2026-09-11 it is not, by
+decision**: the six demo accounts' passwords were committed to this **public** repo before
+2026-09-11 and remain valid on the production project, and the project head has decided the
+demo accounts **stay as they are** rather than being rotated or deleted.
+
+**So this is an accepted risk, recorded rather than mitigated.** With 2FA off in both layers
+and those credentials recoverable from this repository's history, an account holding
+`exec_admin` or `crrd_admin` on the production project can be reached by anyone who reads
+the repo, and those roles read and write real scholar PII — birthdates, addresses, contact
+numbers — under RA 10173. Nothing in the code prevents it; the only remaining controls are
+that the accounts are not advertised and that the audit log attributes every read.
+
+Two ways to close it whenever the decision changes, in order of cost:
+
+1. **Rotate or delete the six accounts** on the production project. Cheapest, no code.
+2. **Re-enable 2FA** (the revert below), which restores the second factor as the barrier.
+
+Until one of them happens, treat any `VIEW_RECORD` / `VIEW` / `VIEW_CONTACTS` audit row from
+a demo account as worth checking, and do not widen what those roles can reach.
+
+### What was parked, and what moved
+
+| Parked / changed | Why |
+|---|---|
+| `supabase/_parked/0064_second_factor_backstop.sql` | The aal2 backstop (restrictive write policies + definer wrappers on the PII and decision RPCs). Written 2026-09-11, deliberately **not** applied. |
+| `supabase/_parked/031_aal2_rls.sql` | The pgTAP suite proving aal1 writes are refused. Its subject is off, so it is parked verbatim rather than inverted. |
+| `022_identity_rls.sql` | The `tech_admin at aal1 cannot write user_roles` assertion removed; `plan()` 32 → 31. |
+| `023_terms_rls.sql` | Two aal1 expectations flipped from refusal to success, each labelled ⚠ TEMPORARY. |
+
+### Re-enable (the whole revert)
+
+1. New migration restoring the 0014 body verbatim:
+   `select (select auth.jwt() ->> 'aal') = 'aal2';`
+2. Re-home `_parked/0064_second_factor_backstop.sql`, renumbered to follow it.
+3. Re-home `_parked/031_aal2_rls.sql`; revert the 022/023 edits above.
+4. Remove `DEV_DISABLE_MFA` from every Vercel scope; confirm every account holds a verified
+   TOTP factor **before** removing it, so nobody is locked out (the 2026-09-10 order).
+
+**Done when:** either 2FA is back on, or the demo accounts are gone and no account can reach
+PII with a password alone.
 
 ---
 

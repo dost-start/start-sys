@@ -201,9 +201,10 @@ with u as (
   update public.terms set label = label
    where id = '00000000-0000-4000-d000-000000000001' returning 1
 )
-select is(count(*)::int, 0,
-  'tech_admin at aal1 affects ZERO rows — the database backstop for PRD US-A3 holds with '
-  'the MFA middleware removed entirely'
+select is(count(*)::int, 1,
+  '⚠ TEMPORARY (0065, 2026-09-11): tech_admin at aal1 now affects ONE row. 2FA is disabled '
+  'org-wide by project-head decision — has_aal2() is forced true — so the database backstop '
+  'for PRD US-A3 is OFF until the re-enable migration (launch debt item 13)'
 ) from u;
 select pg_temp.logout();
 
@@ -260,14 +261,13 @@ select lives_ok(
 select pg_temp.logout();
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000003', 'aal1');   -- crrd_admin, aal1
-select throws_ok(
+select lives_ok(
   $$ insert into public.application_windows (term_id, form_kind, opens_at, closes_at)
      select public.current_term_id(), 'freeform',
             now() - interval '1 hour', now() + interval '1 hour' $$,
-  '42501'::char(5),
-  null::text,
-  'crrd_admin at aal1 cannot open a window — the aal2 predicate applies to BOTH writers, '
-  'not only to the tech_admin branch (PRD US-A3)'
+  '⚠ TEMPORARY (0065, 2026-09-11): crrd_admin at aal1 CAN now open a window. 2FA is off '
+  'org-wide by project-head decision (has_aal2() forced true), so the aal2 conjunct on both '
+  'writers is inert until the re-enable migration (launch debt item 13)'
 );
 select pg_temp.logout();
 

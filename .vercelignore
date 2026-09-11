@@ -1,0 +1,19 @@
+# Files that must never reach a Vercel deployment upload.
+#
+# Vercel does NOT read .gitignore — its CLI has a fixed default ignore list and otherwise
+# uploads the whole working tree. Without this file, `vercel --prod` from a real checkout
+# uploads the gitignored credential files (demo-credentials.mfa.local.md holds the demo
+# accounts' TOTP secrets) and the QA reports under .gstack/ (applicant PII), and the remote
+# build then traces the credential files into server-function bundles. QA 2026-09-11
+# (CRITIC-01). next.config.ts's outputFileTracingExcludes is the second layer.
+#
+# Keep this list to things the build and runtime genuinely do not need. Do NOT add source
+# dirs the build reads (the privacy page mirrors docs/privacy/PRIVACY_NOTICE.md by hand, so
+# it is not imported — but leave docs/ otherwise untouched to be safe).
+
+demo-credentials.local.md
+demo-credentials.mfa.local.md
+*.local.md
+.gstack
+e2e-artifacts
+docs/design

@@ -70,7 +70,7 @@ begin;
 \ir helpers/auth.psql
 \ir helpers/fixtures.psql
 
-select plan(32);
+select plan(31);
 
 
 -- A spare account for the write assertions at the end. Created here, as the session role,
@@ -328,17 +328,12 @@ select throws_ok(
 );
 select pg_temp.logout();
 
-select pg_temp.login_as('00000000-0000-4000-a000-000000000002', 'aal1');   -- tech_admin, aal1
-select throws_ok(
-  $$ insert into public.user_roles (user_id, role)
-     values ('00000000-0000-4000-a000-0000000000aa', 'officer') $$,
-  '42501'::char(5),
-  null::text,
-  'tech_admin at aal1 cannot write user_roles — the aal2 predicate is the DATABASE half of '
-  'PRD US-A3/US-A4 and holds with the MFA middleware removed entirely'
-);
-select pg_temp.logout();
-
+-- ⚠ TEMPORARY (2026-09-11): the aal1 refusal that stood here is REMOVED, not weakened.
+-- Migration 0065 forces has_aal2() true org-wide — 2FA is off by project-head decision, to
+-- be re-implemented — so tech_admin at aal1 now writes user_roles like any aal2 session,
+-- and asserting a refusal here would fail. The assertion is preserved verbatim in
+-- supabase/_parked/031_aal2_rls.sql and comes back with the re-enable migration (see
+-- docs/issues/2026-09-06-launch-debt.md item 13). plan() dropped 32 -> 31 to match.
 select pg_temp.login_as('00000000-0000-4000-a000-000000000002', 'aal2');   -- tech_admin, aal2
 select lives_ok(
   $$ insert into public.user_roles (user_id, role)

@@ -383,11 +383,25 @@ scholar PII**, because the database has no aal2 check on any PII-returning RPC
 `resolve_recipients`) and none on most privileged writes. With 2FA off, **a password alone
 reads and writes real member data through PostgREST.**
 
-That is only survivable if the password half is closed, and **as of 2026-09-11 it is not**:
-the six demo accounts' passwords were committed to this **public** repo before 2026-09-11
-and remain valid on the production project. Until they are deleted or
-rotated, anyone who reads the repo can reach real applicant PII. **That deletion/rotation is
-now the single highest-priority item in this file** — it is doing the work MFA was doing.
+That is only survivable if the password half is closed, and **as of 2026-09-11 it is not, by
+decision**: the six demo accounts' passwords were committed to this **public** repo before
+2026-09-11 and remain valid on the production project, and the project head has decided the
+demo accounts **stay as they are** rather than being rotated or deleted.
+
+**So this is an accepted risk, recorded rather than mitigated.** With 2FA off in both layers
+and those credentials recoverable from this repository's history, an account holding
+`exec_admin` or `crrd_admin` on the production project can be reached by anyone who reads
+the repo, and those roles read and write real scholar PII — birthdates, addresses, contact
+numbers — under RA 10173. Nothing in the code prevents it; the only remaining controls are
+that the accounts are not advertised and that the audit log attributes every read.
+
+Two ways to close it whenever the decision changes, in order of cost:
+
+1. **Rotate or delete the six accounts** on the production project. Cheapest, no code.
+2. **Re-enable 2FA** (the revert below), which restores the second factor as the barrier.
+
+Until one of them happens, treat any `VIEW_RECORD` / `VIEW` / `VIEW_CONTACTS` audit row from
+a demo account as worth checking, and do not widen what those roles can reach.
 
 ### What was parked, and what moved
 

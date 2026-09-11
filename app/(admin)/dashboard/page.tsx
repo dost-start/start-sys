@@ -26,6 +26,14 @@
 // All four reads run concurrently: four sequential round trips to Singapore is a third
 // of the 3-second budget spent on a dashboard (PRD Performance NFR, Success Metric 4).
 //
+// ⚠ A FAILED AGGREGATE READ IS NOT ZERO (QA UX-03, 2026-09-11). An RLS-narrowed aggregate
+// returns no rows and renders honest zeros, which is correct and is what the paragraph
+// above means. A read that ERRORED returns `ok: false`, and the panel it feeds says so
+// instead of showing a figure — "0 active members, 0 in every region" is precisely what a
+// term looks like the morning after rollover, so a broken read that renders it is a false
+// incident waiting to happen. Each panel fails independently: a failed committee read
+// must not blank a status panel that was read successfully.
+//
 // Brand edition (2026-09-08): the page title is the shell's top bar ("Dashboard"), so
 // the `<h1>` here is screen-reader-only; the intro row carries the term line and the
 // "All members" link, and the sections follow docs/design/canvas/boards_admin.py.
@@ -33,6 +41,7 @@ import { redirect } from "next/navigation";
 
 import { CountBarList, type CountBarRow } from "@/components/dashboard/count-bar-list";
 import { DashboardEmptyState } from "@/components/dashboard/dashboard-empty-state";
+import { DashboardUnavailable } from "@/components/dashboard/dashboard-unavailable";
 import { SectionEyebrow } from "@/components/dashboard/section-eyebrow";
 import { StatTile } from "@/components/dashboard/stat-tile";
 import { Card } from "@/components/ui/card";
@@ -64,6 +73,9 @@ import {
 // Headcounts must never be served from a cache: a status change made thirty seconds ago
 // has to be on this screen, and a stale dashboard is how an officer double-approves.
 export const dynamic = "force-dynamic";
+
+/** This page's served path. Route groups are URL-invisible, so `(admin)` is not in it. */
+const DASHBOARD_PATH = "/dashboard";
 
 /** A uuid, or null. The only shape validation `?term_id=` gets — RLS does the rest. */
 function readTermParam(raw: string | string[] | undefined): string | null {
@@ -105,7 +117,7 @@ export default async function AdminDashboardPage({
     );
   }
 
-  const [statusRows, regionRows, committeeRows, regions, pendingCount, termLabel] =
+  const [statusResult, regionResult, committeeResult, regions, pendingCount, termLabel] =
     await Promise.all([
       listStatusCounts(ctx, termId),
       listRegionCounts(ctx, termId),
@@ -115,10 +127,17 @@ export default async function AdminDashboardPage({
       getTermLabel(ctx, termId),
     ]);
 
-  const statusBuckets = zeroFillStatuses(statusRows);
+  // Retrying means running the same reads again, so the target is this page's own URL.
+  // `term_id` is the only param it reads, so reconstructing it is faithful.
+  const retryHref =
+    requestedTerm === null ? DASHBOARD_PATH : `${DASHBOARD_PATH}?term_id=${requestedTerm}`;
+
+  // A failed read zero-fills to nothing rather than to zeros: the buckets are only built
+  // when there is something real to build them from, and the panel renders the banner.
+  const statusBuckets = statusResult.ok ? zeroFillStatuses(statusResult.rows) : [];
   const total = totalFromStatuses(statusBuckets);
-  const regionBuckets = zeroFillRegions(regions, regionRows);
-  const committeeBuckets = toCommitteeBuckets(committeeRows);
+  const regionBuckets = regionResult.ok ? zeroFillRegions(regions, regionResult.rows) : [];
+  const committeeBuckets = committeeResult.ok ? toCommitteeBuckets(committeeResult.rows) : [];
 
   const regionBars: CountBarRow[] = regionBuckets.map((bucket) => ({
     key: bucket.region_id,
@@ -153,7 +172,9 @@ export default async function AdminDashboardPage({
           href={allMembersHref("admin", termId)}
           className="text-brand-link text-sm font-medium underline-offset-4 hover:underline"
         >
-          All members ({total.toLocaleString()})
+          {/* The count is dropped when the status read failed: `total` would be 0, and a
+              headline figure of zero is exactly the lie this fix exists to remove. */}
+          {statusResult.ok ? `All members (${total.toLocaleString()})` : "All members"}
         </a>
       </div>
 
@@ -174,32 +195,45 @@ export default async function AdminDashboardPage({
       {/* ── Headcount by status ──────────────────────────────────────────────── */}
       <section className="space-y-3">
         <SectionEyebrow>Members by status</SectionEyebrow>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {statusBuckets.map((bucket) => (
-            <StatTile
-              key={bucket.status}
-              label={bucket.label}
-              value={bucket.count}
-              href={statusTileHref("admin", termId, bucket.status)}
-            />
-          ))}
-        </div>
+        {statusResult.ok ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {statusBuckets.map((bucket) => (
+              <StatTile
+                key={bucket.status}
+                label={bucket.label}
+                value={bucket.count}
+                href={statusTileHref("admin", termId, bucket.status)}
+              />
+            ))}
+          </div>
+        ) : (
+          <DashboardUnavailable what="Headcount by status" retryHref={retryHref} />
+        )}
       </section>
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* ── Headcount by region ────────────────────────────────────────────── */}
         <Card className="gap-4 p-5 sm:p-6">
           <SectionEyebrow>Members by region</SectionEyebrow>
-          <CountBarList rows={regionBars} emptyLabel="No regions are configured for this term." />
+          {regionResult.ok ? (
+            <CountBarList rows={regionBars} emptyLabel="No regions are configured for this term." />
+          ) : (
+            <DashboardUnavailable what="Headcount by region" retryHref={retryHref} />
+          )}
         </Card>
 
         {/* ── Headcount by committee ─────────────────────────────────────────── */}
         <Card className="gap-4 p-5 sm:p-6">
           <SectionEyebrow>Members by committee</SectionEyebrow>
-          <CountBarList
-            rows={committeeBars}
-            emptyLabel="No committees have been created for this term."
-          />
+          {committeeResult.ok ? null : (
+            <DashboardUnavailable what="Headcount by committee" retryHref={retryHref} />
+          )}
+          {committeeResult.ok ? (
+            <CountBarList
+              rows={committeeBars}
+              emptyLabel="No committees have been created for this term."
+            />
+          ) : null}
           {/* ⚠ THE CAPTION IS PART OF THE ACCEPTANCE CRITERIA, NOT DECORATION.
               CBL Art. III §5 places no limit on committee seats, so a scholar on two
               committees is counted under each and this panel totals to MORE than the

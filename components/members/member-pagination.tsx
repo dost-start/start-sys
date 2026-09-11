@@ -11,15 +11,30 @@
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
-import { changeMemberFilters, membersHref, type MemberFilters } from "@/lib/members/filters";
+import {
+  changeMemberFilters,
+  MEMBERS_PATH,
+  membersHref,
+  type MemberFilters,
+} from "@/lib/members/filters";
 
-export function MemberPagination({ filters, total }: { filters: MemberFilters; total: number }) {
+export function MemberPagination({
+  filters,
+  total,
+  basePath = MEMBERS_PATH,
+}: {
+  filters: MemberFilters;
+  total: number;
+  /** Which list these controls page. `/directory` passes its own base (RECORDS-01). */
+  basePath?: string;
+}) {
   const router = useRouter();
   const totalPages = Math.max(1, Math.ceil(total / filters.per_page));
   const currentPage = Math.min(filters.page, totalPages);
 
   const goTo = (page: number): void => {
-    router.replace(membersHref(changeMemberFilters(filters, { page })), { scroll: false });
+    const nextFilters = changeMemberFilters(filters, { page });
+    router.replace(membersHref(nextFilters, basePath), { scroll: false });
   };
 
   return (

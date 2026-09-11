@@ -29,14 +29,17 @@ function labelFor(facets: readonly { id: string; label: string }[], id: string):
 export function MemberActiveFilters({
   filters,
   facets,
+  basePath = MEMBERS_PATH,
 }: {
   filters: MemberFilters;
   facets: MemberFacetOptions;
+  /** Which list these chips filter. `/directory` passes its own base (RECORDS-01). */
+  basePath?: string;
 }) {
   const router = useRouter();
 
   const navigate = (patch: Partial<MemberFilters>): void => {
-    router.replace(membersHref(changeMemberFilters(filters, patch)), { scroll: false });
+    router.replace(membersHref(changeMemberFilters(filters, patch), basePath), { scroll: false });
   };
 
   if (!hasActiveMemberFilters(filters)) return null;
@@ -108,7 +111,7 @@ export function MemberActiveFilters({
         variant="ghost"
         size="sm"
         onClick={() =>
-          router.replace(membersHref(DEFAULT_MEMBER_FILTERS, MEMBERS_PATH), { scroll: false })
+          router.replace(membersHref(DEFAULT_MEMBER_FILTERS, basePath), { scroll: false })
         }
       >
         Clear all

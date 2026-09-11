@@ -25,11 +25,19 @@
 // ⚠ NOTHING IS LOGGED. `no-console` is an eslint error under `lib/**`, and a raw
 // PostgREST error can carry a value in `details`.
 //
-// A FAILED READ RETURNS AN EMPTY ARRAY, NOT AN ERROR. An RLS-filtered aggregate is
-// legitimately empty for several tiers, so a dashboard panel must render `0` rather than
-// a crash — the zero-fill in status-buckets.ts is what turns that into "0 across the
-// board" instead of a blank panel (PRD US-H2: "dashboards wiped clean" is true of the
-// view, never of the data).
+// AN EMPTY RESULT AND A FAILED READ ARE DIFFERENT FACTS, AND THE CALLER MUST BE ABLE TO
+// TELL THEM APART (QA UX-03, 2026-09-11). An RLS-filtered aggregate is legitimately empty
+// for several tiers, and the morning after rollover the active term genuinely holds
+// nobody — both of those are zeros, and the zero-fill in status-buckets.ts is what turns
+// them into "0 across the board" instead of a blank panel (PRD US-H2: "dashboards wiped
+// clean" is true of the view, never of the data).
+//
+// A read that FAILED is neither of those. Returning `[]` for it rendered "0 active
+// members, 0 in every region" — indistinguishable from an empty term, and the mistake it
+// invites is an officer going to look for 600 rows that were never missing. So the three
+// aggregate reads return `AggregateResult`, and the caller says "could not be loaded"
+// rather than inventing a number. `ok: false` still carries NO error object: one bit is
+// all a panel needs, and a raw PostgREST error can hold a value in `details`.
 //
 // CITATION: BUILD_PLAN S6-T5, S6-T9, S6-T12, S6-T13; ADR 0007;
 //           ARCHITECTURE.md §5, §9; PRD §3 v1.0 items 13-15; PRD US-D4, US-F1, US-H2.
@@ -72,6 +80,29 @@ type AggregateReader = {
   };
 };
 
+/**
+ * The outcome of one aggregate read: the rows, or the fact that the read did not happen.
+ *
+ * ⚠ NOT `ActionResult`. That contract maps a failure onto one of seven user-safe codes and
+ * none of them is true here: `unauthorized` is wrong because RLS narrowing an aggregate to
+ * nothing is not a denial, and `not_found` is wrong because a count that came back empty
+ * was found. A dashboard panel needs exactly one bit — "this number is not knowable right
+ * now" — so that is all this carries, and no PostgREST message can ride along with it.
+ */
+export type AggregateResult<Row> = { ok: true; rows: Row[] } | { ok: false };
+
+/**
+ * The rows, or `[]` when the read failed.
+ *
+ * ⚠ THIS IS THE OLD SWALLOW, KEPT ON PURPOSE AND MOVED INTO THE OPEN. `/directory` and
+ * `/region` still render zeros for a failed aggregate; naming it at the call site means it
+ * shows up in a grep and in a diff instead of hiding inside this file. `/dashboard` no
+ * longer uses it, and both remaining callers want the banner it now has (QA UX-03).
+ */
+export function aggregateRowsOrEmpty<Row>(result: AggregateResult<Row>): Row[] {
+  return result.ok ? result.rows : [];
+}
+
 /** `count(*)::bigint` arrives as a JSON number; coerce defensively and never NaN. */
 function toCount(value: unknown): number {
   const n = typeof value === "number" ? value : Number(value);
@@ -91,11 +122,11 @@ async function readAggregate(
   relation: string,
   columns: string,
   termId: string,
-): Promise<unknown[]> {
+): Promise<AggregateResult<unknown>> {
   const reader = ctx.supabase as unknown as AggregateReader;
   const { data, error } = await reader.from(relation).select(columns).eq("term_id", termId);
-  if (error !== null && error !== undefined) return [];
-  return Array.isArray(data) ? data : [];
+  if (error !== null && error !== undefined) return { ok: false };
+  return { ok: true, rows: Array.isArray(data) ? data : [] };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -120,15 +151,15 @@ const COMMITTEE_COLUMNS = "term_id, committee_id, committee_code, committee_name
 export async function listStatusCounts(
   ctx: ActionContext,
   termId: string,
-): Promise<StatusCountRow[]> {
-  const rows = (await readAggregate(
-    ctx,
-    "v_membership_status_counts",
-    STATUS_COLUMNS,
-    termId,
-  )) as StatusCountRow[];
+): Promise<AggregateResult<StatusCountRow>> {
+  const result = await readAggregate(ctx, "v_membership_status_counts", STATUS_COLUMNS, termId);
+  if (!result.ok) return result;
 
-  return rows.map((row) => ({ ...row, member_count: toCount(row.member_count) }));
+  const rows = result.rows as StatusCountRow[];
+  return {
+    ok: true,
+    rows: rows.map((row) => ({ ...row, member_count: toCount(row.member_count) })),
+  };
 }
 
 /**
@@ -140,17 +171,17 @@ export async function listStatusCounts(
 export async function listRegionCounts(
   ctx: ActionContext,
   termId: string,
-): Promise<RegionCountRow[]> {
-  const rows = (await readAggregate(
-    ctx,
-    "v_membership_region_counts",
-    REGION_COLUMNS,
-    termId,
-  )) as RegionCountRow[];
+): Promise<AggregateResult<RegionCountRow>> {
+  const result = await readAggregate(ctx, "v_membership_region_counts", REGION_COLUMNS, termId);
+  if (!result.ok) return result;
 
-  return rows
-    .map((row) => ({ ...row, member_count: toCount(row.member_count) }))
-    .sort((a, b) => a.sort_order - b.sort_order);
+  const rows = result.rows as RegionCountRow[];
+  return {
+    ok: true,
+    rows: rows
+      .map((row) => ({ ...row, member_count: toCount(row.member_count) }))
+      .sort((a, b) => a.sort_order - b.sort_order),
+  };
 }
 
 /**
@@ -169,22 +200,27 @@ export async function listRegionCounts(
 export async function listCommitteeCounts(
   ctx: ActionContext,
   termId: string,
-): Promise<CommitteeCountRow[]> {
-  const rows = (await readAggregate(
+): Promise<AggregateResult<CommitteeCountRow>> {
+  const result = await readAggregate(
     ctx,
     "v_membership_committee_counts",
     COMMITTEE_COLUMNS,
     termId,
-  )) as CommitteeCountRow[];
+  );
+  if (!result.ok) return result;
 
-  return rows
-    .map((row) => ({ ...row, member_count: toCount(row.member_count) }))
-    .sort((a, b) => {
-      if (a.committee_id === null) return 1;
-      if (b.committee_id === null) return -1;
-      if (b.member_count !== a.member_count) return b.member_count - a.member_count;
-      return (a.committee_name ?? "").localeCompare(b.committee_name ?? "");
-    });
+  const rows = result.rows as CommitteeCountRow[];
+  return {
+    ok: true,
+    rows: rows
+      .map((row) => ({ ...row, member_count: toCount(row.member_count) }))
+      .sort((a, b) => {
+        if (a.committee_id === null) return 1;
+        if (b.committee_id === null) return -1;
+        if (b.member_count !== a.member_count) return b.member_count - a.member_count;
+        return (a.committee_name ?? "").localeCompare(b.committee_name ?? "");
+      }),
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

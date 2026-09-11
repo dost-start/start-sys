@@ -28,6 +28,15 @@
 //    `current_term_id()` for non-admin tiers regardless (0030), and RLS refuses the rows
 //    beneath that. Delete this line and nothing leaks.
 //
+// 4. SEARCH, FILTERS AND PAGINATION ARE S5's, REUSED (RECORDS-01, 2026-09-11). The list
+//    is ~600 people; rendering the first 25 with no controls left rows 26+ reachable only
+//    by hand-editing `?page=`, and a dashboard tile's filter arrived with no visible chip
+//    and no way to clear it. The admin grid's controls are role-agnostic and prop-driven,
+//    so they are imported here with `basePath` pointed at `/directory` rather than
+//    reimplemented — a second search box would be a second opinion about what `?q=`
+//    means, and the one that drifted would be this one. They write a URL, never a row,
+//    so property 2 above is untouched.
+//
 // The admin roles reach this page too (`canAccess`'s officer case). They see the same
 // columns, because the column set is the RPC's, not the page's.
 //
@@ -39,11 +48,16 @@ import { CountBarList, type CountBarRow } from "@/components/dashboard/count-bar
 import { DirectoryTable } from "@/components/dashboard/directory-table";
 import { SectionEyebrow } from "@/components/dashboard/section-eyebrow";
 import { StatTile } from "@/components/dashboard/stat-tile";
+import { MemberActiveFilters } from "@/components/members/member-active-filters";
+import { MemberFilterBar } from "@/components/members/member-filters";
+import { MemberPagination } from "@/components/members/member-pagination";
+import { MemberSearch } from "@/components/members/member-search";
 import { Card } from "@/components/ui/card";
 import { getSessionContext } from "@/lib/auth/queries";
 import { homeForRole } from "@/lib/auth/route-access";
-import { regionTileHref, statusTileHref } from "@/lib/dashboard/links";
+import { OFFICER_DIRECTORY_PATH, regionTileHref, statusTileHref } from "@/lib/dashboard/links";
 import {
+  aggregateRowsOrEmpty,
   getCurrentTermId,
   getTermLabel,
   listRegionCounts,
@@ -52,7 +66,7 @@ import {
 } from "@/lib/dashboard/queries";
 import { zeroFillRegions, zeroFillStatuses } from "@/lib/dashboard/status-buckets";
 import { parseMemberFilters } from "@/lib/members/filters";
-import { listMemberDirectory } from "@/lib/members/queries";
+import { listFacetOptions, listMemberDirectory } from "@/lib/members/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -72,22 +86,39 @@ export default async function OfficerDirectoryPage({
   const parsed = parseMemberFilters(params);
   const filters = { ...parsed, term_id: null };
 
+  // Every reused control links back into `/directory`, never `/members`: `canAccess`
+  // bounces an officer off the admin grid, so a mis-based control would throw the user
+  // home — which reads as a broken session rather than a broken link (links.ts).
+  const basePath = OFFICER_DIRECTORY_PATH;
+
   const termId = await getCurrentTermId(ctx);
 
-  const [listResult, statusRows, regionRows, regions, termLabel] = await Promise.all([
+  // ⚠ `aggregateRowsOrEmpty` BELOW IS THE OLD SWALLOW, NOW VISIBLE (QA UX-03,
+  // 2026-09-11). A failed aggregate still renders zeros on this surface — the same bug
+  // `/dashboard` just fixed. Naming it at the call site is what keeps it from being
+  // invisible again; this page wants the same DashboardUnavailable banner as a follow-up.
+  const [listResult, statusResult, regionResult, regions, termLabel, facets] = await Promise.all([
     listMemberDirectory(ctx, filters),
-    termId === null ? Promise.resolve([]) : listStatusCounts(ctx, termId),
-    termId === null ? Promise.resolve([]) : listRegionCounts(ctx, termId),
+    termId === null
+      ? Promise.resolve({ ok: true as const, rows: [] })
+      : listStatusCounts(ctx, termId),
+    termId === null
+      ? Promise.resolve({ ok: true as const, rows: [] })
+      : listRegionCounts(ctx, termId),
     listRegions(ctx),
     termId === null ? Promise.resolve(null) : getTermLabel(ctx, termId),
+    // The labels the chips and the facet bar need. Regions, committees and departments
+    // are readable by `authenticated` (0014 §1, §5); `terms` comes back EMPTY for this
+    // tier, which is exactly why `canSelectTerm` is false below rather than a UI guess.
+    listFacetOptions(ctx),
   ]);
 
   const page = listResult.ok
     ? listResult.data
     : { rows: [], total: 0, page: filters.page, perPage: filters.per_page };
 
-  const statusBuckets = zeroFillStatuses(statusRows);
-  const regionBuckets = zeroFillRegions(regions, regionRows);
+  const statusBuckets = zeroFillStatuses(aggregateRowsOrEmpty(statusResult));
+  const regionBuckets = zeroFillRegions(regions, aggregateRowsOrEmpty(regionResult));
 
   const regionBars: CountBarRow[] = regionBuckets.map((bucket) => ({
     key: bucket.region_id,
@@ -133,10 +164,26 @@ export default async function OfficerDirectoryPage({
             {page.total.toLocaleString()} matching · page {page.page}
           </span>
         </div>
+
+        {/* S5's controls on the officer base. `canSelectTerm` is false because
+            `/directory` is pinned to the current term (property 3), and the chips are
+            what make a tile's filter visible and clearable (RECORDS-01). */}
+        <div className="space-y-4">
+          <MemberSearch filters={filters} basePath={basePath} />
+          <MemberFilterBar
+            filters={filters}
+            facets={facets}
+            canSelectTerm={false}
+            basePath={basePath}
+          />
+          <MemberActiveFilters filters={filters} facets={facets} basePath={basePath} />
+        </div>
+
         <DirectoryTable
           rows={page.rows}
           emptyMessage="No members match this view for the current term."
         />
+        <MemberPagination filters={filters} total={page.total} basePath={basePath} />
       </section>
     </div>
   );

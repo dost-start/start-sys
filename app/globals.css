@@ -196,7 +196,8 @@
         #f8eb82 0%,
         #f4eda8 22%,
         var(--color-brand-haze-warm) 42%,
-        var(--color-brand-haze-cool) 56%,
+        #f4f4f4 49%,
+        /* Forces a clean white transition to prevent greening */ var(--color-brand-haze-cool) 56%,
         #94cff8 78%,
         var(--color-brand-sky-deep) 100%
       );

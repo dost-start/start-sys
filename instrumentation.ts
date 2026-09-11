@@ -107,11 +107,33 @@ export function parseDsn(dsn: string): { endpoint: string; publicKey: string } |
  * lines: envelope header, item header, payload.
  */
 async function postEnvelope(event: ObservabilityEvent): Promise<void> {
-  const dsn = process.env.SENTRY_DSN;
-  if (dsn === undefined || dsn.trim() === "") return;
+  const dsn = process.env.SENTRY_DSN?.trim() ?? "";
+  const parsed = dsn === "" ? null : parseDsn(dsn);
 
-  const parsed = parseDsn(dsn.trim());
-  if (parsed === null) return;
+  if (parsed === null) {
+    // No Sentry provisioned (SENTRY_DSN empty), or a malformed DSN. Dropping the event
+    // silently is what left the ISSUE-004/009 fixes INERT in production: a failed
+    // Drive / health / proof / purge call, or a CSP violation, reached reportError and
+    // then vanished (QA 2026-09-11, CRITIC-R01 / INFRA-05). Emit ONE PII-free line to
+    // stdout instead, so the reason is at least visible in the Vercel logs until a DSN is
+    // set. STRUCTURAL FIELDS ONLY — never `message`, never `exception.value`, never
+    // `extra` (the scrub cleans it, but it may still carry a caller-supplied value). This
+    // is best-effort; a logging failure must not escape reportError's never-throw contract.
+    try {
+      console.warn(
+        "[observability] " +
+          JSON.stringify({
+            level: event.level,
+            type: event.exception?.[0]?.type ?? null,
+            environment: event.environment ?? null,
+            tags: event.tags ?? null,
+          }),
+      );
+    } catch {
+      // ignore — see the contract above.
+    }
+    return;
+  }
 
   const body = [
     JSON.stringify({ dsn: dsn.trim(), sent_at: new Date().toISOString() }),

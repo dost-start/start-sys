@@ -19,20 +19,21 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** The version an applicant's consent checkbox currently agrees to. Max 32 chars — see `consentShape` in `lib/applications/schema.ts`. */
-export const PRIVACY_NOTICE_VERSION = "v4";
+export const PRIVACY_NOTICE_VERSION = "v5";
 
 /**
  * When this version took effect.
  *
- * `v4` (2026-09-10) names Google as a processor. The document store moved to Google Drive
- * that day (ADR 0018) and the notice did not move with it, so for a few hours applicants
- * were ticking a consent box against a statement that had become false — it said the two
- * documents sat in the Singapore project. Under RA 10173 consent is given at collection,
- * to a specific disclosure; a notice that misstates where personal data lives is worse
- * than no notice at all, which is why `page.tsx` carries the "same PR as the variable"
- * rule and why this is a version bump rather than a quiet edit.
+ * `v5` (2026-09-11) corrects two disclosures every earlier version got wrong (QA
+ * 2026-09-11, UX-01). "Who can see it" now states that a Regional Representative sees their
+ * own region's members' email, phone, Facebook link and university — ADR 0011's audited
+ * `list_region_member_contacts()`, live since 2026-09-06 — where v1–v4 said the RR saw only
+ * name/ID/region/status. "What we collect" now names the current address (0058) and the
+ * optional Instagram/GitHub/LinkedIn links (0055) the form has collected all along. Under
+ * RA 10173 consent is to a specific disclosure, and a notice that understates who reads a
+ * scholar's contact details is a defective basis for the consent captured since intake
+ * reopened — hence a version bump, not a quiet edit.
  *
- * `v3` (2026-09-09) had corrected the same paragraph in the other direction and disclosed
- * the draft autosave.
+ * `v4` (2026-09-10) named Google Drive as the store (ADR 0018) and is unchanged by v5.
  */
-export const PRIVACY_NOTICE_EFFECTIVE_DATE = "2026-09-10";
+export const PRIVACY_NOTICE_EFFECTIVE_DATE = "2026-09-11";

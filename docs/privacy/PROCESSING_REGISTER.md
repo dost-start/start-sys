@@ -33,7 +33,7 @@ does not restate the column list, because a restated list is a list that drifts.
 | **Data subjects** | Approved members, current and historical, across all terms |
 | **Data categories** | Identity, contact, academic, and membership status/history. Sensitive columns: `DATA_MODEL.md` §8.1 row `people`. |
 | **Legal basis** | Consent (carried forward from the original application) and the org's legitimate interest in administering an active membership relationship |
-| **Recipients inside the org** | Exec Admins and CRRD Admin in full; Moderators for records under review; Officers and Regional Representatives see only non-sensitive columns (`v_member_directory`) |
+| **Recipients inside the org** | Exec Admins and CRRD Admin in full; Moderators for records under review; Officers see only non-sensitive columns (`v_member_directory`); a Regional Representative additionally sees their OWN region's members' email, contact number, Facebook link and university through `list_region_member_contacts()` — audited, acknowledgement-gated, aal2 (ADR 0011; disclosed in the privacy notice since v5, 2026-09-11) |
 | **Processors** | Supabase (Singapore) |
 | **Retention** | Five years after the member's last active term (`DATA_MODEL.md` §8.2, `redact_expired_pii()`); non-identifying fields (member ID, join year, region, status history) survive indefinitely — OQ-8 (clock start) unresolved, see the gaps issue |
 | **System mechanism** | `people`, `memberships` tables; `redact_expired_pii()` |

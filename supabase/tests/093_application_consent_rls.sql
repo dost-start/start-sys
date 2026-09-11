@@ -54,7 +54,7 @@ begin;
 \ir helpers/auth.psql
 \ir helpers/fixtures.psql
 
-select plan(26);
+select plan(27);
 
 
 -- ═══════════════════════════════════════════════════════════════════════════════════
@@ -131,10 +131,10 @@ select pg_temp.login_anon();
 
 select is(
   (select count(*)::int from public.privacy_notice_versions),
-  4,
-  'anon reads EXACTLY 4 privacy notice versions (v1 from 0035, v2 from 0052, v3 from 0056, '
-  'v4 from 0061) — the published text must be readable without an account or consent to it '
-  'is not informed'
+  5,
+  'anon reads EXACTLY 5 privacy notice versions (v1 from 0035, v2 from 0052, v3 from 0056, '
+  'v4 from 0061, v5 from 0066) — the published text must be readable without an account or '
+  'consent to it is not informed'
 );
 
 select pg_temp.logout();
@@ -156,15 +156,23 @@ select is(
   'to those bytes, and that record must not move when the notice is rewritten'
 );
 
--- 7b — and the CURRENT version carries the hash of the file as committed. This is the
--- assertion that a notice edit is supposed to break: the CI digest guard compares the file
--- to the newest migration's hash, and this compares the ROW to the same value, so a
--- rewrite that skips either one fails here rather than passing silently.
---     shasum -a 256 docs/privacy/PRIVACY_NOTICE.md
+-- 7b — v4 is now superseded (v5 is current), so its digest must not move either, for the
+-- same reason v3's must not: it is the record of what v4's applicants agreed to.
 select is(
   (select body_sha256 from public.privacy_notice_versions where version = 'v4'),
   'c78ac48ee4f11f23822c04cb3b328933f87cb749ddc9a8417375fc3c60ab4fac',
-  'the seeded v4 digest is the sha256 of docs/privacy/PRIVACY_NOTICE.md as committed'
+  'the superseded v4 digest is UNCHANGED — v4 applicants consented to those bytes'
+);
+
+-- 7c — and the CURRENT version (v5, 0065) carries the hash of the file as committed. This
+-- is the assertion that a notice edit is supposed to break: the CI digest guard compares
+-- the file to the newest migration's hash, and this compares the ROW to the same value, so
+-- a rewrite that skips either one fails here rather than passing silently.
+--     shasum -a 256 docs/privacy/PRIVACY_NOTICE.md
+select is(
+  (select body_sha256 from public.privacy_notice_versions where version = 'v5'),
+  'f6e5a2373d3e2dfbd7efb4268b6bf1544360281ed2661bab4922e30324af5c74',
+  'the seeded v5 digest is the sha256 of docs/privacy/PRIVACY_NOTICE.md as committed'
 );
 
 
@@ -308,14 +316,14 @@ select is(
   'database''s'
 );
 
--- 16 — ⚠ and 'v0' becomes 'v4' (the current version, 0061) WITHOUT tripping the foreign
+-- 16 — ⚠ and 'v0' becomes 'v5' (the current version, 0065) WITHOUT tripping the foreign
 -- key, because BEFORE triggers run before constraints are checked. See the header: this
 -- is what makes a claim of agreement to a superseded or invented text impossible rather
 -- than merely erroneous.
 select is(
   (select privacy_notice_version from public.applications
     where id = '00000000-0000-4000-8000-000000000932'),
-  'v4',
+  'v5',
   'a client-supplied version of ''v0'' is OVERWRITTEN with the server''s current version — '
   'and the bogus value never reaches the foreign key, because BEFORE triggers run first'
 );
@@ -414,7 +422,7 @@ select pg_temp.logout();
 select is(
   (select consented_at::text || '|' || privacy_notice_version
      from public.applications where id = '00000000-0000-4000-8000-000000000934'),
-  now()::text || '|v4',
+  now()::text || '|v5',
   'and the anonymous row lands with the SERVER''s clock and the SERVER''s current version, '
   'not the 1999 timestamp and the invented ''v0'' the client sent'
 );

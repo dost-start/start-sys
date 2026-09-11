@@ -5,9 +5,10 @@ How START-DOST handles the information you give us when you apply.
 ## What we collect
 
 When you apply, we collect your name, birth date, sex, email, phone number and Facebook
-link. We also collect your home address, your scholarship details, your school and
-program, your region, and two documents: your registration form and your Notice of
-Award.
+link, and — only if you give them — your Instagram, GitHub and LinkedIn links. We also
+collect your home address and the current address you live at while studying, your
+scholarship details, your school and program, your region, and two documents: your
+registration form and your Notice of Award.
 
 ## Why we collect it
 
@@ -17,8 +18,10 @@ record, your committee, and the emails START-DOST sends you.
 ## Who can see it
 
 Only the officers whose job needs it. The CRRD officers and the CEO and COO can see your
-contact details. Other officers and your Regional Representative see your name, member
-ID, region and status. The database itself enforces this, not just the screen.
+contact details. Your Regional Representative can see the email, phone number, Facebook
+link and university of the scholars in their own region, which includes you if you are in
+theirs. Every other officer sees only your name, member ID, region and status. The
+database itself enforces this, not just the screen.
 
 ## Where it is stored
 
@@ -55,13 +58,15 @@ Commission within 72 hours.
 
 ## Maintainer notes (not shown to applicants)
 
-**Version `v3` — effective 2026-09-09.** Supersedes `v2` (2026-09-08) and `v1`
-(2026-09-01). `v3` changes two things and nothing else: the storage paragraph now states
-where the uploaded documents actually are (the Singapore project, not Google Drive —
-`DOCUMENT_STORE=supabase_storage` while PRD OQ-1 is open), and a new "On your own device"
-section discloses the draft autosave added in PR D, which keeps what an applicant has
-typed in their own browser. Neither changes what is collected, who can read it, or how
-long it is kept. The text
+**Version `v5` — effective 2026-09-11.** Supersedes `v4` (2026-09-10), `v3` (2026-09-09),
+`v2` (2026-09-08) and `v1` (2026-09-01). `v5` corrects two disclosures the earlier
+versions got wrong (QA 2026-09-11, UX-01): "Who can see it" now states that a Regional
+Representative sees their own region's members' email, phone, Facebook link and university
+(ADR 0011's audited, acknowledgement-gated `list_region_member_contacts()`), where v1–v4
+wrongly said the RR saw only name/ID/region/status; and "What we collect" now names the
+current address (0058) and the optional Instagram/GitHub/LinkedIn links (0055) that the
+form has collected all along. `v4` (2026-09-10) had named Google Drive as the store; that
+is unchanged and still correct. The text
 above the divider is what an applicant agrees to and is mirrored word for word by
 `app/(public)/privacy/page.tsx`; the two must change together, and any change to that
 text is a NEW version — a new `privacy_notice_versions` row (migration `0035` explains

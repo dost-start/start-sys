@@ -61,9 +61,10 @@ export default function PrivacyNoticePage() {
             <h2 className={HEADING_CLASS}>What we collect</h2>
             <p className={BODY_CLASS}>
               When you apply, we collect your name, birth date, sex, email, phone number and
-              Facebook link. We also collect your home address, your scholarship details, your
-              school and program, your region, and two documents: your registration form and your
-              Notice of Award.
+              Facebook link, and — only if you give them — your Instagram, GitHub and LinkedIn
+              links. We also collect your home address and the current address you live at while
+              studying, your scholarship details, your school and program, your region, and two
+              documents: your registration form and your Notice of Award.
             </p>
           </section>
 
@@ -79,8 +80,10 @@ export default function PrivacyNoticePage() {
             <h2 className={HEADING_CLASS}>Who can see it</h2>
             <p className={BODY_CLASS}>
               Only the officers whose job needs it. The CRRD officers and the CEO and COO can see
-              your contact details. Other officers and your Regional Representative see your name,
-              member ID, region and status. The database itself enforces this, not just the screen.
+              your contact details. Your Regional Representative can see the email, phone number,
+              Facebook link and university of the scholars in their own region, which includes you
+              if you are in theirs. Every other officer sees only your name, member ID, region and
+              status. The database itself enforces this, not just the screen.
             </p>
           </section>
 

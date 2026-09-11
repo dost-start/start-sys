@@ -17,12 +17,14 @@
 //
 // ⚠ AN EMPTY-ROW UPDATE IS `conflict`, NEVER `unauthorized` — the same reasoning
 // `updateMembershipStatus` documents. Zero rows affected on `recordOfficerSeparation` means
-// one of: the row moved or was reassigned first; `officer_assignments_update`'s USING half
-// hid it (which, for any caller outside the two recorder tiers, is exactly how the refusal
-// is enforced); or the id no longer exists. Reporting the second case as "forbidden" would
-// confirm a specific officer's assignment id resolves to a row — a disclosure with no data
-// in it. `conflict`'s "reload and try again" is the correct advice in all three cases, and
-// `withRole` already refuses the wrong tier before any of this runs anyway.
+// one of: the row is no longer in the `from_status` the caller claimed (a stale tab, a
+// forged hidden field, or another recorder who decided seconds ago); the row moved or was
+// reassigned first; `officer_assignments_update`'s USING half hid it (which, for any caller
+// outside the two recorder tiers, is exactly how the refusal is enforced); or the id no
+// longer exists. Reporting the third case as "forbidden" would confirm a specific officer's
+// assignment id resolves to a row — a disclosure with no data in it. `conflict`'s "reload
+// and try again" is the correct advice in all four cases, and `withRole` already refuses
+// the wrong tier before any of this runs anyway.
 //
 // ⚠ NO HAND-WRITTEN AUDIT WRITE. `trg_officer_assignments_audit` (0012_functions.sql)
 // fires on every INSERT and UPDATE here; an application-side audit write would double the
@@ -208,6 +210,8 @@ export const appointOfficer = withRole<OfficerAppointInput, AppointOfficerResult
  * A PLAIN TABLE UPDATE, on purpose — see the file header. `status` and `status_note` are
  * written in the SAME statement so a partial write (a status with no recorded ground)
  * cannot happen.
+ *
+ * ⚠ THE UPDATE IS CONDITIONAL ON `from_status`, AND HAS TO BE. See the filter below.
  */
 export const recordOfficerSeparation = withRole<OfficerSeparationInput, null>(
   OFFICER_DESK_ROLES,
@@ -215,10 +219,29 @@ export const recordOfficerSeparation = withRole<OfficerSeparationInput, null>(
     const parsed = officerSeparationSchema.safeParse(input);
     if (!parsed.success) return validationFailure<null>(parsed.error);
 
+    // ⚠ `from_status` IS A PRECONDITION, NOT A TRUSTED FACT, and this filter is what makes
+    // that true. It arrives from the client (a hidden field), so `officerSeparationSchema`'s
+    // edge check proves only that the CLAIMED edge is legal — never that the row is still
+    // where the claim says it is. Filtering the UPDATE on it turns the claim into a
+    // compare-and-swap token, the same shape as `update_member_record`'s
+    // `expected_updated_at` (S5-T7): a stale tab, a second change in one tab, or a value
+    // edited in devtools matches 0 rows and returns `conflict` below instead of writing an
+    // edge nobody authorised.
+    //
+    // This is not belt-and-braces. `officer_assignments` has NO state-machine trigger behind
+    // it — 0007/0014/0046 enforce only WHO may write the row, never WHICH status legally
+    // follows which (lib/officers/schema.ts header). Without this filter, a claimed
+    // `suspended -> active` lands on a row that is actually `impeached`, reversing the one
+    // state CBL Art. VI §3.2.8 declares "final and irrevocable".
+    //
+    // It stays a plain table UPDATE: the filter NARROWS the scan and widens no policy —
+    // `officer_assignments_update` is still in the path, which is the whole point of the
+    // file header's "NO NEW RPC".
     const { data, error } = await ctx.supabase
       .from("officer_assignments")
       .update({ status: parsed.data.status, status_note: parsed.data.status_note })
       .eq("id", parsed.data.assignment_id)
+      .eq("status", parsed.data.from_status)
       .select("id");
 
     if (error) return { ok: false, error: mapDbError(error) };

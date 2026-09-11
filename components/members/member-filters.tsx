@@ -23,6 +23,7 @@ import { Card } from "@/components/ui/card";
 import { NativeSelect } from "@/components/ui/native-select";
 import {
   changeMemberFilters,
+  MEMBERS_PATH,
   membersHref,
   MEMBERSHIP_STATUSES,
   type MemberFilters,
@@ -45,15 +46,18 @@ export function MemberFilterBar({
   filters,
   facets,
   canSelectTerm,
+  basePath = MEMBERS_PATH,
 }: {
   filters: MemberFilters;
   facets: MemberFacetOptions;
   canSelectTerm: boolean;
+  /** Which list these facets filter. `/directory` passes its own base (RECORDS-01). */
+  basePath?: string;
 }) {
   const router = useRouter();
 
   const navigate = (patch: Partial<MemberFilters>): void => {
-    router.replace(membersHref(changeMemberFilters(filters, patch)), { scroll: false });
+    router.replace(membersHref(changeMemberFilters(filters, patch), basePath), { scroll: false });
   };
 
   return (

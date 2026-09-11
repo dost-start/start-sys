@@ -36,6 +36,7 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { getSessionContext } from "@/lib/auth/queries";
 import { homeForRole } from "@/lib/auth/route-access";
 import {
+  aggregateRowsOrEmpty,
   getCallerRegions,
   getCurrentTermId,
   getTermLabel,
@@ -71,10 +72,18 @@ export default async function RegionDashboardPage({
 
   const termId = await getCurrentTermId(ctx);
 
-  const [regions, statusRows, regionRows, termLabel] = await Promise.all([
+  // ⚠ `aggregateRowsOrEmpty` BELOW IS THE OLD SWALLOW, NOW VISIBLE (QA UX-03,
+  // 2026-09-11). A failed headcount read still renders zeros here — the same bug
+  // `/dashboard` just fixed, and this page wants the same banner as a follow-up. The
+  // contact roster below is unaffected: it already distinguishes its refusals by hand.
+  const [regions, statusResult, regionResult, termLabel] = await Promise.all([
     getCallerRegions(ctx),
-    termId === null ? Promise.resolve([]) : listStatusCounts(ctx, termId),
-    termId === null ? Promise.resolve([]) : listRegionCounts(ctx, termId),
+    termId === null
+      ? Promise.resolve({ ok: true as const, rows: [] })
+      : listStatusCounts(ctx, termId),
+    termId === null
+      ? Promise.resolve({ ok: true as const, rows: [] })
+      : listRegionCounts(ctx, termId),
     termId === null ? Promise.resolve(null) : getTermLabel(ctx, termId),
   ]);
 
@@ -97,9 +106,9 @@ export default async function RegionDashboardPage({
       : await listMemberDirectory(ctx, { ...DEFAULT_MEMBER_FILTERS, per_page: 100 });
   const fallbackRows = fallbackRoster?.ok ? fallbackRoster.data.rows : [];
 
-  const statusBuckets = zeroFillStatuses(statusRows);
+  const statusBuckets = zeroFillStatuses(aggregateRowsOrEmpty(statusResult));
   const total = statusBuckets.reduce((sum, bucket) => sum + bucket.count, 0);
-  const regionBuckets = zeroFillRegions(regions, regionRows);
+  const regionBuckets = zeroFillRegions(regions, aggregateRowsOrEmpty(regionResult));
   const regionBars: CountBarRow[] = regionBuckets.map((bucket) => ({
     key: bucket.region_id,
     label: bucket.region_name,

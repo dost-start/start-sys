@@ -233,11 +233,18 @@ export type OfficerAppointInput = z.infer<typeof officerAppointSchema>;
 /**
  * Record a separation from office (CBL Art. VI) on an existing holder row.
  *
- * `from_status` is the holder's CURRENT status, read from the roster row the dialog
- * opened on — not user-editable — and exists so this schema can reject an illegal edge
- * BEFORE the request reaches the database, since (unlike memberships) nothing there
- * will. `status` is restricted to `SEPARATION_TARGET_STATUSES`, so `active` cannot be
- * submitted through this form at all — see that constant's own comment.
+ * `from_status` is the holder's status as the roster row the dialog opened on reported it.
+ * It is a CLIENT-SUPPLIED CLAIM — a hidden field, editable in devtools and stale the moment
+ * anyone else writes the row — so the edge check below proves only that the CLAIMED edge is
+ * legal, never that the row is still in that status. `recordOfficerSeparation` filters its
+ * UPDATE on `from_status`, and THAT is what turns the claim into a compare-and-swap
+ * precondition. The check still belongs here, because (unlike memberships) no database
+ * trigger will reject an illegal edge — it just is not the boundary.
+ *
+ * `status` is restricted to `SEPARATION_TARGET_STATUSES`, which INCLUDES `active`: a return
+ * from leave (Art. VI §1.3-1.4) and an acquittal (§3.2.3) are recorded through this same
+ * form — see that constant's own comment. `legalSeparationTargets` is what narrows the
+ * dropdown per holder.
  */
 export const officerSeparationSchema = z
   .object({

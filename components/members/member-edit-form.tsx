@@ -2,8 +2,9 @@
 //
 // Bound to `memberUpdateSchema` — THE SAME MODULE `updateMemberRecord` re-parses
 // server-side (CONVENTIONS.md §6). `expected_updated_at` travels as a hidden field:
-// it is the value this form LOADED, and `update_member_record()` compares it under
-// `FOR UPDATE` before writing (S5-T7). A mismatch raises 40001, mapped to `conflict`.
+// it is the `updated_at` THE SERVER LAST HANDED THIS FORM, and `update_member_record()`
+// compares it under `FOR UPDATE` before writing (S5-T7). A mismatch raises 40001, mapped
+// to `conflict`. It is re-synced when a save revalidates this page — see the effect below.
 //
 // ⚠ ON `conflict` THIS FORM DOES NOT SILENTLY RETRY OR MERGE. It shows an explicit
 // banner and stops. Retrying with the caller's own (now stale) values would silently
@@ -14,7 +15,7 @@
 // them here would invite the one thing PRD US-C4 forbids.
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, type Resolver } from "react-hook-form";
 
@@ -105,6 +106,28 @@ export function MemberEditForm({
         : String(record.award_year)) as unknown as MemberUpdateInput["award_year"],
     },
   });
+
+  // ⚠ ADOPT THE SERVER'S NEW `updated_at` AFTER OUR OWN SAVE.
+  // `defaultValues` above is read ONCE, at mount. A successful save writes through
+  // `trg_people_set_updated_at` (0012), so the row's `updated_at` moves, and
+  // `updateMemberRecord` then revalidates this path — re-rendering the page and handing
+  // this component a fresher `record`. Without this sync the hidden field still carries
+  // the mount-time value, so the SECOND save of a session always loses with 40001 and the
+  // reader is told a record nobody else touched "was changed by someone else"
+  // (2026-09-11 QA, RECORDS-03).
+  //
+  // ⚠ THIS DOES NOT WEAKEN US-D1. A newer `record` reaches this component only after a
+  // router refresh, and on this screen a refresh follows OUR OWN successful write (a
+  // navigation remounts instead). Another admin's concurrent edit never arrives here
+  // unasked, so nothing they wrote can be silently adopted, and a genuinely stale
+  // timestamp still loses at the database (064 §17). Only the hidden concurrency field is
+  // touched — never a value the CCDO is typing.
+  useEffect(() => {
+    setValue("expected_updated_at", record.updated_at, {
+      shouldDirty: false,
+      shouldValidate: false,
+    });
+  }, [record.updated_at, setValue]);
 
   const onSubmit = handleSubmit(async (values) => {
     setConflict(false);

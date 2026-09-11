@@ -122,7 +122,7 @@ dump, prints the five assertions, and destroys the container and the plaintext o
 | # | Assertion | What a failure means |
 |---|---|---|
 | 1 | `regions = 18` | Reference data did not survive. 18, not 17 — RA 12000 created the Negros Island Region (DATA_MODEL.md §6/0016). |
-| 2 | 4 administrators, exactly CEO/COO/CTO/CCDO | The constitutional invariant did not survive (CBL Art. III §2). |
+| 2 | The positions flagged `is_administrator` are exactly the codes the `admin_is_srs_administrator` CHECK names — **seven** since migration 0036: CEO, COO, CTO, DCTO-PD, CCDO, DCCDO-C, DCCDO-D | The constitutional invariant did not survive. The expected set is **read out of the CHECK in the restored database**, not hard-coded here, so this fails only when the seed and the constraint genuinely disagree — or when the CHECK itself is missing, which is its own finding: the restored database would accept an eighth administrator (CRRD SRS 2026-09-05; CBL Art. III §2-§3). |
 | 3 | `people > 0` | **A dump taken by a role subject to FORCE ROW LEVEL SECURITY restores an empty database that looks structurally perfect.** Check the role in `SUPABASE_DB_URL`. |
 | 4 | `pg_policies > 0` | **The one nobody thinks to check.** Data restored, policies did not: every scholar's PII present with no RLS in front of it. It passes assertions 1–3. |
 | 5 | RLS enabled **and** forced on every public table | ENABLE alone is not enough — a table owner bypasses non-forced RLS, and the migration role *is* the owner. |

@@ -203,7 +203,7 @@ export default async function ApplicationWindowPage() {
         </CardTitle>
 
         <ApplicationWindowForm
-          isOpen={state === "open"}
+          state={state}
           canWrite={canWrite}
           defaultOpensAtLocal={defaultOpensAtLocal}
           defaultClosesAtLocal={defaultClosesAtLocal}
@@ -224,7 +224,7 @@ export default async function ApplicationWindowPage() {
         </p>
         <ApplicationWindowForm
           formKind={MEMBERSHIP_RENEWAL_FORM_KIND}
-          isOpen={renewalState === "open"}
+          state={renewalState}
           canWrite={canWrite}
           defaultOpensAtLocal={renewalOpensAtLocal}
           defaultClosesAtLocal={renewalClosesAtLocal}

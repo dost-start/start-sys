@@ -207,18 +207,26 @@ export const openApplicationWindow = withRole<unknown, ApplicationWindowResult>(
     const { row: existing, error: readError } = await findWindow(supabase, termId, form_kind);
     if (readError) return { ok: false, error: mapDbError(readError) };
 
-    if (existing !== null && Date.parse(existing.closes_at) > Date.now()) {
-      // A live row occupies the term's (term_id, form_kind) slot whether the period is
-      // already OPEN or merely SCHEDULED (opens_at still in the future). Both are
-      // escapable the same way — Close cancels the row (closes_at = now()), then Open
-      // upserts the new dates — but the message must say which state it found, or an
-      // officer staring at a scheduled window is told it is "already open".
-      const scheduled = Date.parse(existing.opens_at) > Date.now();
+    // ⚠ ONLY AN *OPEN* PERIOD IS A CONFLICT. The guard exists so that opening
+    // applications cannot silently move the closing time of a period people are
+    // mid-submission in — and nobody can be mid-submission in a period that has not
+    // opened yet, because `applications_insert_anon` (0008) EXISTS-checks `now()
+    // between opens_at and closes_at` on every INSERT. So a SCHEDULED row is
+    // re-scheduled in place by the upsert below rather than refused.
+    //
+    // It used to be refused, with a message telling the officer to close it first —
+    // which `window_ordered` (0005) makes impossible for a window whose opens_at is
+    // still in the future, so a mistyped date locked the term's (term_id, form_kind)
+    // slot until it passed.
+    const nowMs = Date.now();
+    if (
+      existing !== null &&
+      Date.parse(existing.opens_at) <= nowMs &&
+      Date.parse(existing.closes_at) > nowMs
+    ) {
       return err<ApplicationWindowResult>(
         "conflict",
-        scheduled
-          ? "An application period is already scheduled for this term. Close it first to replace its dates."
-          : "The application period is already open. Close it first if you need to change its dates.",
+        "The application period is already open. Close it first if you need to change its dates.",
       );
     }
 
@@ -256,6 +264,10 @@ export const openApplicationWindow = withRole<unknown, ApplicationWindowResult>(
  *
  * An UPDATE, never a DELETE, and `closes_at = now()` rather than any client value —
  * see the two structural rules in the header.
+ *
+ * It also CANCELS a period that has not opened yet. That is the same act from the
+ * officer's point of view and a different write underneath: see the comment on the
+ * `isScheduled` branch for why that one has to move `opens_at` as well.
  */
 export const closeApplicationWindow = withRole<unknown, ApplicationWindowResult>(
   WINDOW_WRITER_ROLES,
@@ -272,22 +284,41 @@ export const closeApplicationWindow = withRole<unknown, ApplicationWindowResult>
     const { row: existing, error: readError } = await findWindow(supabase, termId, form_kind);
     if (readError) return { ok: false, error: mapDbError(readError) };
 
-    // Nothing to close: no window was ever opened for this term, or it has already
+    // Nothing to close: no window was ever scheduled for this term, or it has already
     // closed. `not_found` rather than a success, because reporting "closed" for a
     // period that was never open would let the screen claim an act that did not happen
     // and produced no audit row.
-    if (existing === null || Date.parse(existing.closes_at) <= Date.now()) {
+    const nowMs = Date.now();
+    if (existing === null || Date.parse(existing.closes_at) <= nowMs) {
       return err<ApplicationWindowResult>(
         "not_found",
-        "There is no open application period to close.",
+        "There is no open or scheduled application period to close.",
       );
     }
 
-    const closesAt = new Date().toISOString();
+    const closesAt = new Date(nowMs).toISOString();
+
+    // ⚠ CANCELLING A *SCHEDULED* PERIOD HAS TO MOVE opens_at TOO, OR THE WRITE IS
+    // REFUSED. `window_ordered` (0005) is `check (closes_at > opens_at)`, so setting
+    // closes_at = now() on a row whose opens_at is still in the future raises 23514 and
+    // the term's (term_id, form_kind) slot stays locked until the mistaken date passes.
+    // Collapsing the row to a one-second interval ending now satisfies the CHECK and
+    // leaves it `closed` for both windowState() and application_windows_read_anon.
+    //
+    // Rewriting opens_at is safe HERE AND ONLY HERE: a period that never opened has no
+    // submissions by construction — applications_insert_anon EXISTS-checks `now()
+    // between opens_at and closes_at` — so no record of "the period people actually
+    // applied in" can be lost, and trg_application_windows_audit (0012) keeps the
+    // original dates in the old_data diff either way. For a period that IS open,
+    // opens_at is left exactly as it was.
+    const isScheduled = Date.parse(existing.opens_at) > nowMs;
+    const opensAt = isScheduled ? new Date(nowMs - 1000).toISOString() : existing.opens_at;
 
     const { error, count } = await supabase
       .from("application_windows")
-      .update({ closes_at: closesAt }, { count: "exact" })
+      .update(isScheduled ? { opens_at: opensAt, closes_at: closesAt } : { closes_at: closesAt }, {
+        count: "exact",
+      })
       .eq("id", existing.id);
 
     if (error) return { ok: false, error: mapDbError(error) };
@@ -298,6 +329,6 @@ export const closeApplicationWindow = withRole<unknown, ApplicationWindowResult>
     if (count === 0) return err<ApplicationWindowResult>("not_found");
 
     revalidateWindowSurfaces();
-    return ok({ termId, opensAt: existing.opens_at, closesAt });
+    return ok({ termId, opensAt, closesAt });
   },
 );

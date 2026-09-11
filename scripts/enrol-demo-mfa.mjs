@@ -39,20 +39,22 @@ if (!url || !anonKey || !serviceKey) {
   process.exit(1);
 }
 
-// Passwords are `<name>123` for the demo accounts (see demo-credentials.local.md).
-// Pass real ones as ACCOUNTS="email:password,email:password" to enrol other accounts.
-const DEFAULT_ACCOUNTS = [
-  ["demo.ceo@start-sys.test", "ceo123"],
-  ["demo.cto@start-sys.test", "cto123"],
-  ["demo.ccdo@start-sys.test", "ccdo123"],
-  ["demo.dccdo@start-sys.test", "dccdo123"],
-  ["demo.officer@start-sys.test", "officer123"],
-  ["demo.rep@start-sys.test", "rep123"],
-];
-
+// Accounts + passwords come from the environment, never from this file. The committed
+// fixed defaults were removed 2026-09-11 (QA AUTH-16 / INFRA-01): this repo is
+// PUBLIC and these accounts turned out to exist on the production project, so a committed
+// password list was a live credential leak. Read the current passwords from
+// demo-credentials.local.md (written by scripts/seed-demo-accounts.mjs, gitignored).
+//
+//   ACCOUNTS="email:password,email:password" node scripts/enrol-demo-mfa.mjs
 const accounts = process.env.ACCOUNTS
   ? process.env.ACCOUNTS.split(",").map((pair) => pair.split(":"))
-  : DEFAULT_ACCOUNTS;
+  : null;
+
+if (accounts === null) {
+  console.error('Set ACCOUNTS="email:password,email:password" — passwords are no longer');
+  console.error("committed to this repo. See demo-credentials.local.md for the current ones.");
+  process.exit(1);
+}
 
 const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
 
